@@ -1,10 +1,10 @@
-"""M4-2:代課推薦、指派處置、調課驗證。
+"""M4-2:代课推荐、指派处理方式、调课验证。
 
-**推薦引擎是這張卡的星角**,測試也集中在它:排序規則(同科目 > 當天在校 > 本月代課少)
-與硬性過濾(那個特定日期真的能來的人)。
+**推荐引擎是这张卡的星角**,测试也集中在它:排序规则(同科目 > 当天在校 > 本月代课少)
+与硬性过滤(那个特定日期真的能来的人)。
 
-硬性過濾正是 Fable 5 提醒的「週格 vs 特定日期」落差——李師週三第二節空堂,
-不代表 11/11 他能代(他自己可能也請假、或已被指派代別班)。這裡逐一造出那些情境。
+硬性过滤正是 Fable 5 提醒的「周格 vs 特定日期」落差——李师周三第二节空堂,
+不代表 11/11 他能代(他自己可能也请假、或已被指派代别班)。这里逐一造出那些场景。
 """
 
 from datetime import date
@@ -13,22 +13,25 @@ import pytest
 
 from app.models.leave import AffectedPeriod, AffectedStatus
 from app.models.user import Role
+from tests.api_helpers import create_api_semester
 from tests.conftest import make_user
-from tests.dates import SEM_END, SEM_START, WED, WED2  # 日期一律由執行當日推算,不硬編
+from tests.dates import SEM_END, SEM_START, WED, WED2  # 日期统一由执行当日推算,不硬编
 
 PW = "password123"
 
 
 @pytest.fixture
 def env2(env):
-    """已發布課表的國中。回傳 helper 物件,測試逐步疊教師/配課/請假。"""
+    """已发布课表的初中。返回 helper 对象,测试逐步叠教师/教学任务/请假。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.scheduler])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sid = client.post("/api/semesters", json={
-        "academic_year": 115, "term": 1, "template_key": "junior_high",
-        "start_date": SEM_START.isoformat(), "end_date": SEM_END.isoformat(),
-    }).json()["id"]
+    sid = create_api_semester(
+        client,
+        ready=True,
+        start_date=SEM_START.isoformat(),
+        end_date=SEM_END.isoformat(),
+    )["id"]
     return _World(client, db, sid)
 
 
@@ -44,8 +47,8 @@ class _World:
         self.classes: dict[str, int] = {}
         self.tt = client.post(f"/api/timetables{self.q}", json={"name": "草稿A"}).json()["id"]
         self._published = False
-        # 週三節次
-        c = self.klass("900")  # 佔位班,取節次表
+        # 周三节次
+        c = self.klass("900")  # 占位班,取作息时间表
         self.wed = [p for p in client.get(f"/api/class-units/{c}/period-table").json()["periods"]
                     if p["weekday"] == 3 and p["type"] == "regular"]
 
@@ -70,7 +73,7 @@ class _World:
         return self.classes[name]
 
     def place(self, teacher: str, subject: str, klass: str, period_idx: int, weekday: int = 3):
-        """把 teacher 的 subject 課排到 (weekday, 第 period_idx 個一般課節次)、上 klass 班。"""
+        """把 teacher 的 subject 课排到 (weekday, 第 period_idx 个一般课节次)、上 klass 班。"""
         slots = [p for p in self.client.get(
             f"/api/class-units/{self.klass(klass)}/period-table").json()["periods"]
             if p["weekday"] == weekday and p["type"] == "regular"]
@@ -106,180 +109,180 @@ class _World:
         return r.status_code, r.json()
 
 
-# ── 驗收①:第一名必為空堂 + 同科;已滿檔者靠後 ──────────────
+# ── 验收①:第一名必为空堂 + 同科;已满档者靠后 ──────────────
 def test_recommendation_ranks_same_subject_first(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])   # 同科,當天沒課
-    w.teacher("林師", ["數學"])   # 非本科
-    # 王師週三第一節上 701 國文;陳師與林師該節空堂
-    a_id, _ = w.place("王師", "國文", "701", 0)
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])   # 同科,当天没课
+    w.teacher("林师", ["数学"])   # 非本科
+    # 王师周三第一节上 701 语文;陈师与林师该节空堂
+    a_id, _ = w.place("王师", "语文", "701", 0)
     w.publish()
-    affected = w.leave("王師")
+    affected = w.leave("王师")
 
     rec = w.recommend(affected[0]["id"])
     names = [c["teacher_name"] for c in rec["candidates"]]
-    assert names[0] == "陳師", names   # 同科優先
+    assert names[0] == "陈师", names   # 同科优先
     top = rec["candidates"][0]
     assert top["same_subject"] is True
-    assert "同科目教師" in top["reasons"]
+    assert "同科目教师" in top["reasons"]
 
 
 def test_at_school_that_day_beats_a_teacher_not_coming_in(env2):
-    """同為非本科,當天已在校者優先(免多跑一趟)。"""
+    """同为非本科,当天已在校者优先(免多跑一趟)。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["體育"])  # 非本科,當天週三另有課 → 已在校
-    w.teacher("林師", ["體育"])  # 非本科,週三完全沒課
-    w.place("王師", "國文", "701", 0)  # 王師週三第一節(被請假)
-    w.place("陳師", "體育", "702", 2)  # 陳師週三第三節有課 → 當天在校,但第一節空
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["体育"])  # 非本科,当天周三另有课 → 已在校
+    w.teacher("林师", ["体育"])  # 非本科,周三完全没课
+    w.place("王师", "语文", "701", 0)  # 王师周三第一节(被请假)
+    w.place("陈师", "体育", "702", 2)  # 陈师周三第三节有课 → 当天在校,但第一节空
     w.publish()
-    affected = w.leave("王師")
+    affected = w.leave("王师")
 
     rec = w.recommend(affected[0]["id"])
     names = [c["teacher_name"] for c in rec["candidates"]]
-    assert names.index("陳師") < names.index("林師"), names
-    chen = next(c for c in rec["candidates"] if c["teacher_name"] == "陳師")
+    assert names.index("陈师") < names.index("林师"), names
+    chen = next(c for c in rec["candidates"] if c["teacher_name"] == "陈师")
     assert chen["at_school_that_day"] is True
-    assert "當天已在校" in chen["reasons"]
+    assert "当天已在校" in chen["reasons"]
 
 
 def test_fewer_monthly_sub_periods_ranks_higher(env2):
-    """同科同條件時,本月代課少者優先(公平)。"""
+    """同科同条件时,本月代课少者优先(公平)。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.teacher("林師", ["國文"])
-    w.place("王師", "國文", "701", 0)
-    # 林師本月已代一節(11/18):先幫另一個請假的老師代
-    w.teacher("周師", ["國文"])
-    w.place("周師", "國文", "702", 0, weekday=3)
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.teacher("林师", ["语文"])
+    w.place("王师", "语文", "701", 0)
+    # 林师本月已代一节(11/18):先帮另一个请假的老师代
+    w.teacher("周师", ["语文"])
+    w.place("周师", "语文", "702", 0, weekday=3)
     w.publish()
 
     other = w.client.post(f"/api/leaves{w.q}", json={
-        "teacher_id": w.teachers["周師"], "leave_type": "sick",
+        "teacher_id": w.teachers["周师"], "leave_type": "sick",
         "start_date": WED2.isoformat(), "end_date": WED2.isoformat()}).json()
     code, _ = w.assign(other["affected_periods"][0]["id"],
-                       type="substitute", handler_teacher_id=w.teachers["林師"])
+                       type="substitute", handler_teacher_id=w.teachers["林师"])
     assert code == 200
 
-    affected = w.leave("王師")  # 11/11
+    affected = w.leave("王师")  # 11/11
     rec = w.recommend(affected[0]["id"])
-    names = [c["teacher_name"] for c in rec["candidates"] if c["teacher_name"] in ("陳師", "林師")]
-    assert names[0] == "陳師", names  # 陳師本月 0 節,林師 1 節
-    lin = next(c for c in rec["candidates"] if c["teacher_name"] == "林師")
+    names = [c["teacher_name"] for c in rec["candidates"] if c["teacher_name"] in ("陈师", "林师")]
+    assert names[0] == "陈师", names  # 陈师本月 0 节,林师 1 节
+    lin = next(c for c in rec["candidates"] if c["teacher_name"] == "林师")
     assert lin["sub_periods_this_month"] == 1
-    assert "本月已代 1 節" in lin["reasons"]
+    assert "本月已代 1 节" in lin["reasons"]
 
 
-# ── 硬性過濾:週格 vs 特定日期(Fable 5 的落差)──────────────
+# ── 硬性过滤:周格 vs 特定日期(Fable 5 的落差)──────────────
 def test_a_teacher_busy_that_period_is_filtered_out(env2):
-    """週格層:陳師該節有自己的課 → 不可代。"""
+    """周格层:陈师该节有自己的课 → 不可代。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)  # 王師週三第一節
-    w.place("陳師", "國文", "702", 0)  # 陳師同一節也有課
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)  # 王师周三第一节
+    w.place("陈师", "语文", "702", 0)  # 陈师同一节也有课
     w.publish()
-    affected = w.leave("王師")
+    affected = w.leave("王师")
 
     names = [c["teacher_name"] for c in w.recommend(affected[0]["id"])["candidates"]]
-    assert "陳師" not in names
+    assert "陈师" not in names
 
 
 def test_a_teacher_on_leave_that_day_is_filtered_out(env2):
-    """日期層:陳師該節空堂,但『那一天』他自己也請假 → 不可代。"""
+    """日期层:陈师该节空堂,但『那一天』他自己也请假 → 不可代。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)   # 王師週三第一節(被請假)
-    w.place("陳師", "國文", "703", 2)   # 陳師週三第三節有課;第一節空堂
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)   # 王师周三第一节(被请假)
+    w.place("陈师", "语文", "703", 2)   # 陈师周三第三节有课;第一节空堂
     w.publish()
-    w.leave("陳師")                     # 陳師也請整天假(含第一節)
-    affected = w.leave("王師")
+    w.leave("陈师")                     # 陈师也请全天假(含第一节)
+    affected = w.leave("王师")
 
     names = [c["teacher_name"] for c in w.recommend(affected[0]["id"])["candidates"]]
-    assert "陳師" not in names, "當天請假的人不該出現在可代清單"
+    assert "陈师" not in names, "当天请假的人不该出现在可代列表"
 
 
 def test_a_teacher_already_covering_that_slot_is_filtered_out(env2):
-    """日期層:陳師該節空堂、當天沒請假,但已被指派代別班 → 不可代。"""
+    """日期层:陈师该节空堂、当天没请假,但已被指派代别班 → 不可代。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("周師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)  # 王師週三第一節
-    w.place("周師", "國文", "702", 0)  # 周師同一節也有課(也會被請假)
+    w.teacher("王师", ["语文"])
+    w.teacher("周师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)  # 王师周三第一节
+    w.place("周师", "语文", "702", 0)  # 周师同一节也有课(也会被请假)
     w.publish()
 
-    a_wang = w.leave("王師")[0]["id"]
-    a_zhou = w.leave("周師")[0]["id"]
-    # 陳師先被指派去代周師那一節(週三第一節)
-    code, _ = w.assign(a_zhou, type="substitute", handler_teacher_id=w.teachers["陳師"])
+    a_wang = w.leave("王师")[0]["id"]
+    a_zhou = w.leave("周师")[0]["id"]
+    # 陈师先被指派去代周师那一节(周三第一节)
+    code, _ = w.assign(a_zhou, type="substitute", handler_teacher_id=w.teachers["陈师"])
     assert code == 200
 
     names = [c["teacher_name"] for c in w.recommend(a_wang)["candidates"]]
-    assert "陳師" not in names, "同一時段已被指派代課的人不該再被推薦"
+    assert "陈师" not in names, "同一时段已被指派代课的人不该再被推荐"
 
 
 def test_the_absent_teacher_is_never_a_candidate(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.place("王師", "國文", "701", 0)
+    w.teacher("王师", ["语文"])
+    w.place("王师", "语文", "701", 0)
     w.publish()
-    affected = w.leave("王師")
+    affected = w.leave("王师")
     names = [c["teacher_name"] for c in w.recommend(affected[0]["id"])["candidates"]]
-    assert "王師" not in names
+    assert "王师" not in names
 
 
-# ── 驗收③:全校無人可代 → 提示併班/自習 ────────────────────
+# ── 验收③:全校无人可代 → 提示合班/自习 ────────────────────
 def test_no_available_teacher_hints_merge_or_self_study(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)  # 王師週三第一節
-    w.place("陳師", "國文", "702", 0)  # 唯一其他教師同一節也有課
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)  # 王师周三第一节
+    w.place("陈师", "语文", "702", 0)  # 唯一其他教师同一节也有课
     w.publish()
-    affected = w.leave("王師")
+    affected = w.leave("王师")
 
     rec = w.recommend(affected[0]["id"])
     assert rec["candidates"] == []
-    assert "併班" in rec["no_candidate_hint"] and "自習" in rec["no_candidate_hint"]
+    assert "合班" in rec["no_candidate_hint"] and "自习" in rec["no_candidate_hint"]
 
 
-# ── 指派處置 ─────────────────────────────────────────────────
+# ── 指派处理方式 ─────────────────────────────────────────────────
 def test_assigning_a_substitute_marks_resolved_and_notifies(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)
     w.publish()
-    affected_id = w.leave("王師")[0]["id"]
+    affected_id = w.leave("王师")[0]["id"]
 
-    code, body = w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["陳師"])
+    code, body = w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["陈师"])
     assert code == 200
-    assert body["type_label"] == "代課"
-    assert body["handler_name"] == "陳師"
+    assert body["type_label"] == "代课"
+    assert body["handler_name"] == "陈师"
     assert body["counts_toward_hours"] is True
 
     ap = w.db.get(AffectedPeriod, affected_id)
     assert ap.status == AffectedStatus.resolved.value
-    assert ap.handler_teacher_id == w.teachers["陳師"]
+    assert ap.handler_teacher_id == w.teachers["陈师"]
 
-    # 陳師收到代課通知
+    # 陈师收到代课通知
     notes = w.client.get(
-        f"/api/notifications{w.q}&teacher_id={w.teachers['陳師']}").json()
+        f"/api/notifications{w.q}&teacher_id={w.teachers['陈师']}").json()
     assert notes and notes[0]["type"] == "substitution_assigned"
 
 
 def test_self_study_and_merge_hours_policy(env2):
-    """自習不計鐘點且無處理教師;併班計不計由預設(不計)。"""
+    """自习不计课时且无处理教师;合班计不计由默认(不计)。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)
     w.publish()
-    ids = [p["id"] for p in w.leave("王師")]
+    ids = [p["id"] for p in w.leave("王师")]
 
     _, self_study = w.assign(ids[0], type="self_study")
     assert self_study["handler_name"] is None
@@ -288,104 +291,104 @@ def test_self_study_and_merge_hours_policy(env2):
 
 def test_cannot_assign_absent_teacher_to_cover_self(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.place("王師", "國文", "701", 0)
+    w.teacher("王师", ["语文"])
+    w.place("王师", "语文", "701", 0)
     w.publish()
-    affected_id = w.leave("王師")[0]["id"]
-    code, body = w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["王師"])
+    affected_id = w.leave("王师")[0]["id"]
+    code, body = w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["王师"])
     assert code == 409
     assert "代自己" in body["detail"]
 
 
 def test_assigning_a_busy_teacher_is_rejected_with_reason(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)
-    w.place("陳師", "國文", "702", 0)  # 陳師同一節有課
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)
+    w.place("陈师", "语文", "702", 0)  # 陈师同一节有课
     w.publish()
-    affected_id = w.leave("王師")[0]["id"]
-    code, body = w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["陳師"])
+    affected_id = w.leave("王师")[0]["id"]
+    code, body = w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["陈师"])
     assert code == 409
-    assert "有自己的課" in body["detail"]
+    assert "有自己的课" in body["detail"]
 
 
 def test_clearing_a_substitution_returns_to_pending(env2):
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["國文"])
-    w.place("王師", "國文", "701", 0)
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["语文"])
+    w.place("王师", "语文", "701", 0)
     w.publish()
-    affected_id = w.leave("王師")[0]["id"]
-    w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["陳師"])
+    affected_id = w.leave("王师")[0]["id"]
+    w.assign(affected_id, type="substitute", handler_teacher_id=w.teachers["陈师"])
 
     r = w.client.delete(f"/api/affected-periods/{affected_id}/substitution")
     assert r.status_code == 200
     assert r.json()["status"] == AffectedStatus.pending.value
     assert w.db.get(AffectedPeriod, affected_id).handler_teacher_id is None
-    # 陳師收到取消通知
+    # 陈师收到取消通知
     types = [n["type"] for n in w.client.get(
-        f"/api/notifications{w.q}&teacher_id={w.teachers['陳師']}").json()]
+        f"/api/notifications{w.q}&teacher_id={w.teachers['陈师']}").json()]
     assert "substitution_cancelled" in types
 
 
-# ── 驗收②:調課(swap)驗證 ─────────────────────────────────
+# ── 验收②:调课(swap)验证 ─────────────────────────────────
 def test_swap_succeeds_when_both_sides_are_free(env2):
-    """乙代甲週三第一節;甲於下週三補乙原本週三第二節的課。兩邊都空 → 成立。"""
+    """乙代甲周三第一节;甲于下周三补乙原本周三第二节的课。两边都空 → 成立。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["數學"])
-    w.place("王師", "國文", "701", 0)              # 甲:週三第一節(被請假)
-    _, swap_entry = _entry(w, "陳師", "數學", "702", 1)  # 乙:週三第二節
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["数学"])
+    w.place("王师", "语文", "701", 0)              # 甲:周三第一节(被请假)
+    _, swap_entry = _entry(w, "陈师", "数学", "702", 1)  # 乙:周三第二节
     w.publish()
-    affected_id = w.leave("王師")[0]["id"]
+    affected_id = w.leave("王师")[0]["id"]
 
-    entry_id = _find_entry(w, "陳師")
+    entry_id = _find_entry(w, "陈师")
     code, body = w.assign(
-        affected_id, type="swap", handler_teacher_id=w.teachers["陳師"],
-        swap_entry_id=entry_id, swap_date=WED2.isoformat())  # 下週三補
+        affected_id, type="swap", handler_teacher_id=w.teachers["陈师"],
+        swap_entry_id=entry_id, swap_date=WED2.isoformat())  # 下周三补
     assert code == 200, body
-    assert body["type_label"] == "調課"
-    assert body["swap_subject_name"] == "數學"
+    assert body["type_label"] == "调课"
+    assert body["swap_subject_name"] == "数学"
     assert body["swap_date"] == WED2.isoformat()
 
 
 def test_swap_rejected_when_partner_busy_at_absent_slot(env2):
-    """乙在甲請假那節本來就有課 → 無法來代,拒絕並指名。"""
+    """乙在甲请假那节本来就有课 → 无法来代,拒绝并指名。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["數學"])
-    w.place("王師", "國文", "701", 0)   # 甲週三第一節
-    w.place("陳師", "數學", "702", 0)   # 乙週三第一節也有課
-    _entry(w, "陳師", "數學", "703", 1)  # 乙另有週三第二節(用來當 swap 目標)
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["数学"])
+    w.place("王师", "语文", "701", 0)   # 甲周三第一节
+    w.place("陈师", "数学", "702", 0)   # 乙周三第一节也有课
+    _entry(w, "陈师", "数学", "703", 1)  # 乙另有周三第二节(用来当 swap 目标)
     w.publish()
-    affected_id = w.leave("王師")[0]["id"]
+    affected_id = w.leave("王师")[0]["id"]
 
-    entry_id = _find_entry(w, "陳師", period_idx=1)
+    entry_id = _find_entry(w, "陈师", period_idx=1)
     code, body = w.assign(
-        affected_id, type="swap", handler_teacher_id=w.teachers["陳師"],
+        affected_id, type="swap", handler_teacher_id=w.teachers["陈师"],
         swap_entry_id=entry_id, swap_date=WED2.isoformat())
     assert code == 409
-    assert "陳師" in body["detail"] and "有自己的課" in body["detail"]
+    assert "陈师" in body["detail"] and "有自己的课" in body["detail"]
 
 
 def test_swap_rejected_when_absent_teacher_busy_at_makeup_slot(env2):
-    """甲在補課那節本來就有別的課 → 補不了,拒絕並指名。"""
+    """甲在补课那节本来就有别的课 → 补不了,拒绝并指名。"""
     w = env2
-    w.teacher("王師", ["國文"])
-    w.teacher("陳師", ["數學"])
-    w.place("王師", "國文", "701", 0)   # 甲週三第一節(被請假)
-    w.place("王師", "國文", "705", 1)   # 甲週三第二節另有課(補課會撞)
-    _entry(w, "陳師", "數學", "702", 1)  # 乙週三第二節 → swap 目標
+    w.teacher("王师", ["语文"])
+    w.teacher("陈师", ["数学"])
+    w.place("王师", "语文", "701", 0)   # 甲周三第一节(被请假)
+    w.place("王师", "语文", "705", 1)   # 甲周三第二节另有课(补课会撞)
+    _entry(w, "陈师", "数学", "702", 1)  # 乙周三第二节 → swap 目标
     w.publish()
-    affected_id = [p for p in w.leave("王師") if p["period_name"] == w.wed[0]["name"]][0]["id"]
+    affected_id = [p for p in w.leave("王师") if p["period_name"] == w.wed[0]["name"]][0]["id"]
 
-    entry_id = _find_entry(w, "陳師", period_idx=1)
+    entry_id = _find_entry(w, "陈师", period_idx=1)
     code, body = w.assign(
-        affected_id, type="swap", handler_teacher_id=w.teachers["陳師"],
+        affected_id, type="swap", handler_teacher_id=w.teachers["陈师"],
         swap_entry_id=entry_id, swap_date=WED2.isoformat())
     assert code == 409
-    assert "王師" in body["detail"]
+    assert "王师" in body["detail"]
 
 
 def _entry(w, teacher, subject, klass, period_idx):
@@ -393,7 +396,7 @@ def _entry(w, teacher, subject, klass, period_idx):
 
 
 def _find_entry(w, teacher: str, period_idx: int | None = None) -> int:
-    """取某教師某節的 schedule_entry id(供 swap 目標)。"""
+    """取某教师某节的 schedule_entry id(供 swap 目标)。"""
     from app.models.assignment import AssignmentTeacher, CourseAssignment
     from app.models.timetable import ScheduleEntry
     q = (w.db.query(ScheduleEntry)

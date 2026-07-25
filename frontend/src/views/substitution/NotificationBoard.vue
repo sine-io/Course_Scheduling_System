@@ -4,26 +4,22 @@ import { computed, onMounted, ref } from 'vue'
 import { notificationBoard, remind } from '@/api/notifications'
 import type { BoardEntry } from '@/api/notifications'
 import { listSemesters } from '@/api/semesters'
-import { useAppConfigStore } from '@/stores/appConfig'
 
 const message = useMessage()
-const appConfig = useAppConfigStore()
-const mainland = computed(() => appConfig.isMainland)
-const tr = (tw: string, cn: string) => mainland.value ? cn : tw
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
 const entries = ref<BoardEntry[]>([])
-const unackOnly = ref(true) // 預設只看未確認——那才是組長要追的
+const unackOnly = ref(true) // 默认只看未确认——那才是排课管理员要追的
 
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
 
 const TYPE_LABEL = computed<Record<string, string>>(() => ({
-  substitution_assigned: tr('代課通知', '代课通知'),
-  substitution_cancelled: tr('代課取消', '代课取消'),
-  leave_registered: tr('請假登記', '请假登记'),
-  leave_cancelled: tr('銷假', '销假'),
-  timetable_published: tr('課表發布', '课表发布'),
+  substitution_assigned: '代课通知',
+  substitution_cancelled: '代课取消',
+  leave_registered: '请假登记',
+  leave_cancelled: '销假',
+  timetable_published: '课表发布',
 }))
 
 async function reload() {
@@ -44,37 +40,37 @@ onMounted(async () => {
 async function onRemind(e: BoardEntry) {
   try {
     await remind(e.id)
-    message.success(tr(`已再次提醒 ${e.teacher_name}`, `已再次提醒 ${e.teacher_name}`))
+    message.success(`已再次提醒 ${e.teacher_name}`)
     await reload()
   } catch (err) {
-    message.error((err as { message?: string }).message || tr('提醒失敗', '提醒失败'))
+    message.error((err as { message?: string }).message || '提醒失败')
   }
 }
 
 function ackTag(e: BoardEntry): { type: string; label: string } {
-  if (e.acknowledged_at) return { type: 'success', label: tr('已確認', '已确认') }
-  if (e.read_at) return { type: 'info', label: tr('已讀未確認', '已读未确认') }
-  return { type: 'warning', label: tr('未讀', '未读') }
+  if (e.acknowledged_at) return { type: 'success', label: '已确认' }
+  if (e.read_at) return { type: 'info', label: '已读未确认' }
+  return { type: 'warning', label: '未读' }
 }
 </script>
 
 <template>
   <n-space vertical size="large">
     <n-space align="center">
-      <h2 style="margin: 0">{{ tr('通知確認看板', '通知确认看板') }}</h2>
+      <h2 style="margin: 0">{{ '通知确认看板' }}</h2>
       <n-select
         :value="sid" :options="semesterOptions" style="width: 220px"
-        :placeholder="tr('選擇學期', '选择学期')" @update:value="onSemesterChange"
+        :placeholder="'选择学期'" @update:value="onSemesterChange"
       />
       <n-checkbox v-model:checked="unackOnly" data-testid="board-unackonly" @update:checked="reload">
-        {{ tr('只看未確認', '只看未确认') }}
+        {{ '只看未确认' }}
       </n-checkbox>
     </n-space>
 
-    <n-empty v-if="!entries.length" :description="tr('沒有符合條件的通知', '没有符合条件的通知')" />
+    <n-empty v-if="!entries.length" :description="'没有符合条件的通知'" />
     <table v-else class="data-table" data-testid="board-table">
       <thead>
-        <tr><th>{{ tr('教師', '教师') }}</th><th>{{ tr('類型', '类型') }}</th><th>{{ tr('內容', '内容') }}</th><th>{{ tr('狀態', '状态') }}</th><th>{{ tr('操作', '操作') }}</th></tr>
+        <tr><th>{{ '教师' }}</th><th>{{ '类型' }}</th><th>{{ '内容' }}</th><th>{{ '状态' }}</th><th>{{ '操作' }}</th></tr>
       </thead>
       <tbody>
         <tr v-for="e in entries" :key="e.id" data-testid="board-row">
@@ -89,7 +85,7 @@ function ackTag(e: BoardEntry): { type: string; label: string } {
               v-if="!e.acknowledged_at" size="tiny" data-testid="board-remind"
               @click="onRemind(e)"
             >
-              {{ tr('再次提醒', '再次提醒') }}
+              {{ '再次提醒' }}
             </n-button>
             <n-text v-else depth="3">—</n-text>
           </td>

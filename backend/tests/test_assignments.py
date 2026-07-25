@@ -1,4 +1,4 @@
-"""配課(M2-1)測試:單班/跑班/協同/連堂三種結構 + 五項驗收標準。"""
+"""教学任务(M2-1)测试:单班/走班/协同/连堂三种结构 + 五项验收标准。"""
 
 import io
 
@@ -7,6 +7,7 @@ from openpyxl import Workbook
 
 from app.api.imports import XLSX_MIME
 from app.models.user import Role
+from tests.api_helpers import SENIOR_HIGH_SLOTS, create_api_semester, create_period_table
 from tests.conftest import make_user
 
 PW = "password123"
@@ -14,13 +15,11 @@ PW = "password123"
 
 @pytest.fixture
 def env2(env):
-    """已登入教學組長 + 國中範本學期(含預設節次表與科目)。回傳 (client, sid)。"""
+    """已登录排课管理员和一份含测试作息时间表的学期。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.scheduler])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sem = client.post(
-        "/api/semesters", json={"academic_year": 115, "term": 1, "template_key": "junior_high"}
-    ).json()
+    sem = create_api_semester(client)
     return client, sem["id"]
 
 
@@ -45,13 +44,13 @@ def _create_assignment(client, sid, **body):
     return client.post(f"/api/assignments?semester_id={sid}", json=body)
 
 
-# ── 驗收① 單班 + 跑班群組 ──────────────
+# ── 验收① 单班 + 走班群组 ──────────────
 def test_single_assignment(env2):
-    """301 班 × 國文 × 王師 × 每週 5 節。"""
+    """301 班 × 语文 × 王师 × 每周 5 节。"""
     client, sid = env2
     c = _class(client, sid, 3, "301")
-    s = _subject(client, sid, "國文")
-    t = _teacher(client, sid, "王師", 20)
+    s = _subject(client, sid, "语文")
+    t = _teacher(client, sid, "王师", 20)
     r = _create_assignment(
         client, sid, class_id=c["id"], subject_id=s["id"], periods_per_week=5,
         teachers=[{"teacher_id": t["id"]}],
@@ -65,19 +64,19 @@ def test_single_assignment(env2):
 
 
 def test_group_five_courses(env2):
-    """高二多元選修跑班群組(3 班),群組內建 5 筆配課。"""
+    """创建由 3 个班组成的高二选修课程走班分组，并维护 5 条教学任务。"""
     client, sid = env2
     cids = [_class(client, sid, 2, f"20{i}", track="senior_high")["id"] for i in (1, 2, 3)]
     g = client.post(
         f"/api/scheduling-units?semester_id={sid}",
-        json={"name": "高二多元選修", "class_ids": cids},
+        json={"name": "高二选修课程", "class_ids": cids},
     )
     assert g.status_code == 201, g.text
     gid = g.json()["id"]
     assert len(g.json()["classes"]) == 3
     for i in range(5):
-        s = _subject(client, sid, f"選修{i}")
-        t = _teacher(client, sid, f"選修師{i}")
+        s = _subject(client, sid, f"选修{i}")
+        t = _teacher(client, sid, f"选修师{i}")
         r = _create_assignment(
             client, sid, scheduling_unit_id=gid, subject_id=s["id"], periods_per_week=2,
             teachers=[{"teacher_id": t["id"]}],
@@ -88,14 +87,14 @@ def test_group_five_courses(env2):
     assert len(group_items) == 5
 
 
-# ── 驗收② 協同 + 連堂 ─────────────────
+# ── 验收② 协同 + 连堂 ─────────────────
 def test_coteaching_with_block(env2):
-    """機械科實習 × 2 位協同教師 × 每週 6 節含 3 連堂×2。"""
+    """机械科实习 × 2 位协同教师 × 每周 6 节含 3 连堂×2。"""
     client, sid = env2
-    c = _class(client, sid, 1, "機械一", track="vocational")
-    s = _subject(client, sid, "機械實習")
-    t1 = _teacher(client, sid, "師甲")
-    t2 = _teacher(client, sid, "師乙")
+    c = _class(client, sid, 1, "机械一", track="vocational")
+    s = _subject(client, sid, "机械实习")
+    t1 = _teacher(client, sid, "师甲")
+    t2 = _teacher(client, sid, "师乙")
     r = _create_assignment(
         client, sid, class_id=c["id"], subject_id=s["id"], periods_per_week=6,
         teachers=[
@@ -107,18 +106,18 @@ def test_coteaching_with_block(env2):
     assert r.status_code == 201, r.text
     a = r.json()
     assert len(a["teachers"]) == 2
-    assert {t["name"] for t in a["teachers"]} == {"師甲", "師乙"}
+    assert {t["name"] for t in a["teachers"]} == {"师甲", "师乙"}
     assert a["block_rules"][0]["block_size"] == 3
     assert a["block_rules"][0]["count_per_week"] == 2
 
 
-# ── 驗收③ 教師超鐘點 ─────────────────
+# ── 验收③ 教师超课时 ─────────────────
 def test_teacher_over_hours(env2):
-    """王師配 22 節、基本鐘點 20 → delta +2。"""
+    """王师配 22 节、基本课时 20 → delta +2。"""
     client, sid = env2
-    t = _teacher(client, sid, "王師", 20)
+    t = _teacher(client, sid, "王师", 20)
     c = _class(client, sid, 3, "301")
-    s = _subject(client, sid, "國文")
+    s = _subject(client, sid, "语文")
     _create_assignment(
         client, sid, class_id=c["id"], subject_id=s["id"], periods_per_week=22,
         teachers=[{"teacher_id": t["id"]}],
@@ -131,11 +130,11 @@ def test_teacher_over_hours(env2):
 
 
 def test_teacher_target_subtracts_admin_reduction(env2):
-    """應授 = 基本鐘點 - 行政減課。"""
+    """应授 = 基本课时 - 行政减课。"""
     client, sid = env2
     tr = client.post(
         f"/api/teachers?semester_id={sid}",
-        json={"name": "組長", "base_periods": 20, "admin_reduction": 4},
+        json={"name": "排课管理员", "base_periods": 20, "admin_reduction": 4},
     ).json()
     loads = client.get(f"/api/assignments/teacher-load?semester_id={sid}").json()
     row = next(x for x in loads if x["teacher_id"] == tr["id"])
@@ -144,13 +143,13 @@ def test_teacher_target_subtracts_admin_reduction(env2):
     assert row["delta"] == -16
 
 
-# ── 驗收④ 班級配課超出可排節次 ────────
+# ── 验收④ 班级教学任务超出可排节次 ────────
 def test_class_over_capacity(env2):
     client, sid = env2
     c = _class(client, sid, 3, "305")
-    s = _subject(client, sid, "國文")
-    t = _teacher(client, sid, "師")
-    # 先讀該班可排節次數(capacity)
+    s = _subject(client, sid, "语文")
+    t = _teacher(client, sid, "师")
+    # 先读该班可排节次数(capacity)
     cl = client.get(f"/api/assignments/class-load?semester_id={sid}").json()
     cap = next(x for x in cl if x["class_id"] == c["id"])["capacity"]
     assert cap > 0
@@ -166,22 +165,22 @@ def test_class_over_capacity(env2):
 
 
 def test_class_load_counts_group_once(env2):
-    """跑班群組的多門課同時段開課(H7),班級被佔用的是最長的一筆,不是全部相加。
+    """走班群组的多门课同时段开课(H7),班级被占用的是课时最长的一项,不是全部相加。
 
-    3 門 3 節的選修同時開,班級只被佔掉 3 節;若相加成 9 節,60 班規模的學校
-    會滿頁誤報「超出可排節數」。
+    3 门 3 节的选修同时开,班级只被占掉 3 节;若相加成 9 节,60 班规模的学校
+    会满页误报「超出可排节数」。
     """
     client, sid = env2
     classes = [_class(client, sid, 2, f"20{i}") for i in (1, 2)]
     gr = client.post(
         f"/api/scheduling-units?semester_id={sid}",
-        json={"name": "高二多元選修", "class_ids": [c["id"] for c in classes]},
+        json={"name": "高二选修课程", "class_ids": [c["id"] for c in classes]},
     )
     assert gr.status_code == 201, gr.text
     group = gr.json()
-    for name in ("選修甲", "選修乙", "選修丙"):
+    for name in ("选修甲", "选修乙", "选修丙"):
         s = _subject(client, sid, name)
-        t = _teacher(client, sid, f"{name}師")
+        t = _teacher(client, sid, f"{name}师")
         r = _create_assignment(
             client, sid, scheduling_unit_id=group["id"], subject_id=s["id"],
             periods_per_week=3, teachers=[{"teacher_id": t["id"]}],
@@ -191,22 +190,24 @@ def test_class_load_counts_group_once(env2):
     cl = client.get(f"/api/assignments/class-load?semester_id={sid}").json()
     for c in classes:
         row = next(x for x in cl if x["class_id"] == c["id"])
-        assert row["assigned"] == 3, "跑班群組應計 3 節(同時段),而非 3 門 × 3 節 = 9"
+        assert row["assigned"] == 3, "走班群组应计 3 节(同时段),而非 3 门 × 3 节 = 9"
         assert row["over_capacity"] is False
 
 
-# ── 驗收⑤ 跑班群組節次表須一致 ────────
+# ── 验收⑤ 走班群组作息时间表须一致 ────────
 def test_group_requires_same_period_table(env2):
     client, sid = env2
-    pt2 = client.post(
-        f"/api/semesters/{sid}/period-tables",
-        json={"name": "高中部節次表", "template_key": "senior_high"},
-    ).json()
-    ca = _class(client, sid, 2, "甲")  # 用學期預設表
+    pt2 = create_period_table(
+        client,
+        sid,
+        name="高中部作息时间表",
+        slots=SENIOR_HIGH_SLOTS,
+    )
+    ca = _class(client, sid, 2, "甲")  # 用学期默认表
     cb = _class(client, sid, 2, "乙", period_table_id=pt2["id"])  # 用另一套表
     r = client.post(
         f"/api/scheduling-units?semester_id={sid}",
-        json={"name": "跨表群組", "class_ids": [ca["id"], cb["id"]]},
+        json={"name": "跨表群组", "class_ids": [ca["id"], cb["id"]]},
     )
     assert r.status_code == 409
 
@@ -217,17 +218,17 @@ def test_group_same_table_ok(env2):
     cb = _class(client, sid, 2, "乙")
     r = client.post(
         f"/api/scheduling-units?semester_id={sid}",
-        json={"name": "同表群組", "class_ids": [ca["id"], cb["id"]]},
+        json={"name": "同表群组", "class_ids": [ca["id"], cb["id"]]},
     )
     assert r.status_code == 201
 
 
-# ── 驗證與級聯 ────────────────────────
+# ── 验证与级联 ────────────────────────
 def test_block_total_exceeds_rejected(env2):
     client, sid = env2
     c = _class(client, sid, 1, "甲")
-    s = _subject(client, sid, "數學")
-    t = _teacher(client, sid, "師")
+    s = _subject(client, sid, "数学")
+    t = _teacher(client, sid, "师")
     r = _create_assignment(
         client, sid, class_id=c["id"], subject_id=s["id"], periods_per_week=4,
         teachers=[{"teacher_id": t["id"]}],
@@ -239,8 +240,8 @@ def test_block_total_exceeds_rejected(env2):
 def test_target_xor_required(env2):
     client, sid = env2
     c = _class(client, sid, 1, "甲")
-    s = _subject(client, sid, "數學")
-    t = _teacher(client, sid, "師")
+    s = _subject(client, sid, "数学")
+    t = _teacher(client, sid, "师")
     both = _create_assignment(
         client, sid, class_id=c["id"], scheduling_unit_id=1, subject_id=s["id"],
         periods_per_week=1, teachers=[{"teacher_id": t["id"]}],
@@ -258,10 +259,10 @@ def test_delete_group_cascades_assignments(env2):
     cids = [_class(client, sid, 2, f"2{i}", track="senior_high")["id"] for i in (1, 2)]
     g = client.post(
         f"/api/scheduling-units?semester_id={sid}",
-        json={"name": "群組X", "class_ids": cids},
+        json={"name": "群组X", "class_ids": cids},
     ).json()
-    s = _subject(client, sid, "選修")
-    t = _teacher(client, sid, "師")
+    s = _subject(client, sid, "选修")
+    t = _teacher(client, sid, "师")
     _create_assignment(
         client, sid, scheduling_unit_id=g["id"], subject_id=s["id"], periods_per_week=2,
         teachers=[{"teacher_id": t["id"]}],
@@ -271,12 +272,12 @@ def test_delete_group_cascades_assignments(env2):
 
 
 def test_single_unit_reused_across_assignments(env2):
-    """同班多科配課共用同一 single 排課單位。"""
+    """同班多科教学任务共用同一 single 排课单位。"""
     client, sid = env2
     c = _class(client, sid, 3, "301")
-    t = _teacher(client, sid, "師")
+    t = _teacher(client, sid, "师")
     ids = set()
-    for name in ("國文", "數學"):
+    for name in ("语文", "数学"):
         s = _subject(client, sid, name)
         a = _create_assignment(
             client, sid, class_id=c["id"], subject_id=s["id"], periods_per_week=3,
@@ -286,12 +287,12 @@ def test_single_unit_reused_across_assignments(env2):
     assert len(ids) == 1
 
 
-# ── Excel 匯入 ────────────────────────
+# ── Excel 导入 ────────────────────────
 def _xlsx(rows, ncols=7):
     wb = Workbook()
     ws = wb.active
     for _ in range(3):
-        ws.append(["表頭"] * ncols)
+        ws.append(["表头"] * ncols)
     for r in rows:
         ws.append(r)
     buf = io.BytesIO()
@@ -302,10 +303,10 @@ def _xlsx(rows, ncols=7):
 def test_import_assignments(env2):
     client, sid = env2
     _class(client, sid, 3, "301")
-    _subject(client, sid, "國文")
-    _teacher(client, sid, "王師")
-    _teacher(client, sid, "李協")
-    rows = [["301", "國文", "王師、李協", 6, 3, 2, ""]]
+    _subject(client, sid, "语文")
+    _teacher(client, sid, "王师")
+    _teacher(client, sid, "李协")
+    rows = [["301", "语文", "王师、李协", 6, 3, 2, ""]]
     r = client.post(
         f"/api/import/assignments?semester_id={sid}",
         files={"file": ("a.xlsx", _xlsx(rows), XLSX_MIME)},
@@ -315,19 +316,19 @@ def test_import_assignments(env2):
     assert len(items) == 1
     a = items[0]
     assert len(a["teachers"]) == 2
-    assert a["teachers"][0]["is_lead"] is True  # 王師為主教
+    assert a["teachers"][0]["is_lead"] is True  # 王师为主讲
     assert a["block_rules"][0]["block_size"] == 3
 
 
 def test_import_assignments_unknown_class_zero_write(env2):
     client, sid = env2
-    _subject(client, sid, "國文")
-    _teacher(client, sid, "王師")
-    rows = [["不存在班", "國文", "王師", 5, "", "", ""]]
+    _subject(client, sid, "语文")
+    _teacher(client, sid, "王师")
+    rows = [["不存在班", "语文", "王师", 5, "", "", ""]]
     body = client.post(
         f"/api/import/assignments?semester_id={sid}",
         files={"file": ("a.xlsx", _xlsx(rows), XLSX_MIME)},
     ).json()
     assert body["imported"] == 0
-    assert any("班級" in e for e in body["errors"])
+    assert any("班级" in e for e in body["errors"])
     assert client.get(f"/api/assignments?semester_id={sid}").json() == []

@@ -1,21 +1,14 @@
 <script setup lang="ts">
 import {
-  NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider, zhCN, dateZhCN, zhTW, dateZhTW,
+  NConfigProvider, NDialogProvider, NGlobalStyle, NMessageProvider, zhCN, dateZhCN,
 } from 'naive-ui'
-import { computed } from 'vue'
 import { themeOverrides } from '@/theme'
-import { useAppConfigStore } from '@/stores/appConfig'
-
-const appConfig = useAppConfigStore()
-const locale = computed(() => appConfig.isMainland ? zhCN : zhTW)
-const dateLocale = computed(() => appConfig.isMainland ? dateZhCN : dateZhTW)
 </script>
 
 <template>
-  <n-config-provider :locale="locale" :date-locale="dateLocale" :theme-overrides="themeOverrides">
+  <n-config-provider :locale="zhCN" :date-locale="dateZhCN" :theme-overrides="themeOverrides">
     <n-global-style />
-    <!-- dialog provider 不可少:useDialog() 找不到它會在 setup 直接擲錯,整頁渲染不出來
-         (系統管理頁就是這樣整片空白的)。 -->
+    <!-- useDialog() 依赖对话框上下文；缺少此组件时，系统管理页无法渲染。 -->
     <n-message-provider>
       <n-dialog-provider>
         <router-view />

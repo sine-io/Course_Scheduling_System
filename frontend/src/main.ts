@@ -12,12 +12,12 @@ async function bootstrap() {
   const app = createApp(App)
   const pinia = createPinia()
   app.use(pinia)
-  // Naive UI locale and date parsing must be selected before the first render.
+  // 首次渲染前固定使用简体中文界面和中国大陆日期格式。
   await useAppConfigStore(pinia).load()
   app.use(router)
   app.use(naive)
 
-  // session 過期/被撤銷時,清除登入狀態並導回登入頁
+  // 会话过期或被撤销时，清除登录状态并返回登录页。
   setUnauthorizedHandler(() => {
     useAuthStore().reset()
     if (router.currentRoute.value.name !== 'login') {

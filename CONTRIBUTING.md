@@ -1,109 +1,110 @@
-# 貢獻指南
+# 贡献指南
 
-歡迎回報問題與貢獻程式。本專案為 MIT 授權、單校自架的排課與調代課系統,面向台灣中小學教學組長。
+欢迎反馈问题并参与开发。本项目采用 MIT 许可证，是面向全国中小学的单校自建排课、调课与代课管理系统。
 
-## 回報問題
+## 反馈问题
 
-到 GitHub 開 Issue,請盡量附上:
+到 GitHub 开 Issue,请尽量附上:
 
-- 復現步驟、預期行為與實際行為。
-- 環境:部署方式(拉映像 / 原始碼)、`IMAGE_TAG` 或 commit、作業系統。
-- 相關 log:`docker compose logs --tail=100 api`(或 worker/web)。**請先移除機密**(密碼、`SECRET_KEY`)。
+- 复现步骤、预期行为与实际行为。
+- 环境：部署方式（拉取镜像或源代码）、`IMAGE_TAG` 或提交版本、操作系统。
+- 相关日志：`sudo docker compose logs --tail=100 api`（或 worker/web）。请先移除密码和 `SECRET_KEY` 等敏感信息。
 
-## 開發環境
+## 开发环境
 
-### 熱重載全棧
+### 热重载全栈
 
 ```bash
 cp .env.example .env
-docker compose -f docker-compose.dev.yml up
+sudo docker compose -f docker-compose.dev.yml up
 ```
 
-- 前端(熱重載):<http://localhost:5173>
-- API 互動文件:<http://localhost:8000/api/docs>
+- 前端(热重载):<http://localhost:5173>
+- API 互动文件:<http://localhost:8000/api/docs>
 
-前後端原始碼掛載進容器,存檔即時生效。含 `mailhog`(攔截外送信,Web UI <http://localhost:8025>)須以 `--profile dev` 啟動。
+前后端源代码挂载进容器,保存文件后立即生效。含 `mailhog`(拦截外发邮件,Web UI <http://localhost:8025>)须以 `--profile dev` 启动。
 
-### 各自本機測試
+### 各自本机测试
 
 ```bash
-# 後端
+# 后端
 cd backend && pip install -e ".[dev]" && pytest
 # 前端
 cd frontend && npm install && npm run test
 ```
 
-## 程式風格與品質門檻
+## 程序风格与质量门槛
 
-送 PR 前請確保各項通過(CI 也會擋):
+提交 PR 前请确保以下检查全部通过（CI 会执行同样的检查）：
 
-| 範圍 | 指令 | 要求 |
+| 范围 | 命令 | 要求 |
 |---|---|---|
-| 後端 lint/格式 | `ruff check .` | 零錯誤 |
-| 後端型別 | `mypy app` | 零錯誤 |
-| 後端測試 | `pytest` | 全綠,且不使既有測試退步 |
-| 前端 lint | `npm run lint` | 零錯誤 |
-| 前端建置+型別 | `npm run build`(含 vue-tsc) | 通過 |
-| 前端單元測試 | `npm run test` | 全綠 |
+| 中文文案与术语 | `python3 scripts/check_simplified_chinese.py` | 无禁用字形、旧术语或地区化分支 |
+| 后端 lint/格式 | `ruff check .` | 零错误 |
+| 后端类型 | `mypy app` | 零错误 |
+| 后端测试 | `pytest` | 全部通过，且不使现有测试退步 |
+| 前端 lint | `npm run lint` | 零错误 |
+| 前端构建+类型 | `npm run build`(含 vue-tsc) | 通过 |
+| 前端单元测试 | `npm run test` | 全部通过 |
 
-其他約定:
+其他约定:
 
-- **UI 文案一律繁體中文、台灣教務用語**(節次、科任、配課、鐘點、跑班)。衝突/提示訊息用節次表中儲存的名稱(早自修/午休/第一節),不用內部 `period_no`。
-- **資料庫 schema 變更必附 Alembic 遷移**,且能從前一版順向升級。
-- solver 模組(`app/solver/`)不得 import `app.api` / `app.models`(以測試保證純度)。
-- **背景任務分兩條佇列**:`default` 只跑自動排課(可佔住 worker 數分鐘),`ops` 跑匯出/備份/還原/寄信與定時任務。新增背景任務時先問「這會不會跑很久」——會的話走 `default`,否則一律 `ops`,別讓秒級任務排在排課後面。兩者由 `worker` 與 `worker-ops` 兩個容器分別守著(同一映像,見 `app/workers/worker.py`)。
-- 架構規格以 [docs/architecture.md](docs/architecture.md) 為準;與任務卡衝突時以架構文件為準並回報矛盾。
+- **所有用户界面、接口错误、导入导出和通知文案统一使用自然简体中文。** 采用全国中小学通用教务用语，例如教学任务、作息时间表、课时、走班和班主任。冲突提示使用作息时间表中的名称（如早自习、午休、第一节），不展示内部 `period_no`。
+- **数据库 schema 变更必附 Alembic 迁移**,且能从前一版顺向升级。
+- solver 模块(`app/solver/`)不得 import `app.api` / `app.models`(以测试保证纯度)。
+- **后台任务分两条队列**:`default` 只跑自动排课(可占住 worker 数分钟),`ops` 跑导出/备份/恢复/发送邮件与定时任务。新增后台任务时先问「这会不会跑很久」——会的话走 `default`,否则统一 `ops`,别让秒级任务排在排课后面。两者由 `worker` 与 `worker-ops` 两个容器分别监听(同一镜像,见 `app/workers/worker.py`)。
+- 架构规格以 [docs/architecture.md](docs/architecture.md) 为准;与任务卡冲突时以架构文件为准并反馈矛盾。
 
 ### E2E(Playwright)
 
-對「執行中的 Docker 全棧」驅動真實瀏覽器。需先 `docker compose up -d`,再建立測試帳號(冪等,`e2e_scheduler` 與 `e2e_teacher`,並將設定精靈標記完成):
+对运行中的 Docker 全栈环境驱动真实浏览器。先执行 `sudo docker compose up -d`，再创建测试账号（可重复执行），并将设置向导标记为已完成：
 
 ```bash
-docker compose exec -T api python -m app.scripts.seed_e2e
+sudo docker compose exec -T api python -m app.scripts.seed_e2e
 
 cd frontend
 npx playwright install chromium   # 首次
-npm run e2e            # 迴歸套件(無頭;CI 跑的就是這個)
-npm run e2e:headed     # 有頭 + 放慢,可在螢幕上觀看
-npm run e2e:perf       # 60 班壓測(執行久,非迴歸,CI 不跑)
-npm run e2e:manual     # 操作手冊截圖產生器(需另備示範資料測試站,CI 不跑)
+npm run e2e            # 无头模式运行 E2E 回归测试（与 CI 一致）
+npm run e2e:headed     # 显示浏览器并放慢执行，可在屏幕上观察
+npm run e2e:perf       # 60 班压测(执行久,非回归,CI 不跑)
+npm run e2e:manual     # 操作手册截图生成器(需另备示范数据测试站,CI 不跑)
 ```
 
-CI 的 `e2e` job 會在 runner 上建置三個映像、起全棧、seed 帳號後跑迴歸套件;E2E 未過不會發布映像。
+CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建测试账号并运行回归测试；E2E 未通过时不会发布镜像。
 
-## 提交與 PR
+## 提交与 PR
 
-- 從 `main` 開分支開發;PR 對回 `main`。
-- Commit 訊息用祈使句、精簡描述「做了什麼、為什麼」。
-- PR 描述請逐條對照相關任務卡的驗收標準,說明驗證方式與結果。
-- 不 force-push 共用分支;不繞過 hook 或簽章(除非明確需要)。
+- 从 `main` 开分支开发;PR 对回 `main`。
+- Commit 信息用祈使句、精简描述「做了什么、为什么」。
+- PR 描述请逐条对照相关任务卡的验收标准,说明验证方式与结果。
+- 不 force-push 共用分支;不绕过 hook 或签名(除非明确需要)。
 
-## 開發流程(任務卡制)
+## 开发流程(任务卡制)
 
-本專案以 [docs/tasks.md](docs/tasks.md) 的 Milestone 任務卡推進:一次一張卡,實作 → 依卡上「驗收標準」自我驗證 → 回報 → 驗收後才進下一張。完成後更新該卡核取方塊為 `[x]` 並補「實作後」紀錄。臨時冒出的點子記入 tasks.md 末尾的 Backlog,不順手實作。
+本项目以 [docs/tasks.md](docs/tasks.md) 的 Milestone 任务卡推进:一次一张卡,实现 → 依卡上「验收标准」自我验证 → 报告 → 验收后才进下一张。完成后更新该卡复选框为 `[x]` 并补「实现后」记录。临时冒出的点子记入 tasks.md 末尾的 Backlog,不顺手实现。
 
-## 發布新版本(維護者)
+## 发布新版本(维护者)
 
-映像建置與發布已由 CI 自動化(見 [.github/workflows/ci.yml](.github/workflows/ci.yml)):
+镜像构建与发布已由 CI 自动化(见 [.github/workflows/ci.yml](.github/workflows/ci.yml)):
 
-1. 確認 `main` 綠燈(backend / frontend / migrations 三個 job 通過)。
-2. 更新 `CHANGELOG.md`:把 `[Unreleased]` 內容整理到新版本標題下並註明日期,標註破壞性變更(⚠️)。
-3. 打標籤並推送:
+1. 确认 `main` 绿灯(backend / frontend / migrations 三个 job 通过)。
+2. 更新 `CHANGELOG.md`:把 `[Unreleased]` 内容整理到新版本标题下并注明日期,标注破坏性变更(⚠️)。
+3. 打标签并推送:
 
    ```bash
    git tag v1.0.0
    git push origin v1.0.0
    ```
 
-4. `v*` 標籤觸發 CI 的 `images` job,建置並推送**雙架構(amd64 + arm64)**映像到 GHCR:
+4. `v*` 标签触发 CI 的 `images` job,构建并推送**双架构(amd64 + arm64)**镜像到 GHCR:
    - `ghcr.io/begin0808/course_scheduling_system-api`
    - `ghcr.io/begin0808/course_scheduling_system-worker`
    - `ghcr.io/begin0808/course_scheduling_system-web`
 
-   每個映像會推 `:latest`、`:<版本標籤>`(如 `v1.0.0`,即 `github.ref_name`)與 `:<commit sha>` 三個 tag。`main` push 僅建 amd64;**版本標籤才建雙架構**。
-5. 在 GitHub 建立 Release,關聯該標籤,貼上該版 CHANGELOG 內容。
-6. 使用者升級:`.env` 設 `IMAGE_TAG=v1.0.0` → `docker compose pull && docker compose up -d`(見 [docs/deploy/upgrade.md](docs/deploy/upgrade.md))。`IMAGE_TAG` 即對應此處推送的版本標籤。
+   每个镜像会推 `:latest`、`:<版本标签>`(如 `v1.0.0`,即 `github.ref_name`)与 `:<commit sha>` 三个 tag。`main` push 仅建 amd64;**版本标签才建双架构**。
+5. 在 GitHub 创建 Release,关联该标签,粘贴该版 CHANGELOG 内容。
+6. 用户升级：在 `.env` 中设置 `IMAGE_TAG=v1.0.0`，然后执行 `sudo docker compose pull && sudo docker compose up -d`（见 [升级说明](docs/deploy/upgrade.md)）。`IMAGE_TAG` 对应此处推送的版本标签。
 
-## 授權
+## 授权
 
-貢獻即表示你同意以 [MIT](LICENSE) 授權釋出你的貢獻。
+贡献即表示你同意以 [MIT](LICENSE) 授权释出你的贡献。

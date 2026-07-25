@@ -5,16 +5,10 @@ import { useRoute } from 'vue-router'
 import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard, LogEntry } from '@/api/substitutionLog'
 import { listSemesters } from '@/api/semesters'
-import { useAppConfigStore } from '@/stores/appConfig'
 
-const appConfig = useAppConfigStore()
-const mainland = computed(() => appConfig.isMainland)
-const tr = (tw: string, cn: string) => mainland.value ? cn : tw
-const WEEKDAYS = computed(() => mainland.value
-  ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  : ['週日', '週一', '週二', '週三', '週四', '週五', '週六'])
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
-// NDatePicker 給的是毫秒時間戳;以本機日期組出 YYYY-MM-DD,避免 toISOString 的 UTC 倒退
+// NDatePicker 给的是毫秒时间戳;以本机日期组出 YYYY-MM-DD,避免 toISOString 的 UTC 倒退
 function toISODate(ts: number): string {
   const d = new Date(ts)
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -41,7 +35,7 @@ const loading = ref(false)
 
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
 const dateLabel = computed(() =>
-  board.value ? `${board.value.date}(${WEEKDAYS.value[board.value.weekday % 7]})` : '')
+  board.value ? `${board.value.date}（${WEEKDAYS[board.value.weekday % 7]}）` : '')
 
 async function reload() {
   if (sid.value === null) return
@@ -73,11 +67,9 @@ function openPrint() {
 }
 
 function dispositionText(e: LogEntry): string {
-  if (!e.disposed) return tr('待安排', '待安排')
+  if (!e.disposed) return '待安排'
   if (e.sub_type === 'swap' && e.swap_period_name) {
-    return mainland.value
-      ? `调课 · ${e.handler_name}（补 ${e.swap_date} ${e.swap_period_name}）`
-      : `調課 · ${e.handler_name}(補 ${e.swap_date} ${e.swap_period_name})`
+    return `调课 · ${e.handler_name}（补 ${e.swap_date} ${e.swap_period_name}）`
   }
   if (e.handler_name) return `${e.sub_type_label} · ${e.handler_name}`
   return e.sub_type_label ?? ''
@@ -93,10 +85,10 @@ function statusType(e: LogEntry): string {
 <template>
   <n-space vertical size="large">
     <n-space align="center" :wrap="true">
-      <h2 style="margin: 0">{{ tr('今日調代課看板', '今日调代课看板') }}</h2>
+      <h2 style="margin: 0">{{ '今日调课与代课看板' }}</h2>
       <n-select
         :value="sid" :options="semesterOptions" style="width: 200px"
-        :placeholder="tr('選擇學期', '选择学期')" @update:value="onSemesterChange"
+        :placeholder="'选择学期'" @update:value="onSemesterChange"
       />
       <n-date-picker
         v-model:value="dateTs" type="date" style="width: 160px"
@@ -106,7 +98,7 @@ function statusType(e: LogEntry): string {
         v-if="board?.entries.length" type="primary" data-testid="board-print"
         @click="openPrint"
       >
-        {{ tr('列印通知單', '打印通知单') }}
+        {{ '打印通知单' }}
       </n-button>
     </n-space>
 
@@ -114,14 +106,14 @@ function statusType(e: LogEntry): string {
 
     <n-empty
       v-if="board && !board.entries.length && !loading"
-      :description="tr('今日無調代課', '今日无调代课')" data-testid="board-empty" style="padding: 40px 0"
+      :description="'今日无调课与代课'" data-testid="board-empty" style="padding: 40px 0"
     />
 
     <table v-else-if="board?.entries.length" class="data-table" data-testid="board-table">
       <thead>
         <tr>
-          <th>{{ tr('節次', '节次') }}</th><th>{{ tr('班級', '班级') }}</th><th>{{ tr('科目', '科目') }}</th><th>{{ tr('原任教師', '原任教师') }}</th>
-          <th>{{ tr('假別', '假别') }}</th><th>{{ tr('處置', '处置') }}</th><th>{{ tr('狀態', '状态') }}</th>
+          <th>节次</th><th>班级</th><th>科目</th><th>原授课教师</th>
+          <th>请假类型</th><th>处理方式</th><th>状态</th>
         </tr>
       </thead>
       <tbody>

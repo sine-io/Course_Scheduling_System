@@ -1,7 +1,12 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { NEXT_MON, SEM_END, SEM_START, WED, WED2, withWeekday } from './dates'
-import { deleteSemesterByYearTerm, login } from './helpers'
+import { NEXT_MON, WED, WED2, withWeekday } from './dates'
+import {
+  createTestSemester,
+  deleteSemesterByYearTerm,
+  login,
+  semesterLabel,
+} from './helpers'
 
 const SHOTS = 'e2e/screenshots'
 const PENDING_ORANGE = 'rgb(240, 160, 32)'
@@ -11,10 +16,10 @@ const post = async (page: Page, url: string, data: object) =>
 
 async function selectSemester(page: Page, year: number) {
   await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: `${year} 學年度第 1 學期` }).click()
+  await page.locator('.n-base-select-option', { hasText: semesterLabel(year) }).click()
 }
 
-/** Naive UI 的日期輸入:填字串再按 Enter 才會落值。 */
+/** Naive UI 的日期输入:填字符串再按 Enter 才会落值。 */
 async function fillDate(page: Page, testId: string, value: string) {
   const input = page.getByTestId(testId).locator('input')
   await input.click()
@@ -22,19 +27,16 @@ async function fillDate(page: Page, testId: string, value: string) {
   await input.press('Enter')
 }
 
-/** 王師週三 5 節國文;課表已發布(請假只看已發布課表)。 */
+/** 王师周三 5 节语文;课表已发布(请假只看已发布课表)。 */
 async function seedPublishedSchool(page: Page, year: number) {
-  const sem = await post(page, '/api/semesters', {
-    academic_year: year, term: 1, template_key: 'junior_high',
-    start_date: SEM_START, end_date: SEM_END,
-  })
+  const sem = await createTestSemester(page, year)
   const sid = sem.id
   const subjects: Record<string, number> = {}
   for (const s of await (await page.request.get(`/api/subjects?semester_id=${sid}`)).json()) {
     subjects[s.name] = s.id
   }
   const wang = await post(page, `/api/teachers?semester_id=${sid}`,
-    { name: '王師', base_periods: 20 })
+    { name: '王师', base_periods: 20 })
   const tt = await post(page, `/api/timetables?semester_id=${sid}`, { name: '草稿A' })
 
   const classes: number[] = []
@@ -50,7 +52,7 @@ async function seedPublishedSchool(page: Page, year: number) {
 
   for (const [i, cid] of classes.entries()) {
     const a = await post(page, `/api/assignments?semester_id=${sid}`, {
-      class_id: cid, subject_id: subjects['國文'], periods_per_week: 1,
+      class_id: cid, subject_id: subjects['语文'], periods_per_week: 1,
       teachers: [{ teacher_id: wang.id }], block_rules: [],
     })
     await page.request.post(`/api/timetables/${tt.id}/entries`, {
@@ -61,10 +63,10 @@ async function seedPublishedSchool(page: Page, year: number) {
   return { sid, teacherId: wang.id as number }
 }
 
-// ── 驗收①③:整天假展開 5 節 → 銷假級聯取消 ──
-test('請假登記:組長代登整天假,展開受影響節次,銷假後級聯取消', async ({ page }) => {
+// ── 验收①③:全天假展开 5 节 → 销假级联取消 ──
+test('请假登记:排课管理员代登全天假,展开受影响节次,销假后级联取消', async ({ page }) => {
   test.setTimeout(120_000)
-  const YEAR = 138
+  const YEAR = 2049
   await login(page)
   await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
@@ -73,33 +75,33 @@ test('請假登記:組長代登整天假,展開受影響節次,銷假後級聯�
   await page.goto('/leaves')
   await selectSemester(page, YEAR)
 
-  // 代登:選教師 → 假別 → 日期
+  // 代登:选教师 → 请假类型 → 日期
   await page.getByTestId('lv-teacher').click()
-  await page.locator('.n-base-select-option', { hasText: '王師' }).click()
-  await fillDate(page, 'lv-start', WED) // 週三
+  await page.locator('.n-base-select-option', { hasText: '王师' }).click()
+  await fillDate(page, 'lv-start', WED) // 周三
   await fillDate(page, 'lv-end', WED)
   await page.getByTestId('lv-reason').locator('input').fill('流感')
   await page.getByTestId('lv-submit').click()
 
-  // 週三整天 → 5 節課,節次一律顯示節次表的名稱
+  // 周三全天 → 5 节课,节次统一显示作息时间表的名称
   const card = page.getByTestId('lv-card').first()
-  await expect(card).toContainText(`王師 · 病假 · ${withWeekday(WED)} 整天`)
-  await expect(page.getByTestId('lv-pending').first()).toHaveText('待處理 5 節')
+  await expect(card).toContainText(`王师 · 病假 · ${withWeekday(WED)} 全天`)
+  await expect(page.getByTestId('lv-pending').first()).toHaveText('待处理 5 节')
 
   const table = page.getByTestId('lv-affected').first()
   await expect(table.locator('tbody tr')).toHaveCount(5)
-  await expect(table).toContainText('第一節')
+  await expect(table).toContainText('第一节')
   await expect(table).toContainText('701')
-  await expect(table).toContainText('國文')
-  await expect(table).toContainText(withWeekday(WED))  // 沒有星期就看不出為什麼只有這天有課
+  await expect(table).toContainText('语文')
+  await expect(table).toContainText(withWeekday(WED))  // 没有星期就看不出为什么只有这天有课
   await page.screenshot({ path: `${SHOTS}/leave-1-affected.png` })
 
-  // 銷假 → 所有節次轉為已取消
+  // 销假 → 所有节次转为已取消
   await page.getByTestId('lv-cancel').first().click()
-  await page.getByRole('button', { name: '確定' }).click()
-  await expect(page.getByText('已銷假').first()).toBeVisible()
+  await page.getByRole('button', { name: '确认' }).click()
+  await expect(page.getByText('已销假').first()).toBeVisible()
   await expect(table.locator('tbody tr').first()).toContainText('已取消')
-  // 顏色也要對:已取消不該和「待處理」長得一樣,否則掃表時分不出還有幾節沒人處理
+  // 颜色也要对:已取消不该和「待处理」长得一样,否则扫表时分不出还有几节没人处理
   const cancelledColor = await table.getByTestId('lv-status').first()
     .evaluate((el) => getComputedStyle(el).color)
   expect(cancelledColor).not.toBe(PENDING_ORANGE)
@@ -108,16 +110,16 @@ test('請假登記:組長代登整天假,展開受影響節次,銷假後級聯�
   await deleteSemesterByYearTerm(page, YEAR, 1)
 })
 
-// ── 驗收②:跨週末只展開上課日 + 半天假 ──
-test('請假登記:跨週末只展開上課日;上午請假不含下午的課', async ({ page }) => {
+// ── 验收②:跨周末只展开上课日 + 半天假 ──
+test('请假登记:跨周末只展开上课日;上午请假不含下午的课', async ({ page }) => {
   test.setTimeout(120_000)
-  const YEAR = 139
+  const YEAR = 2050
   await login(page)
   await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const { sid, teacherId } = await seedPublishedSchool(page, YEAR)
 
-  // 週三 ~ 下週一:中間夾週六日,王師只有週三有課
+  // 周三 ~ 下周一:中间夹周六日,王师只有周三有课
   const across = await post(page, `/api/leaves?semester_id=${sid}`, {
     teacher_id: teacherId, leave_type: 'official',
     start_date: WED, end_date: NEXT_MON,
@@ -126,7 +128,7 @@ test('請假登記:跨週末只展開上課日;上午請假不含下午的課', 
   expect([...new Set(across.affected_periods.map((p: { date: string }) => p.date))])
     .toEqual([WED])
 
-  // 下週三上午:不該把下午的課列進來
+  // 下周三上午:不该把下午的课列进来
   const half = await post(page, `/api/leaves?semester_id=${sid}`, {
     teacher_id: teacherId, leave_type: 'personal',
     start_date: WED2, end_date: WED2,

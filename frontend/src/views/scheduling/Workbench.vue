@@ -18,10 +18,8 @@ import {
   listTimetables, lockEntry, moveEntry, placeEntry,
 } from '@/api/timetables'
 import type { Timetable, TimetableBrief } from '@/api/timetables'
-import { useProfileText } from '@/composables/useProfileText'
 
 const message = useMessage()
-const { tr } = useProfileText()
 
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
@@ -49,7 +47,7 @@ const classOptions = computed(() =>
 const teacherOptions = computed(() => teachers.value.map((t) => ({ label: t.name, value: t.id })))
 const roomOptions = computed(() => rooms.value.map((r) => ({ label: r.name, value: r.id })))
 
-// 拖拉排課僅在班級視角進行;教師/場地視角為唯讀檢視(避免跨節次表的節次號對不齊)
+// 拖拽排课仅在班级视角进行;教师和教室/场地视角为只读查看(避免跨作息时间表的节次号不一致)
 const readonly = computed(() => view.value !== 'class')
 
 async function loadSemester(id: number) {
@@ -117,7 +115,7 @@ async function onDraftChange(id: number) {
   await refreshTimetable()
 }
 
-// ── 格位 → 元件資料 ──
+// ── 单元格 → 组件数据 ──
 const visibleEntries = computed<GridEntry[]>(() => {
   const all = tt.value?.entries ?? []
   let list = all
@@ -132,7 +130,7 @@ const visibleEntries = computed<GridEntry[]>(() => {
   }))
 })
 
-// ── 未排課務(班級視角)──
+// ── 未排教学任务(班级视角)──
 const placedByAssignment = computed(() => {
   const m = new Map<number, number>()
   for (const e of tt.value?.entries ?? []) {
@@ -155,7 +153,7 @@ const trayItems = computed<TrayItem[]>(() => {
 })
 const totalRemaining = computed(() => trayItems.value.reduce((n, x) => n + x.remaining, 0))
 
-// ── 拖拉與衝突檢查 ──
+// ── 拖拽与冲突检查 ──
 interface WbDrag extends DragData { assignmentId: number; span: number }
 const dragging = ref<WbDrag | null>(null)
 const feedback = ref<DropFeedback | null>(null)
@@ -184,7 +182,7 @@ async function onCheck(p: { weekday: number; period_no: number }) {
   const d = dragging.value
   if (!d || !ttId.value) return
   const key = `${p.weekday}-${p.period_no}`
-  if (key === lastKey) return // dragover 會連續觸發,同格只查一次
+  if (key === lastKey) return // dragover 会连续触发,同格只查一次
   lastKey = key
   const token = ++checkToken
   try {
@@ -192,12 +190,12 @@ async function onCheck(p: { weekday: number; period_no: number }) {
       course_assignment_id: d.assignmentId, weekday: p.weekday, period_no: p.period_no,
       span: d.span, ...(d.source === 'grid' ? { ignore_entry_id: d.entryId as number } : {}),
     })
-    if (token !== checkToken) return // 丟棄過期回應
+    if (token !== checkToken) return // 丢弃过期响应
     feedback.value = {
       weekday: p.weekday, period_no: p.period_no,
       ok: res.ok, reason: res.conflicts[0]?.message,
     }
-  } catch { /* 檢查失敗不阻擋 UI */ }
+  } catch { /* 检查失败不阻挡 UI */ }
 }
 
 async function onDrop(p: { weekday: number; period_no: number }) {
@@ -249,7 +247,7 @@ async function onTrayDrop(ev: DragEvent) {
   const id = ttId.value
   const e = tt.value?.entries.find((x) => x.id === d.entryId)
   if (!e) return
-  if (e.locked) { message.warning(tr('鎖定格位不可移除,請先解鎖', '锁定单元格不可移除，请先解锁')); return }
+  if (e.locked) { message.warning('锁定单元格不可移除，请先解锁'); return }
   const snap = { aid: e.course_assignment_id, weekday: e.weekday, period_no: e.period_no, span: e.span }
   let curId = e.id
   try {
@@ -282,15 +280,15 @@ async function onSelect(g: GridEntry) {
   const next = !e.locked
   tt.value = await lockEntry(id, e.id, next)
   message.info(next
-    ? tr(`已鎖定「${e.subject}」`, `已锁定“${e.subject}”`)
-    : tr(`已解鎖「${e.subject}」`, `已解锁“${e.subject}”`))
+    ? `已锁定“${e.subject}”`
+    : `已解锁“${e.subject}”`)
   pushUndo({
     undo: async () => { tt.value = await lockEntry(id, e.id, !next) },
     redo: async () => { tt.value = await lockEntry(id, e.id, next) },
   })
 }
 
-// ── 復原 / 重做(command stack,上限 20 步)──
+// ── 撤销 / 重做（命令栈上限 20 步）──
 interface Cmd { undo: () => Promise<void>; redo: () => Promise<void> }
 const UNDO_LIMIT = 20
 const undoStack = ref<Cmd[]>([])
@@ -306,13 +304,13 @@ async function doUndo() {
   const c = undoStack.value.pop()
   if (!c || busy.value) return
   busy.value = true
-  try { await c.undo(); redoStack.value.push(c) } catch { message.error(tr('復原失敗', '撤销失败')) } finally { busy.value = false }
+  try { await c.undo(); redoStack.value.push(c) } catch { message.error('撤销失败') } finally { busy.value = false }
 }
 async function doRedo() {
   const c = redoStack.value.pop()
   if (!c || busy.value) return
   busy.value = true
-  try { await c.redo(); undoStack.value.push(c) } catch { message.error(tr('重做失敗', '重做失败')) } finally { busy.value = false }
+  try { await c.redo(); undoStack.value.push(c) } catch { message.error('重做失败') } finally { busy.value = false }
 }
 function onKey(ev: KeyboardEvent) {
   if (!(ev.ctrlKey || ev.metaKey)) return
@@ -325,9 +323,9 @@ function onKey(ev: KeyboardEvent) {
 <template>
   <n-space vertical size="large">
     <n-space align="center" :wrap="true">
-      <h1 style="margin: 0">{{ tr('排課工作台', '排课工作台') }}</h1>
+      <h1 style="margin: 0">{{ '排课工作台' }}</h1>
       <n-select
-        :value="sid" :options="semesterOptions" :placeholder="tr('選擇學期', '选择学期')"
+        :value="sid" :options="semesterOptions" :placeholder="'选择学期'"
         style="width: 200px" @update:value="loadSemester"
       />
       <n-select
@@ -335,22 +333,22 @@ function onKey(ev: KeyboardEvent) {
         style="width: 140px" @update:value="onDraftChange"
       />
       <n-button size="small" data-testid="wb-undo" :disabled="!undoStack.length" @click="doUndo">
-        {{ tr('復原', '撤销') }} (Ctrl+Z)
+        {{ '撤销' }} (Ctrl+Z)
       </n-button>
       <n-button size="small" data-testid="wb-redo" :disabled="!redoStack.length" @click="doRedo">
-        {{ tr('重做', '重做') }}
+        {{ '重做' }}
       </n-button>
-      <n-text depth="3" style="font-size: 12px">{{ tr('變更即時儲存', '更改会实时保存') }}</n-text>
+      <n-text depth="3" style="font-size: 12px">{{ '更改会实时保存' }}</n-text>
     </n-space>
 
-    <n-alert v-if="!sid" type="info">{{ tr('請先建立學期並完成配課,再回此頁排課。', '请先建立学期并完成配课，再返回此页排课。') }}</n-alert>
+    <n-alert v-if="!sid" type="info">{{ '请先创建学期并完成教学任务，再返回此页排课。' }}</n-alert>
 
     <template v-else>
       <n-space align="center">
         <n-radio-group :value="view" @update:value="(v: 'class'|'teacher'|'room') => { view = v; onViewChange() }">
-          <n-radio-button value="class" data-testid="wb-view-class">{{ tr('班級視角', '班级视图') }}</n-radio-button>
-          <n-radio-button value="teacher" data-testid="wb-view-teacher">{{ tr('教師視角', '教师视图') }}</n-radio-button>
-          <n-radio-button value="room" data-testid="wb-view-room">{{ tr('場地視角', '场地视图') }}</n-radio-button>
+          <n-radio-button value="class" data-testid="wb-view-class">{{ '班级视图' }}</n-radio-button>
+          <n-radio-button value="teacher" data-testid="wb-view-teacher">{{ '教师视图' }}</n-radio-button>
+          <n-radio-button value="room" data-testid="wb-view-room">{{ '教室/场地视图' }}</n-radio-button>
         </n-radio-group>
         <n-select
           v-if="view === 'class'" :value="classId" data-testid="wb-class"
@@ -364,12 +362,12 @@ function onKey(ev: KeyboardEvent) {
           v-else v-model:value="roomId" data-testid="wb-room"
           :options="roomOptions" style="width: 180px" filterable
         />
-        <n-tag v-if="readonly" size="small" type="warning">{{ tr('唯讀檢視(排課請切回班級視角)', '只读视图（排课请切回班级视图）') }}</n-tag>
+        <n-tag v-if="readonly" size="small" type="warning">{{ '只读视图（排课请切回班级视图）' }}</n-tag>
       </n-space>
 
       <div class="wb-layout">
         <n-card size="small" style="flex: 1; min-width: 0">
-          <n-empty v-if="periods.length === 0" :description="tr('此學期尚無節次表', '此学期尚无节次表')" />
+          <n-empty v-if="periods.length === 0" :description="'此学期尚无作息时间表'" />
           <TimetableGrid
             v-else
             :periods="periods" :num-weekdays="numWeekdays" :entries="visibleEntries"
@@ -385,15 +383,15 @@ function onKey(ev: KeyboardEvent) {
         >
           <template #header>
             <n-space align="center" size="small">
-              <span>{{ tr('未排課務', '未排课程') }}</span>
+              <span>{{ '未排课程' }}</span>
               <n-tag size="small" :type="totalRemaining === 0 ? 'success' : 'info'" data-testid="wb-remaining">
-                {{ tr('剩', '剩余') }} {{ totalRemaining }} {{ tr('節', '节') }}
+                {{ '剩余' }} {{ totalRemaining }} {{ '节' }}
               </n-tag>
             </n-space>
           </template>
           <n-space vertical size="small">
             <n-text v-if="trayItems.length === 0" depth="3" data-testid="wb-tray-empty">
-              {{ tr('本班課務已全部排入', '本班课程已全部排入') }} 🎉
+              {{ '本班课程已全部排入' }} 🎉
             </n-text>
             <div
               v-for="item in trayItems" :key="item.a.id"
@@ -402,14 +400,14 @@ function onKey(ev: KeyboardEvent) {
             >
               <div class="tray-subject">
                 {{ item.a.subject.name }}
-                <n-tag v-if="item.span > 1" size="tiny" type="warning">{{ item.span }}{{ tr('連堂', '连堂') }}</n-tag>
+                <n-tag v-if="item.span > 1" size="tiny" type="warning">{{ item.span }}{{ '连堂' }}</n-tag>
               </div>
               <div class="tray-meta">
-                {{ item.a.teachers.map((t) => t.name).join('、') }} · {{ tr('剩', '剩余') }} {{ item.remaining }} {{ tr('節', '节') }}
+                {{ item.a.teachers.map((t) => t.name).join('、') }} · {{ '剩余' }} {{ item.remaining }} {{ '节' }}
               </div>
             </div>
             <n-text depth="3" style="font-size: 12px">
-              {{ tr('拖曳到左側格子排課;拖回此處移除;點格內卡片可鎖定/解鎖。', '拖到左侧单元格排课；拖回此处移除；点击单元格内卡片可锁定或解锁。') }}
+              {{ '拖到左侧单元格排课；拖回此处移除；点击单元格内卡片可锁定或解锁。' }}
             </n-text>
           </n-space>
         </n-card>

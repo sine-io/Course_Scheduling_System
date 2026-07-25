@@ -1,6 +1,6 @@
-"""學期與節次表 API。
+"""学期与作息时间表 API。
 
-權限:讀取 = 教學組長/教務主任;寫入 = 教學組長(admin 一律通過)。
+权限:读取 = 排课管理员/教务主任;写入 = 排课管理员(admin 统一通过)。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -27,11 +27,10 @@ from app.schemas.semester import (
     TemplateOut,
 )
 from app.schemas.wizard import SemesterSummary
-from app.services import deployment_profile
 from app.services import period_tables as pt_service
 from app.services import templates as tpl
 from app.services.calendar import readiness_issues
-from app.services.localization import validate_academic_year
+from app.services.school_rules import validate_academic_year
 from app.services.semester_copy import CopyOptions, copy_semester
 
 router = APIRouter(tags=["semesters"])
@@ -40,44 +39,18 @@ viewer = require_roles(Role.scheduler, Role.director)
 editor = require_roles(Role.scheduler)
 
 
-# ── 內部工具 ──────────────────────────
-def _ensure_profile(db: Session) -> str:
-    try:
-        return deployment_profile.assert_profile(db)
-    except deployment_profile.ProfileMismatchError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={
-                "code": "school_profile_locked",
-                "message": str(exc),
-                "locked_profile": exc.locked,
-                "requested_profile": exc.requested,
-            },
-        ) from exc
-
-
-def _template_allowed(template_key: str, profile: str) -> bool:
-    is_mainland_template = template_key.startswith("cn_")
-    return is_mainland_template if profile == "cn_mainland" else not is_mainland_template
-
-
-def _available_templates(profile: str) -> list[dict]:
-    return [t for t in tpl.load_templates() if _template_allowed(t["key"], profile)]
-
-
+# ── 内部工具 ──────────────────────────
 def _get_semester(db: Session, semester_id: int) -> Semester:
-    _ensure_profile(db)
     semester = db.get(Semester, semester_id)
     if semester is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
     return semester
 
 
 def _get_period_table(db: Session, table_id: int) -> PeriodTable:
-    _ensure_profile(db)
     table = db.get(PeriodTable, table_id)
     if table is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到節次表")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到作息时间表")
     return table
 
 
@@ -92,10 +65,9 @@ def _unset_other_defaults(db: Session, semester_id: int, keep_id: int | None) ->
             t.is_default = False
 
 
-# ── 學制範本 ──────────────────────────
+# ── 学制模板 ──────────────────────────
 @router.get("/school-templates", response_model=list[TemplateOut])
-def list_templates(db: Session = Depends(get_db), _: object = Depends(viewer)) -> list[TemplateOut]:
-    profile = _ensure_profile(db)
+def list_templates(_: object = Depends(viewer)) -> list[TemplateOut]:
     return [
         TemplateOut(
             key=t["key"],
@@ -104,14 +76,13 @@ def list_templates(db: Session = Depends(get_db), _: object = Depends(viewer)) -
             subject_count=len(t.get("subjects", [])),
             editable=bool(t.get("editable", False)),
         )
-        for t in _available_templates(profile)
+        for t in tpl.load_templates()
     ]
 
 
-# ── 學期 ──────────────────────────────
+# ── 学期 ──────────────────────────────
 @router.get("/semesters", response_model=list[SemesterListItem])
 def list_semesters(db: Session = Depends(get_db), _: object = Depends(viewer)):
-    _ensure_profile(db)
     return db.scalars(
         select(Semester).order_by(Semester.academic_year.desc(), Semester.term.desc())
     ).all()
@@ -122,13 +93,7 @@ def create_semester(
     body: SemesterCreate, db: Session = Depends(get_db), _: object = Depends(editor)
 ) -> Semester:
     try:
-        profile = deployment_profile.assert_profile(db)
-        validate_academic_year(body.academic_year, profile)
-    except deployment_profile.ProfileMismatchError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={"code": "school_profile_locked", "message": str(exc)},
-        ) from exc
+        validate_academic_year(body.academic_year)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     exists = db.scalar(
@@ -137,14 +102,11 @@ def create_semester(
         )
     )
     if exists:
-        raise HTTPException(status.HTTP_409_CONFLICT, "該學年度學期已存在")
+        raise HTTPException(status.HTTP_409_CONFLICT, "该学年学期已存在")
 
     if body.template_key:
-        if (
-            not _template_allowed(body.template_key, profile)
-            or tpl.get_template(body.template_key) is None
-        ):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的學制範本")
+        if tpl.get_template(body.template_key) is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的学校模板")
         semester = tpl.create_semester_from_template(
             db,
             academic_year=body.academic_year,
@@ -176,13 +138,7 @@ def copy_to_new_semester(
     _: object = Depends(editor),
 ) -> Semester:
     try:
-        profile = deployment_profile.assert_profile(db)
-        validate_academic_year(body.academic_year, profile)
-    except deployment_profile.ProfileMismatchError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={"code": "school_profile_locked", "message": str(exc)},
-        ) from exc
+        validate_academic_year(body.academic_year)
     except ValueError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     source = _get_semester(db, source_id)
@@ -192,7 +148,7 @@ def copy_to_new_semester(
         )
     )
     if exists:
-        raise HTTPException(status.HTTP_409_CONFLICT, "目標學年度學期已存在")
+        raise HTTPException(status.HTTP_409_CONFLICT, "目标学年学期已存在")
     opts = CopyOptions(
         period_tables=body.period_tables,
         subjects=body.subjects,
@@ -259,7 +215,7 @@ def update_semester(
                     status.HTTP_409_CONFLICT,
                     detail={
                         "code": "semester_not_ready",
-                        "message": "学期资料尚未准备完成",
+                        "message": "学期数据尚未准备完成",
                         "issues": issues,
                     },
                 )
@@ -280,7 +236,7 @@ def delete_semester(
     db.commit()
 
 
-# ── 節次表 ────────────────────────────
+# ── 作息时间表 ────────────────────────────
 @router.post(
     "/semesters/{semester_id}/period-tables",
     response_model=PeriodTableOut,
@@ -296,9 +252,8 @@ def create_period_table(
 
     if body.template_key:
         template = tpl.get_template(body.template_key)
-        profile = deployment_profile.assert_profile(db)
-        if not _template_allowed(body.template_key, profile) or template is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的學制範本")
+        if template is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的学校模板")
         table = tpl.build_period_table_from_template(
             template, name=body.name, is_default=body.is_default
         )
@@ -361,7 +316,7 @@ def delete_period_table(
     if ref_count:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"此節次表已被 {ref_count} 個班級指定使用,請先改用其他節次表再刪除",
+            f"此作息时间表已被 {ref_count} 个班级指定使用,请先改用其他作息时间表再删除",
         )
     db.delete(table)
     if semester is not None:
@@ -376,7 +331,7 @@ def replace_periods(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> PeriodTable:
-    """整批取代節次表的所有格位(視覺化編輯器儲存用)。"""
+    """整批取代作息时间表的所有单元格(视觉化编辑器存储用)。"""
     table = _get_period_table(db, table_id)
     semester = db.get(Semester, table.semester_id)
 
@@ -386,7 +341,7 @@ def replace_periods(
         if key in seen:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                f"重複的格位:星期 {p.weekday} 第 {p.period_no} 節",
+                f"重复的单元格:星期 {p.weekday} 第 {p.period_no} 节",
             )
         seen.add(key)
 
@@ -427,6 +382,6 @@ def _slots_out(rows: list[Period]) -> list[AvailableSlot]:
 def available_slots(
     table_id: int, db: Session = Depends(get_db), _: object = Depends(viewer)
 ) -> list[AvailableSlot]:
-    """回傳可排課時段(type=regular),供排課時段檢查使用。"""
+    """返回可排课时段(type=regular),供排课时段检查使用。"""
     _get_period_table(db, table_id)
     return _slots_out(pt_service.regular_slots(db, table_id))

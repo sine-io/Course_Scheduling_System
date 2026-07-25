@@ -1,11 +1,11 @@
-"""課表匯出:把已發布課表攤成格線,產生 Excel / PDF(HTML)/PNG(M5-1)。
+"""课表导出:把已发布课表摊成格线,生成 Excel / PDF(HTML)/PNG(M5-1)。
 
-三種對象(班級 / 教師 / 場地)共用同一個格線模型 `Grid`,再交給各格式的渲染器,
-確保三種格式與畫面課表內容一致(驗收①)。資料來源一律是**已發布**課表(D4 快照)。
+三种对象(班级 / 教师 / 教室/场地)共用同一个格线模型 `Grid`,再交给各格式的渲染器,
+确保三种格式与页面课表内容一致(验收①)。数据来源统一是**已发布**课表(D4 快照)。
 
-- Excel 由 openpyxl 產生,可在 api 同步跑(輕量)。
-- PDF 需 WeasyPrint(系統依賴+中文字型只在 worker),故 PDF/PNG 走 worker 背景渲染;
-  本模組只負責產出 HTML,實際 write_pdf 在 `app.workers.export_job`。
+- Excel 由 openpyxl 生成,可在 api 同步跑(轻量)。
+- PDF 需 WeasyPrint(系统依赖+中文字体只在 worker),故 PDF/PNG 走 worker 背景渲染;
+  本模块只负责产出 HTML,实际 write_pdf 在 `app.workers.export_job`。
 """
 
 import io
@@ -21,20 +21,20 @@ from app.models.basedata import ClassUnit, Room, Teacher
 from app.models.period import Period, PeriodTable, PeriodType
 from app.models.semester import Semester
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
-from app.services import localization
 from app.services import period_tables as pt_service
+from app.services import school_rules
 
 
 class ExportError(Exception):
-    """匯出前置條件不成立(呼叫端轉為 4xx)。"""
+    """导出前置条件不成立(调用方转为 4xx)。"""
 
 
-# ── 格線模型 ────────────────────────────────────────────────
+# ── 格线模型 ────────────────────────────────────────────────
 @dataclass(frozen=True, slots=True)
 class Cell:
-    lines: tuple[str, ...] = ()  # 科目 / 教師或班級 / 教室(逐行)
-    span: int = 1  # 連堂佔幾列
-    covered: bool = False  # 被上方連堂覆蓋,不繪
+    lines: tuple[str, ...] = ()  # 科目 / 教师或班级 / 教室(逐行)
+    span: int = 1  # 连堂占几列
+    covered: bool = False  # 被上方连堂覆盖,不绘
 
 
 @dataclass
@@ -42,7 +42,7 @@ class Row:
     period_no: int
     label: str
     is_regular: bool
-    cells: list[Cell] = field(default_factory=list)  # 長度 = num_weekdays
+    cells: list[Cell] = field(default_factory=list)  # 长度 = num_weekdays
 
 
 @dataclass
@@ -53,7 +53,7 @@ class Grid:
 
     @property
     def weekday_names(self) -> list[str]:
-        return list(localization.weekday_names()[: self.num_weekdays])
+        return list(school_rules.weekday_names()[: self.num_weekdays])
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,13 +79,13 @@ class _EntryView:
 
 
 class _Published:
-    """一份已發布課表的匯出來源:格位、節次表、對象清單一次撈齊。"""
+    """一份已发布课表的导出来源:一次查询单元格、作息时间表和对象列表。"""
 
     def __init__(self, db: Session, semester_id: int) -> None:
         self.db = db
         semester = db.get(Semester, semester_id)
         if semester is None:
-            raise ExportError("找不到學期")
+            raise ExportError("找不到学期")
         timetable = db.scalar(
             select(Timetable).where(
                 Timetable.semester_id == semester_id,
@@ -93,7 +93,7 @@ class _Published:
             )
         )
         if timetable is None:
-            raise ExportError("此學期尚無已發布的課表")
+            raise ExportError("此学期尚无已发布的课表")
         self.semester: Semester = semester
         self.timetable: Timetable = timetable
         self.entries = [
@@ -150,12 +150,12 @@ def _grid_from(
     entries: list[_EntryView],
     lines_of,
 ) -> Grid:
-    """把某對象的格位排進節次表格線。`lines_of(entry)` 決定每格顯示哪幾行。"""
+    """把某对象的单元格排进作息时间表格线。`lines_of(entry)` 决定每格显示哪几行。"""
     if table is None:
         return Grid(title=title, num_weekdays=5, rows=[])
     num_weekdays = table.num_weekdays
     periods = sorted(table.periods, key=lambda p: (p.period_no, p.weekday))
-    # 每個 period_no 取一個代表(名稱/類型),weekday 小者優先
+    # 每个 period_no 取一个代表(名称/类型),weekday 小者优先
     by_no: dict[int, Period] = {}
     for p in periods:
         by_no.setdefault(p.period_no, p)
@@ -185,7 +185,7 @@ def _grid_from(
     return grid
 
 
-# ── 三種對象 → Grid ─────────────────────────────────────────
+# ── 三种对象 → Grid ─────────────────────────────────────────
 def _class_lines(e: _EntryView) -> list[str]:
     return [x for x in (e.subject, e.teachers, e.room) if x]
 
@@ -202,7 +202,7 @@ def class_grid(pub: _Published, cls: ClassUnit) -> Grid:
     entries = [e for e in pub.entries if cls.id in e.class_ids]
     return _grid_from(
         pub.class_table(cls),
-        f"{cls.grade}年{cls.name} {localization.export_label('timetable')}",
+        f"{cls.grade}年{cls.name} {school_rules.export_label('timetable')}",
         entries,
         _class_lines,
     )
@@ -212,7 +212,7 @@ def teacher_grid(pub: _Published, teacher: Teacher) -> Grid:
     entries = [e for e in pub.entries if teacher.id in e.teacher_ids]
     return _grid_from(
         pub.default_table(),
-        f"{teacher.name} {localization.export_label('timetable')}",
+        f"{teacher.name} {school_rules.export_label('timetable')}",
         entries,
         _teacher_lines,
     )
@@ -222,7 +222,7 @@ def room_grid(pub: _Published, room: Room) -> Grid:
     entries = [e for e in pub.entries if e.room_id == room.id]
     return _grid_from(
         pub.default_table(),
-        f"{room.name} {localization.export_label('timetable')}",
+        f"{room.name} {school_rules.export_label('timetable')}",
         entries,
         _room_lines,
     )
@@ -233,19 +233,19 @@ def build_grid(db: Session, semester_id: int, view: str, target_id: int) -> tupl
     if view == "class":
         obj = db.get(ClassUnit, target_id)
         if obj is None or obj.semester_id != semester_id:
-            raise ExportError("找不到班級")
+            raise ExportError("找不到班级")
         return class_grid(pub, obj), pub.meta()
     if view == "teacher":
         obj_t = db.get(Teacher, target_id)
         if obj_t is None or obj_t.semester_id != semester_id:
-            raise ExportError("找不到教師")
+            raise ExportError("找不到教师")
         return teacher_grid(pub, obj_t), pub.meta()
     if view == "room":
         obj_r = db.get(Room, target_id)
         if obj_r is None or obj_r.semester_id != semester_id:
-            raise ExportError("找不到場地")
+            raise ExportError("找不到教室/场地")
         return room_grid(pub, obj_r), pub.meta()
-    raise ExportError(f"未知的檢視類型:{view}")
+    raise ExportError(f"未知的查看类型:{view}")
 
 
 def _classes(db: Session, semester_id: int) -> list[ClassUnit]:
@@ -259,14 +259,14 @@ def _classes(db: Session, semester_id: int) -> list[ClassUnit]:
 
 
 def school_workbook(db: Session, semester_id: int) -> bytes:
-    """全校總表:一個 Excel 檔,每班一個分頁。"""
+    """全校总表:一个 Excel 文件,每班一个工作表。"""
     pub = _Published(db, semester_id)
     grids = [class_grid(pub, c) for c in _classes(db, semester_id)]
     return grids_to_xlsx(grids, pub.meta())
 
 
 def class_batch_zip(db: Session, semester_id: int) -> bytes:
-    """批次匯出:全部班級各一個 Excel 檔,打包成 zip。"""
+    """批量导出:全部班级各一个 Excel 文件,打包成 zip。"""
     pub = _Published(db, semester_id)
     meta = pub.meta()
     buf = io.BytesIO()
@@ -279,11 +279,11 @@ def class_batch_zip(db: Session, semester_id: int) -> bytes:
 
 # ── Excel 渲染 ──────────────────────────────────────────────
 def _safe_sheet_title(title: str, used: set[str]) -> str:
-    # Excel 分頁名 ≤31 字、不可含 : \ / ? * [ ]
+    # Excel 工作表名称 ≤31 字,且不可包含 : \ / ? * [ ]
     clean = title
     for ch in ":\\/?*[]":
         clean = clean.replace(ch, " ")
-    clean = clean[:28].strip() or localization.export_label("timetable")
+    clean = clean[:28].strip() or school_rules.export_label("timetable")
     name, i = clean, 1
     while name in used:
         name = f"{clean[:26]}~{i}"
@@ -293,7 +293,7 @@ def _safe_sheet_title(title: str, used: set[str]) -> str:
 
 
 def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
-    """每張 Grid 一個分頁。"""
+    """每张 Grid 对应一个工作表。"""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
@@ -312,11 +312,11 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
         ws.append(
             [
                 f"{meta.school_name}　{meta.semester_label}　"
-                f"{localization.export_label('printed_on')}:{meta.printed_on}"
+                f"{school_rules.export_label('printed_on')}：{meta.printed_on}"
             ]
         )
         ws["A1"].font = Font(bold=True, size=14)
-        header = [localization.export_label("period"), *grid.weekday_names]
+        header = [school_rules.export_label("period"), *grid.weekday_names]
         ws.append(header)
         head_row = ws.max_row
         for c in ws[head_row]:
@@ -336,7 +336,7 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
                 c.border = border
                 if ci == 0 or not row.is_regular:
                     c.fill = shade
-            # 連堂:垂直合併
+            # 连堂:垂直合并
             for ci, cell in enumerate(row.cells):
                 if cell.span > 1:
                     col = ci + 2
@@ -349,32 +349,28 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
             ws.column_dimensions[ws.cell(row=head_row, column=col).column_letter].width = 16
         ws.freeze_panes = ws.cell(row=head_row + 1, column=2)
 
-    if not wb.sheetnames:  # 全空:給一張空白頁避免壞檔
-        wb.create_sheet(localization.export_label("timetable"))
+    if not wb.sheetnames:  # 全空:给一张空白页避免坏档
+        wb.create_sheet(school_rules.export_label("timetable"))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
 
 
-# ── HTML 渲染(供 worker 轉 PDF/PNG)─────────────────────────
+# ── HTML 渲染(供 worker 转 PDF/PNG)─────────────────────────
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def grid_to_html(grid: Grid, meta: Meta) -> str:
-    """單一對象的 A4 直式課表 HTML。中文由 worker 映像內嵌的 Noto CJK 呈現。"""
+    """单一对象的 A4 纵向课表 HTML。中文由 worker 镜像内嵌的 Noto CJK 呈现。"""
     head_cells = "".join(f"<th>{_esc(w)}</th>" for w in grid.weekday_names)
-    period_label = _esc(localization.export_label("period"))
+    period_label = _esc(school_rules.export_label("period"))
     subtitle = (
         f"{_esc(meta.school_name)}　{_esc(meta.semester_label)}　"
         f"{_esc(meta.timetable_name)}　"
-        f"{_esc(localization.export_label('printed_on'))}:{meta.printed_on}"
+        f"{_esc(school_rules.export_label('printed_on'))}：{meta.printed_on}"
     )
-    font_stack = (
-        '"Noto Sans CJK SC", "Noto Sans SC", sans-serif'
-        if localization.is_mainland()
-        else '"Noto Sans CJK TC", "Noto Sans TC", sans-serif'
-    )
+    font_stack = '"Noto Sans CJK SC", "Noto Sans SC", sans-serif'
     body_rows = []
     for row in grid.rows:
         tds = [f'<th class="pno">{_esc(row.label)}</th>']

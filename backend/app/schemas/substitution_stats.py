@@ -1,4 +1,4 @@
-"""代課鐘點統計 schema(M4-5)。"""
+"""代课课时统计 schema(M4-5)。"""
 
 from datetime import date
 

@@ -1,4 +1,4 @@
-// 代課鐘點月結統計(M4-5)。
+// 代课课时月结统计(M4-5)。
 
 import { apiGet } from '@/api/client'
 

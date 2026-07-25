@@ -1,6 +1,6 @@
-"""學期 model。
+"""学期 model。
 
-同校可並存多學期(準備中/進行中/已封存),所有資料以 semester_id 為範圍(見 D3/D5)。
+同校可并存多学期(准备中/进行中/已归档),所有数据以 semester_id 为范围(见 D3/D5)。
 """
 
 import enum
@@ -11,21 +11,21 @@ from sqlalchemy import Date, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
-from app.services.localization import format_semester_label
+from app.services.school_rules import format_semester_label
 
 if TYPE_CHECKING:
     from app.models.period import PeriodTable
 
 
 class SemesterStatus(enum.StrEnum):
-    preparing = "preparing"  # 準備中(建置資料、排課)
-    active = "active"        # 進行中(課表已發布、日常調代課)
-    archived = "archived"    # 已封存(歷史保存)
+    preparing = "preparing"  # 准备中(构建数据、排课)
+    active = "active"        # 进行中(课表已发布、日常调课与代课)
+    archived = "archived"    # 已归档(历史保存)
 
 
 class SemesterReadiness(enum.StrEnum):
-    draft = "draft"  # 尚未確認校曆/節次等部署資料
-    ready = "ready"  # 可進入排課與發布流程
+    draft = "draft"  # 排课准备尚未确认
+    ready = "ready"  # 排课准备已确认，可进入排课与发布流程
 
 
 class Semester(Base):
@@ -35,9 +35,9 @@ class Semester(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    academic_year: Mapped[int] = mapped_column(Integer)  # 學年度,如 115
-    term: Mapped[int] = mapped_column(Integer)           # 學期,1 或 2
-    # 領域日期,無時區(見 architecture.md D6)
+    academic_year: Mapped[int] = mapped_column(Integer)  # 学年起始年，如 2026
+    term: Mapped[int] = mapped_column(Integer)           # 学期,1 或 2
+    # 业务日期，不带时区（见 architecture.md D6）
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=SemesterStatus.preparing.value)

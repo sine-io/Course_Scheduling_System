@@ -1,111 +1,111 @@
-# 常見問題 FAQ
+# 常见问题 FAQ
 
-## 安裝與啟動
+## 安装与启动
 
-**Q:`docker compose up -d` 後開網頁看到「502」或「無法連線」。**
-容器可能還在啟動(尤其首次要跑資料庫遷移)。等 20–30 秒再試,並看狀態:
-
-```bash
-docker compose ps          # 看是否都 healthy
-docker compose logs api    # 看 api 是否卡在遷移或報錯
-```
-
-**Q:`docker compose ps` 有容器一直 restarting。**
-看該容器 log 找原因:
+**Q：执行 `sudo docker compose up -d` 后，网页显示“502”或“无法连接”。**
+容器可能还在启动(尤其首次要跑数据库迁移)。等 20–30 秒再试,并看状态:
 
 ```bash
-docker compose logs --tail=50 <服務名>   # 例如 api / worker / postgres
+sudo docker compose ps          # 查看服务是否均为 healthy
+sudo docker compose logs api    # 查看 API 是否卡在迁移或发生错误
 ```
 
-常見:`.env` 的 `DATABASE_URL` 與 `POSTGRES_*` 帳密不一致;`SECRET_KEY` 未設。
+**Q：执行 `sudo docker compose ps` 时，有容器一直处于 restarting 状态。**
+看该容器 log 找原因:
 
-**Q:80 埠被占用,啟動失敗(port is already allocated)。**
-改 `.env` 的 `HTTP_PORT`(例如 `8080`)再 `docker compose up -d`,改用 `http://<主機IP>:8080`。
+```bash
+sudo docker compose logs --tail=50 <服务名>   # 例如 api / worker / postgres
+```
 
-**Q:校內其他電腦連不到。**
-確認用的是主機的**區網 IP**(非 `localhost`),且主機防火牆放行該埠。手機/平板需與主機同一網段(同一 Wi-Fi)。
+常见:`.env` 的 `DATABASE_URL` 与 `POSTGRES_*` 账号和密码不一致;`SECRET_KEY` 未设。
 
----
+**Q:80 端口被占用,启动失败(port is already allocated)。**
+修改 `.env` 中的 `HTTP_PORT`（例如 `8080`），再执行 `sudo docker compose up -d`，然后访问 `http://<主机IP>:8080`。
 
-## 帳號與登入
-
-**Q:忘記管理員密碼怎麼辦?**
-若你還記得 `.env` 的初始 `ADMIN_PASSWORD`,那是**首次登入**用的;登入後改過的密碼存在資料庫。若連改過的都忘了,目前需由具資料庫存取權者重設。最務實的做法是**還原一份記得密碼的舊備份**(見[備份指南](backup.md)),或聯繫維護者。請妥善保管管理員密碼。
-
-**Q:還原備份後大家被登出了。**
-這是預期行為。還原會替換整個資料庫(含帳號),為安全起見系統會強制所有人以還原時點的帳密重新登入。
-
-**Q:老師收不到調代課 Email。**
-Email 為**選配**;未在「系統管理」設定 SMTP 時,只有站內通知(鈴鐺),系統一切正常。要寄 Email 需填學校的 SMTP 主機資訊,並可按「寄測試信」當場驗證。
+**Q:校内其他电脑连不到。**
+确认用的是主机的**局域网 IP**(非 `localhost`),且主机防火墙放行该端口。手机/平板需与主机同一网段(同一 Wi-Fi)。
 
 ---
 
-## 資料與備份
+## 账号与登录
 
-**Q:我的資料存在哪?會不會不見?**
-存在 Docker volume `pgdata`。只要不刪這個 volume,`docker compose down` / 重啟 / 升級都不會動到資料。**但主機硬碟壞掉 volume 會一起沒**,所以務必做[異地備援](backup.md)。
+**Q:忘记管理员密码怎么办?**
+若你还记得 `.env` 的初始 `ADMIN_PASSWORD`,那是**首次登录**用的;登录后改过的密码存在数据库。若连改过的都忘了,目前需由具数据库访问权者重设。最务实的做法是**恢复一份记得密码的旧备份**(见[备份指南](backup.md)),或联系维护者。请妥善保管管理员密码。
 
-**Q:`docker compose down` 會刪資料嗎?**
-不會。`down` 只停止並移除容器,volume 保留。**只有 `docker compose down -v` 的 `-v` 會刪 volume(含你的資料)**,請勿誤用。
+**Q:恢复备份后大家被登出了。**
+这是预期行为。恢复会替换整个数据库(含账号),为安全起见系统会强制所有人以恢复时点的账号和密码重新登录。
 
-**Q:怎麼把系統搬到新主機?**
-新主機裝好空系統 → 舊主機下載一份備份 `.dump` → 新主機「系統管理 → 上傳還原」。詳見[備份指南](backup.md)。
+**Q:老师收不到调课与代课 Email。**
+Email 为**选配**;未在「系统管理」设置 SMTP 时,只有站内通知(铃铛),系统一切正常。要寄 Email 需填学校的 SMTP 主机信息,并可按「寄测试信」当场验证。
 
 ---
 
-## 效能與規模
+## 数据与备份
 
-**Q:自動排課很慢或跑不出來。**
-排課是計算密集工作,受班級數、約束複雜度影響。建議主機 ≥ 4 核 8GB。無解時系統會給「衝突定位」報告,依提示放寬條件或補資源。可設定求解逾時(預設 10 分鐘),逾時取當前最佳解。
+**Q:我的数据存在哪?会不会不见?**
+数据保存在 Docker 卷 `pgdata` 中。只要不删除该卷，执行 `sudo docker compose down`、重启或升级都不会影响数据。主机硬盘损坏时卷也会丢失，因此必须做好[异地备份](backup.md)。
 
-**Q:頁面偶爾轉圈久。**
-自動排課/大量匯出時 worker 較忙,但與 api 分離,一般操作不受影響。自 v1.1 起排課(`worker`)與匯出/備份(`worker-ops`)分屬兩個容器,**排課進行中按匯出仍是秒回**。若持續緩慢,查主機資源(`docker stats`)是否吃緊。
+**Q：执行 `sudo docker compose down` 会删除数据吗？**
+不会。`down` 只停止并移除容器，数据卷会保留。**只有 `sudo docker compose down -v` 中的 `-v` 会删除数据卷及其中的数据**，请勿误用。
 
-**Q:匯出/備份時出現「維運背景服務(worker-ops)沒有在執行」。**
+**Q:怎么把系统搬到新主机?**
+新主机装好空系统 → 旧主机下载一份备份 `.dump` → 新主机「系统管理 → 上传恢复」。详见[备份指南](backup.md)。
 
-你的 `docker-compose.yml` 少了 `worker-ops` 這個容器(多半是用了舊版的 compose 檔)。它負責匯出、備份、還原、寄信與每日自動備份——沒有它,這些功能全都沒人處理,而且**每日自動備份是無聲停擺的**。
+---
 
-取得最新的 compose 檔再重啟即可,資料不受影響:
+## 性能与规模
+
+**Q:自动排课很慢或跑不出来。**
+排课是计算密集工作,受班级数、约束复杂度影响。建议主机 ≥ 4 核 8GB。无解时系统会给「冲突定位」报告,依提示放宽条件或补资源。可设置求解超时(默认 10 分钟),超时取当前最佳解。
+
+**Q:页面偶尔转圈久。**
+自动排课或大量导出时 worker 会比较繁忙，但它与 API 服务相互独立，一般操作不受影响。自 v1.1 起，排课（`worker`）与导出/备份（`worker-ops`）由不同容器负责，排课进行中提交导出任务仍会立即响应。若持续缓慢，请执行 `sudo docker stats` 检查主机资源使用情况。
+
+**Q:导出/备份时出现「运维背景服务(worker-ops)没有在执行」。**
+
+你的 `docker-compose.yml` 少了 `worker-ops` 这个容器(多半是用了旧版的 Compose 文件)。它负责导出、备份、恢复、发送邮件与每日自动备份——没有它,这些功能全都没人处理,而且**每日自动备份是无声停摆的**。
+
+获取最新的 Compose 文件再重启即可,数据不受影响:
 
 ```bash
 curl -fLO https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
-docker compose up -d
-docker compose ps          # 應看到六個容器,含 worker 與 worker-ops
+sudo docker compose up -d
+sudo docker compose ps          # 应看到六个容器，包括 worker 和 worker-ops
 ```
 
-**Q:匯出課表 / 備份失敗,說「背景忙碌或逾時」。**
+**Q:导出课表 / 备份失败,说「背景忙碌或超时」。**
 
-`worker-ops` 有在跑但沒做完。查它的 log:
+`worker-ops` 有在跑但没做完。查它的 log:
 
 ```bash
-docker compose ps worker-ops
-docker compose logs --tail=50 worker-ops
+sudo docker compose ps worker-ops
+sudo docker compose logs --tail=50 worker-ops
 ```
 
-PDF/PNG 匯出在低階機器上偶爾會超過 90 秒;主機吃緊(`docker stats`)時先讓自動排課跑完再試。
+PDF/PNG 导出在配置较低的机器上偶尔会超过 90 秒；如果 `sudo docker stats` 显示资源紧张，请等待自动排课完成后重试。
 
 ---
 
-## 升級與版本
+## 升级与版本
 
-**Q:怎麼知道有沒有新版、這版改了什麼?**
-看專案 [CHANGELOG.md](../../CHANGELOG.md) 與 GitHub Releases。升級步驟見[升級指南](upgrade.md)。
+**Q:怎么知道有没有新版、这版改了什么?**
+看项目 [CHANGELOG.md](../../CHANGELOG.md) 与 GitHub Releases。升级步骤见[升级指南](upgrade.md)。
 
-**Q:升級會不會弄壞資料?**
-資料表結構變更由 `api` 啟動時自動、向前相容地遷移,資料保留。仍建議升級前先「立即備份」。破壞性變更(若有)會在 CHANGELOG 該版本以 ⚠️ 標註。
+**Q:升级会不会弄坏数据?**
+数据表结构变更由 `api` 启动时自动、向前兼容地迁移,数据保留。仍建议升级前先「立即备份」。破坏性变更(若有)会在 CHANGELOG 该版本以 ⚠️ 标注。
 
 ---
 
 ## 其他
 
-**Q:可以多所學校共用一套嗎?**
-本系統設計為**單校自架**,一所學校一套部署,資料彼此隔離、最單純也最安全。多校請各自部署。
+**Q:可以多所学校共用一套吗?**
+本系统设计为**单校自建**,一所学校一套部署,数据彼此隔离、最单纯也最安全。多校请各自部署。
 
 **Q:如何完全移除?**
 
 ```bash
-docker compose down -v     # ⚠️ 連同資料 volume 一起刪除,不可復原,請先備份!
+sudo docker compose down -v     # ⚠️ 会连同数据卷一起删除且无法恢复，请先备份！
 ```
 
-**Q:找不到答案 / 想回報問題?**
-到專案 GitHub 開 Issue(見 [CONTRIBUTING.md](../../CONTRIBUTING.md))。回報時附上 `docker compose logs` 相關片段會更快解決。
+**Q:找不到答案 / 想反馈问题?**
+在项目 GitHub 创建 Issue（见 [CONTRIBUTING.md](../../CONTRIBUTING.md)）。报告时附上 `sudo docker compose logs` 的相关片段，有助于更快定位问题。

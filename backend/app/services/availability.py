@@ -1,15 +1,15 @@
-"""特定日期的教師可用性(M4-2)。
+"""特定日期的教师可用性(M4-2)。
 
-**這是「週循環格」與「特定日期」的交界。** 課表只知道「李師週三第二節有課」;
-但要判斷「11/11(週三)第二節李師能不能來代課」,週格不夠——那個週三他自己可能也
-請假了,或已經被指派去代別班。這一層把三件事疊起來:
+**这是「周循环格」与「特定日期」的交界。** 课表只知道「李师周三第二节有课」;
+但要判断「11/11(周三)第二节李师能不能来代课」,周格不够——那个周三他自己可能也
+请假了,或已经被指派去代别班。这一层把三件事叠起来:
 
-1. **週課表**:李師在該節次的牆鐘時間有沒有自己的課(D7:跨節次表以時間重疊判定)。
-2. **當日請假**:李師那一天那個時段自己是不是也請假了。
-3. **當日已接手**:李師是不是已經被指派代別班、或調課到那個時段。
+1. **周课表**:李师在该节次的墙钟时间有没有自己的课(D7:跨作息时间表以时间重叠判定)。
+2. **当日请假**:李师那一天那个时段自己是不是也请假了。
+3. **当日已接手**:李师是不是已经被指派代别班、或调课到那个时段。
 
-M4-4 的今日看板、M4-2 的代課推薦都建立在這一層上。判斷一律用牆鐘時間區間,
-不用 period_no——不同節次表的「第二節」時間不同(D7)。
+M4-4 的今日看板、M4-2 的代课推荐都创建在这一层上。判断统一用墙钟时间区间,
+不用 period_no——不同作息时间表的「第二节」时间不同(D7)。
 """
 
 from dataclasses import dataclass
@@ -24,13 +24,12 @@ from app.models.period import Period
 from app.models.substitution import Substitution
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
 from app.services import calendar as calendar_service
-from app.services import localization
 from app.services import period_tables as pt_service
 
 
 @dataclass(frozen=True, slots=True)
 class Interval:
-    """某個上課時段的牆鐘區間。缺起訖時間時退化為 period_no(單表學校的正確值)。"""
+    """某个上课时段的墙钟区间。缺起止时间时退化为 period_no(单表学校的正确值)。"""
 
     weekday: int
     period_no: int
@@ -42,24 +41,24 @@ class Interval:
             return False
         if self.start and self.end and other.start and other.end:
             return self.start < other.end and other.start < self.end
-        # 任一方缺時間:退化為同節次號(單一節次表的學校天然如此)
+        # 任一方缺时间:退化为同节次号(单一作息时间表的学校天然如此)
         return self.period_no == other.period_no
 
 
 @dataclass(frozen=True, slots=True)
 class Conflict:
-    """為什麼這位教師那個時段不能用。"""
+    """为什么这位教师那个时段不能用。"""
 
     kind: str  # teaching / on_leave / already_covering
     detail: str
 
 
 def _window_covers(slot: Interval, begin: time | None, finish: time | None) -> bool:
-    """slot 是否落在請假時間窗 [begin, finish] 內(None = 該端點不限,即整天/半天開放端)。"""
+    """slot 是否落在请假时间窗 [begin, finish] 内(None = 该端点不限,即全天/半天开放端)。"""
     if begin is None and finish is None:
-        return True  # 整天假
+        return True  # 全天假
     if slot.start is None or slot.end is None:
-        return True  # 節次缺時間時保守視為涵蓋(與 leaves 展開的保守策略一致)
+        return True  # 节次缺时间时保守视为涵盖(与 leaves 展开的保守策略一致)
     if finish is not None and slot.start >= finish:
         return False
     if begin is not None and slot.end <= begin:
@@ -77,9 +76,9 @@ def published_timetable(db: Session, semester_id: int) -> Timetable | None:
 
 
 class Availability:
-    """一個學期的可用性查詢器。批次撈好課表/請假/處置,供推薦引擎逐一比對。
+    """一个学期的可用性查询器。批量查询课表、请假和处理方式,供推荐引擎逐一比对。
 
-    只建構一次、重複查詢:代課推薦要對全校教師逐一判斷同一個時段。
+    只构建一次并重复查询:代课推荐需要对全校教师逐一判断同一个时段。
     """
 
     def __init__(self, db: Session, semester_id: int, timetable: Timetable | None = None) -> None:
@@ -89,7 +88,7 @@ class Availability:
         self._teaching: dict[int, list[Interval]] | None = None
         self._table_periods: dict[int, dict[tuple[int, int], Period]] = {}
 
-    # ── 週課表:每位教師的授課時段(牆鐘區間)──
+    # ── 周课表:每位教师的授课时段(墙钟区间)──
     def _teaching_map(self) -> dict[int, list[Interval]]:
         if self._teaching is not None:
             return self._teaching
@@ -132,13 +131,13 @@ class Availability:
             self._table_periods[table_id] = {(p.weekday, p.period_no): p for p in rows}
         return self._table_periods[table_id].get((weekday, period_no))
 
-    # ── 當日請假:該教師自己那天那個時段是否也請假 ──
+    # ── 当日请假:该教师自己那天那个时段是否也请假 ──
     def _on_leave(self, teacher_id: int, when: date, slot: Interval) -> bool:
-        """該教師在 when 這天的 slot 時段是否請假。
+        """该教师在 when 这天的 slot 时段是否请假。
 
-        **必須讀假單本身的日期/時間窗,不是展開的 affected_period。**
-        後者只在「有課的節次」才存在——一位老師請整天假、而該節恰好是他的空堂時,
-        affected_period 不會涵蓋那一格,但他人確實不在,不能被找來代課。
+        **必须读假单本身的日期/时间窗,不是展开的 affected_period。**
+        后者只在「有课的节次」才存在——一位老师请全天假、而该节恰好是他的空堂时,
+        affected_period 不会涵盖那一格,但他人确实不在,不能被找来代课。
         """
         rows = self.db.execute(
             select(LeaveRequest.start_date, LeaveRequest.start_time,
@@ -151,16 +150,16 @@ class Availability:
             )
         ).all()
         for start_date, start_time, end_date, end_time in rows:
-            # 只有假期頭尾兩天受時間限制,中間整天(與 leaves.expand 同一套語意)
+            # 只有假期头尾两天受时间限制,中间全天(与 leaves.expand 同一套语义)
             begin = start_time if when == start_date else None
             finish = end_time if when == end_date else None
             if _window_covers(slot, begin, finish):
                 return True
         return False
 
-    # ── 當日已接手:已被指派代別班/調課到那個時段 ──
+    # ── 当日已接手:已被指派代别班/调课到那个时段 ──
     def _already_covering(self, teacher_id: int, when: date, slot: Interval) -> Interval | None:
-        # (a) 身為其他受影響節次的代課/接手者
+        # (a) 身为其他受影响节次的代课/接手者
         rows = self.db.execute(
             select(AffectedPeriod.weekday, AffectedPeriod.period_no,
                    AffectedPeriod.start_time, AffectedPeriod.end_time)
@@ -176,9 +175,9 @@ class Availability:
             other = Interval(weekday, period_no, start, end)
             if slot.overlaps(other):
                 return other
-        # (b) 身為調課的補課者(swap 的甲方,補在 swap_date)。
-        # **補課方是該筆調課「請假的當事人」**,不是 handler(乙);必須以
-        # AffectedPeriod→LeaveRequest.teacher_id 比對,否則會把全校在該時段都誤判為已佔用。
+        # (b) 身为调课的补课者(swap 的甲方,补在 swap_date)。
+        # **补课方是该项调课「请假的当事人」**,不是 handler(乙);必须以
+        # AffectedPeriod→LeaveRequest.teacher_id 比对,否则会把全校在该时段都误判为已占用。
         swaps = self.db.execute(
             select(Substitution.swap_period_no)
             .join(AffectedPeriod, Substitution.affected_period_id == AffectedPeriod.id)
@@ -191,11 +190,11 @@ class Availability:
             )
         ).all()
         for (swap_period_no,) in swaps:
-            if swap_period_no == slot.period_no:  # 調課補課以節次號記錄
+            if swap_period_no == slot.period_no:  # 调课补课以节次号记录
                 return Interval(slot.weekday, swap_period_no, None, None)
         return None
 
-    # ── 對外:某教師某時段能不能用 ──
+    # ── 对外:某教师某时段能不能用 ──
     def slot_of(self, affected: AffectedPeriod) -> Interval:
         return Interval(affected.weekday, affected.period_no,
                         affected.start_time, affected.end_time)
@@ -207,34 +206,23 @@ class Availability:
         return None
 
     def conflict_for(self, teacher_id: int, when: date, slot: Interval) -> Conflict | None:
-        """該教師在 when 這一天的 slot 時段,有沒有不能來的理由(回第一個)。"""
+        """该教师在 when 这一天的 slot 时段,有没有不能来的理由(回第一个)。"""
         effective = calendar_service.effective_weekday(self.db, self.semester_id, when)
         if effective is None:
-            return Conflict(
-                "no_instruction",
-                localization.profile_text("該日期依校曆停課", "该日期按校历停课"),
-            )
+            return Conflict("no_instruction", "该日期按校历停课")
         if effective != slot.weekday:
-            return Conflict(
-                "calendar",
-                localization.profile_text("該日期使用其他星期的課表", "该日期使用其他星期的课表"),
-            )
+            return Conflict("calendar", "该日期使用其他星期的课表")
         if self.teaching_at(teacher_id, slot) is not None:
-            return Conflict(
-                "teaching", localization.profile_text("該時段有自己的課", "该时段有自己的课")
-            )
+            return Conflict("teaching", "该时段有自己的课")
         if self._on_leave(teacher_id, when, slot):
-            return Conflict("on_leave", localization.profile_text("當天也請假", "当天也请假"))
+            return Conflict("on_leave", "当天也请假")
         if self._already_covering(teacher_id, when, slot) is not None:
-            return Conflict(
-                "already_covering",
-                localization.profile_text("已被安排代其他課", "已被安排代其他课"),
-            )
+            return Conflict("already_covering", "已被安排代其他课")
         return None
 
     def is_free(self, teacher_id: int, when: date, slot: Interval) -> bool:
         return self.conflict_for(teacher_id, when, slot) is None
 
     def teaches_on(self, teacher_id: int, weekday: int) -> bool:
-        """該教師在某星期是否有課——用來判斷『當天已在校』(免多跑一趟)。"""
+        """该教师在某星期是否有课——用来判断『当天已在校』(免多跑一趟)。"""
         return any(iv.weekday == weekday for iv in self._teaching_map().get(teacher_id, []))

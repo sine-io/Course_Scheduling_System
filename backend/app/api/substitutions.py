@@ -1,6 +1,6 @@
-"""調代課處理工作台:代課推薦、指派處置、調課(M4-2)。
+"""调课与代课处理工作台:代课推荐、指派处理方式、调课(M4-2)。
 
-處置是行政決定,一律限教學組長/教務主任。教師端不在這裡處理(只在通知端「確認收到」)。
+处理方式是行政决定,统一限排课管理员/教务主任。教师端不在这里处理(只在通知端「确认收到」)。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,7 +19,7 @@ from app.schemas.substitution import (
     RecommendationOut,
     SubstitutionOut,
 )
-from app.services import localization
+from app.services import school_rules
 from app.services import substitution_recommender as recommender
 from app.services import substitutions as sub_service
 
@@ -31,7 +31,7 @@ editor = require_roles(Role.scheduler, Role.director)
 def _get_affected(db: Session, affected_id: int) -> AffectedPeriod:
     ap = db.get(AffectedPeriod, affected_id)
     if ap is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到受影響節次")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到受影响节次")
     return ap
 
 
@@ -40,7 +40,7 @@ def _sub_out(sub: Substitution) -> SubstitutionOut:
         id=sub.id,
         affected_period_id=sub.affected_period_id,
         type=sub.type,
-        type_label=localization.substitution_type_label(sub.type),
+        type_label=school_rules.substitution_type_label(sub.type),
         handler_teacher_id=sub.handler_teacher_id,
         handler_name=sub.handler.name if sub.handler else None,
         counts_toward_hours=sub.counts_toward_hours,
@@ -55,7 +55,7 @@ def _sub_out(sub: Substitution) -> SubstitutionOut:
 
 @router.get("/affected-periods/{affected_id}/recommendations", response_model=RecommendationOut)
 def get_recommendations(affected_id: int, db: Session = Depends(get_db), _: User = Depends(editor)):
-    """這一節該找誰代:硬性過濾後排序,每位候選附理由。"""
+    """这一节该找谁代:硬性过滤后排序,每位候选附理由。"""
     affected = _get_affected(db, affected_id)
     rec = recommender.recommend(db, affected)
     return RecommendationOut(
@@ -82,7 +82,7 @@ def assign_substitution(
     db: Session = Depends(get_db),
     user: User = Depends(editor),
 ):
-    """指派處置(代課/調課/併班/自習/不處理);指派即生效並通知處理教師。"""
+    """指派处理方式(代课/调课/合班/自习/不处理);指派即生效并通知处理教师。"""
     affected = _get_affected(db, affected_id)
     try:
         sub = sub_service.assign(
@@ -109,7 +109,7 @@ def assign_substitution(
             target_id=affected.id,
             detail=(
                 f"{affected.leave_request.teacher.name} {affected.date} {affected.period_name}"
-                f" → {localization.substitution_type_label(sub.type)}"
+                f" → {school_rules.substitution_type_label(sub.type)}"
                 + (f"({sub.handler.name})" if sub.handler else "")
             )[:500],
         )
@@ -123,7 +123,7 @@ def assign_substitution(
 def clear_substitution(
     affected_id: int, db: Session = Depends(get_db), user: User = Depends(editor)
 ):
-    """撤回處置:退回待處理,已指派教師收到取消通知。"""
+    """撤回处理方式:退回待处理,已指派教师收到取消通知。"""
     affected = _get_affected(db, affected_id)
     try:
         sub_service.clear(db, affected, actor_name=user.username)
@@ -135,7 +135,7 @@ def clear_substitution(
 
 @router.get("/substitution-types", response_model=dict[str, str])
 def substitution_types(_: User = Depends(editor)):
-    return {t.value: localization.substitution_type_label(t.value) for t in SubstitutionType}
+    return {t.value: school_rules.substitution_type_label(t.value) for t in SubstitutionType}
 
 
 @router.get("/affected-periods/{affected_id}/substitution", response_model=SubstitutionOut | None)

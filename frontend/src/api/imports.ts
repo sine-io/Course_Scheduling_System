@@ -1,4 +1,4 @@
-// Excel 匯入 API:範本下載、上傳匯入。
+// Excel 导入 API:模板下载、上传导入。
 
 export type ImportEntity = 'subjects' | 'teachers' | 'classes' | 'assignments'
 
@@ -9,25 +9,15 @@ export interface ImportResult {
 
 export const ENTITY_LABELS: Record<ImportEntity, string> = {
   subjects: '科目',
-  teachers: '教師',
-  classes: '班級',
-  assignments: '配課',
+  teachers: '教师',
+  classes: '班级',
+  assignments: '教学任务',
 }
 
-export function entityLabels(mainland: boolean): Record<ImportEntity, string> {
-  if (!mainland) return ENTITY_LABELS
-  return {
-    subjects: '科目',
-    teachers: '教师',
-    classes: '班级',
-    assignments: '配课',
-  }
-}
-
-/** 下載範本檔並觸發瀏覽器儲存。 */
+/** 下载模板档并触发浏览器存储。 */
 export async function downloadTemplate(entity: ImportEntity): Promise<void> {
   const resp = await fetch(`/api/import/templates/${entity}`, { credentials: 'include' })
-  if (!resp.ok) throw new Error('範本下載失敗')
+  if (!resp.ok) throw new Error('模板下载失败')
   const blob = await resp.blob()
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -37,7 +27,7 @@ export async function downloadTemplate(entity: ImportEntity): Promise<void> {
   URL.revokeObjectURL(url)
 }
 
-/** 上傳 Excel 檔匯入。回傳匯入結果(含錯誤清單)。 */
+/** 上传 Excel 文件导入。返回导入结果(含错误列表)。 */
 export async function uploadImport(
   entity: ImportEntity,
   semesterId: number,
@@ -50,11 +40,11 @@ export async function uploadImport(
   if (createAccounts) url += '&create_accounts=true'
   const resp = await fetch(url, { method: 'POST', credentials: 'include', body: form })
   if (!resp.ok) {
-    let detail = '匯入失敗'
+    let detail = '导入失败'
     try {
       detail = (await resp.json())?.detail ?? detail
     } catch {
-      /* ignore */
+      /* 无需处理解析失败，调用方会显示原始错误。 */
     }
     throw new Error(detail)
   }

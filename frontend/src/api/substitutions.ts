@@ -1,4 +1,4 @@
-// 調代課處理:代課推薦、指派處置(M4-2)。
+// 调课与代课处理:代课推荐、指派处理方式(M4-2)。
 
 import { apiDelete, apiGet, apiPut } from '@/api/client'
 

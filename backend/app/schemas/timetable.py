@@ -1,4 +1,4 @@
-"""課表(timetable / schedule_entry)與衝突檢查 schema。"""
+"""课表(timetable / schedule_entry)与冲突检查 schema。"""
 
 from datetime import time
 
@@ -22,7 +22,7 @@ class ScheduleEntryOut(BaseModel):
     unit_type: str
     unit_name: str
     room: str | None = None
-    # id 供前端三視角精確篩選(姓名/班名可能重複,不可當鍵)
+    # id 供前端三视角精确筛选(姓名/班名可能重复,不可当键)
     teacher_ids: list[int] = []
     class_ids: list[int] = []
     room_id: int | None = None
@@ -43,7 +43,7 @@ class TimetableOut(BaseModel):
     name: str
     status: str
     entries: list[ScheduleEntryOut] = []
-    # 發布後回填:今日之後、依舊課表展開的受影響節次數(>0 提醒組長重新檢視調代課)
+    # 发布后回填:今日之后、依旧课表展开的受影响节次数(>0 提醒排课管理员重新查看调课与代课)
     stale_affected: int = 0
 
 
@@ -57,8 +57,8 @@ class CheckRequest(BaseModel):
     weekday: int = Field(ge=1, le=7)
     period_no: int = Field(ge=1)
     span: int = Field(default=1, ge=1, le=8)
-    ignore_entry_id: int | None = None  # 移動既有格位時,忽略自身
-    room_id: int | None = None  # 本格位使用的場地(空=沿用配課場地)
+    ignore_entry_id: int | None = None  # 移动现有单元格时,忽略自身
+    room_id: int | None = None  # 本单元格使用的教室/场地(空=沿用教学任务教室/场地)
 
 
 class CheckResponse(BaseModel):
@@ -71,7 +71,7 @@ class PlaceRequest(BaseModel):
     weekday: int = Field(ge=1, le=7)
     period_no: int = Field(ge=1)
     span: int = Field(default=1, ge=1, le=8)
-    room_id: int | None = None  # 本格位使用的場地(空=沿用配課場地)
+    room_id: int | None = None  # 本单元格使用的教室/场地(空=沿用教学任务教室/场地)
 
 
 class MoveRequest(BaseModel):
@@ -79,7 +79,7 @@ class MoveRequest(BaseModel):
     period_no: int = Field(ge=1)
 
 
-# ── 版本管理與發布 ────────────────────
+# ── 版本管理与发布 ────────────────────
 class TimetableRename(BaseModel):
     name: str = Field(min_length=1, max_length=64)
 
@@ -92,7 +92,7 @@ class UnplacedItem(BaseModel):
     required: int
     placed: int
     remaining: int
-    # 自動排課當時 solver 說的「為什麼排不下」(手動未排完則為空,M6-3)
+    # 自动排课当时 solver 说的「为什么排不下」(手动未排完则为空,M6-3)
     reason: str = ""
 
 
@@ -104,7 +104,7 @@ class CompletenessOut(BaseModel):
     unplaced: list[UnplacedItem] = []
 
 
-# ── 全員唯讀課表查詢 ──────────────────
+# ── 全员只读课表查询 ──────────────────
 class PublicSemester(BaseModel):
     id: int
     label: str
@@ -141,7 +141,7 @@ class PublicPeriodTable(BaseModel):
 
 
 class PublishedTimetableOut(BaseModel):
-    """已發布課表 + 查詢頁所需的全部選項,一次回傳(教師端只打這一支)。"""
+    """已发布课表 + 查询页所需的全部选项,一次返回(教师端只打这一支)。"""
 
     id: int
     semester_id: int

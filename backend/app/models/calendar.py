@@ -1,4 +1,4 @@
-"""學期校曆例外日。"""
+"""学期特殊日期。"""
 
 import enum
 from datetime import date, datetime
@@ -31,7 +31,7 @@ class SemesterCalendarException(Base):
     )
     date: Mapped[date] = mapped_column(Date, index=True)
     kind: Mapped[str] = mapped_column(String(32))
-    # 補課日必須指定使用哪個週一至週六的週課表。
+    # 补课日必须指定使用哪个周一至周六的周课表。
     makeup_weekday: Mapped[int | None] = mapped_column(Integer, nullable=True)
     note: Mapped[str] = mapped_column(String(200), default="", server_default="")
     created_by_user_id: Mapped[int | None] = mapped_column(

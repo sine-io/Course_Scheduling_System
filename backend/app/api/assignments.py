@@ -1,7 +1,7 @@
-"""配課 API:排課單位(跑班群組)、配課 CRUD、鐘點/負載統計。
+"""教学任务 API:排课单位(走班群组)、教学任务 CRUD、课时/负载统计。
 
-權限:讀取 = 教學組長/教務主任;寫入 = 教學組長(admin 一律通過)。
-所有資源以 semester_id 為範圍。
+权限:读取 = 排课管理员/教务主任;写入 = 排课管理员(admin 统一通过)。
+所有资源以 semester_id 为范围。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -38,21 +38,21 @@ editor = require_roles(Role.scheduler)
 
 def _require_semester(db: Session, semester_id: int) -> None:
     if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
 
 
 def _domain(exc: svc.DomainError) -> HTTPException:
     return HTTPException(exc.status_code, exc.message)
 
 
-# ── 跑班群組 ──────────────────────────
+# ── 走班群组 ──────────────────────────
 @router.get("/scheduling-units", response_model=list[SchedulingUnitOut])
 def list_groups(
     semester_id: int = Query(...),
     db: Session = Depends(get_db),
     _: object = Depends(viewer),
 ):
-    """列出跑班群組(single 單班單位為內部用,不在此列出)。"""
+    """列出走班群组(single 单班单位为内部用,不在此列出)。"""
     units = db.scalars(
         select(SchedulingUnit).where(
             SchedulingUnit.semester_id == semester_id,
@@ -87,12 +87,12 @@ def delete_group(
 ) -> None:
     unit = db.get(SchedulingUnit, unit_id)
     if unit is None or unit.unit_type != SchedulingUnitType.group.value:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到跑班群組")
-    db.delete(unit)  # 級聯刪除其配課
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到走班群组")
+    db.delete(unit)  # 级联删除其教学任务
     db.commit()
 
 
-# ── 統計(需在 /assignments/{id} 之前註冊)────
+# ── 统计(需在 /assignments/{id} 之前注册)────
 @router.get("/assignments/teacher-load", response_model=list[TeacherLoad])
 def teacher_load(
     semester_id: int = Query(...),
@@ -111,7 +111,7 @@ def class_load(
     return svc.class_loads(db, semester_id)
 
 
-# ── 配課 CRUD ─────────────────────────
+# ── 教学任务 CRUD ─────────────────────────
 @router.get("/assignments", response_model=list[AssignmentOut])
 def list_assignments(
     semester_id: int = Query(...),
@@ -129,22 +129,22 @@ def _resolve_unit(db: Session, semester_id: int, body: AssignmentIn) -> Scheduli
     if body.class_id is not None:
         cu = db.get(ClassUnit, body.class_id)
         if cu is None or cu.semester_id != semester_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "班級無效或不屬於本學期")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "班级无效或不属于本学期")
         return svc.get_or_create_single_unit(db, cu)
     unit = db.get(SchedulingUnit, body.scheduling_unit_id or -1)
     if unit is None or unit.semester_id != semester_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "排課單位無效或不屬於本學期")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "排课单位无效或不属于本学期")
     return unit
 
 
 def _validate_refs(db: Session, semester_id: int, body: AssignmentIn) -> None:
     subject = db.get(Subject, body.subject_id)
     if subject is None or subject.semester_id != semester_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "科目無效或不屬於本學期")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "科目无效或不属于本学期")
     if body.room_id is not None:
         room = db.get(Room, body.room_id)
         if room is None or room.semester_id != semester_id:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "場地無效或不屬於本學期")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "教室/场地无效或不属于本学期")
     teacher_ids = [t.teacher_id for t in body.teachers]
     found = db.scalars(
         select(Teacher.id).where(
@@ -152,7 +152,7 @@ def _validate_refs(db: Session, semester_id: int, body: AssignmentIn) -> None:
         )
     ).all()
     if set(found) != set(teacher_ids):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "教師清單含無效或跨學期的教師")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "教师列表含无效或跨学期的教师")
 
 
 def _apply(db: Session, assignment: CourseAssignment, body: AssignmentIn) -> None:
@@ -204,7 +204,7 @@ def get_assignment(
 ):
     a = db.get(CourseAssignment, assignment_id)
     if a is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到配課")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
     return svc.serialize_assignment(a)
 
 
@@ -217,7 +217,7 @@ def update_assignment(
 ):
     a = db.get(CourseAssignment, assignment_id)
     if a is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到配課")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
     _validate_refs(db, a.semester_id, body)
     unit = _resolve_unit(db, a.semester_id, body)
     a.scheduling_unit_id = unit.id
@@ -233,6 +233,6 @@ def delete_assignment(
 ) -> None:
     a = db.get(CourseAssignment, assignment_id)
     if a is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到配課")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
     db.delete(a)
     db.commit()

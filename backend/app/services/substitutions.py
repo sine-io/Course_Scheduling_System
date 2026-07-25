@@ -1,10 +1,10 @@
-"""調代課處置(M4-2,architecture.md §5.3)。
+"""调课与代课处理方式(M4-2,architecture.md §5.3)。
 
-指派即生效:建立/更新處置 → 受影響節次轉『已確認』並記下處理教師 → 通知處理教師。
-沒有邀請/婉拒;通知只是正式告知 +「確認收到」。
+指派即生效：创建或更新处理方式后，受影响节次转为“已处理”并记录处理教师，随后发送通知。
+没有邀请/婉拒;通知只是正式告知 +「确认收到」。
 
-各處置的鐘點:代課計、併班/自習/不處理不計(§5.4 月結)。
-調課(swap)要驗兩位教師交換後都無衝突,拒絕時說出是誰在哪一節撞課。
+各处理方式的课时:代课计、合班/自习/不处理不计(§5.4 月结)。
+调课(swap)要验两位教师交换后都无冲突,拒绝时说出是谁在哪一节撞课。
 """
 
 from datetime import date
@@ -24,16 +24,16 @@ from app.models.substitution import (
 )
 from app.models.timetable import ScheduleEntry
 from app.services import calendar as calendar_service
-from app.services import localization, notifications
+from app.services import notifications, school_rules
 from app.services.availability import Availability, Interval
 
 
 class SubstitutionError(Exception):
-    """處置不合法(呼叫端轉為 400/409)。"""
+    """处理方式不合法(调用方转为 400/409)。"""
 
 
 def _wd(weekday: int) -> str:
-    return localization.weekday_name(weekday)
+    return school_rules.weekday_name(weekday)
 
 
 def _counts_default(sub_type: str) -> bool:
@@ -54,15 +54,15 @@ def assign(
     created_by_name: str,
     availability: Availability | None = None,
 ) -> Substitution:
-    """對一個受影響節次做處置。呼叫端負責 commit。"""
+    """对一个受影响节次做处理方式。调用方负责 commit。"""
     if affected.status == AffectedStatus.cancelled.value:
-        raise SubstitutionError("此節次已因銷假取消,無法處置")
+        raise SubstitutionError("此节次已因销假取消,无法再设置处理方式")
     if affected.status == AffectedStatus.completed.value or clock.is_past_slot(
         affected.date, affected.end_time
     ):
-        raise SubstitutionError("此節次已結束,無法變更處置")
+        raise SubstitutionError("此节次已结束,无法变更处理方式")
     if sub_type not in set(SubstitutionType):
-        raise SubstitutionError(f"未知的處置方式:{sub_type}")
+        raise SubstitutionError(f"未知的处理方式：{sub_type}")
 
     av = availability or Availability(db, affected.semester_id)
     handler = _resolve_handler(db, affected, sub_type, handler_teacher_id, av)
@@ -105,11 +105,10 @@ def _resolve_handler(
     av: Availability,
 ) -> Teacher | None:
     if sub_type not in TYPES_WITH_HANDLER:
-        return None  # 自習/不處理沒有處理教師
+        return None  # 自习/不处理没有处理教师
     if handler_teacher_id is None:
-        label = localization.substitution_type_label(sub_type)
-        suffix = "需要指定教师" if localization.is_mainland() else "需要指定教師"
-        raise SubstitutionError(f"「{label}」{suffix}")
+        label = school_rules.substitution_type_label(sub_type)
+        raise SubstitutionError(f"“{label}”需要指定教师")
 
     teacher = db.scalar(
         select(Teacher).where(
@@ -117,16 +116,16 @@ def _resolve_handler(
         )
     )
     if teacher is None:
-        raise SubstitutionError("找不到指定的教師")
+        raise SubstitutionError("找不到指定的教师")
     if teacher.id == affected.leave_request.teacher_id:
-        raise SubstitutionError("不能指派請假教師代自己的課")
+        raise SubstitutionError("不能指派请假教师代自己的课")
 
-    # 代課/併班:接手者在該時段必須是空的(調課的衝突另由 _validate_swap 檢查)
+    # 代课/合班:接手者在该时段必须是空的(调课的冲突另由 _validate_swap 检查)
     if sub_type != SubstitutionType.swap.value:
         conflict = av.conflict_for(teacher.id, affected.date, av.slot_of(affected))
         if conflict is not None:
             raise SubstitutionError(
-                f"{teacher.name} {affected.date} {affected.period_name} {conflict.detail},無法指派"
+                f"{teacher.name} {affected.date} {affected.period_name} {conflict.detail},无法指派"
             )
     return teacher
 
@@ -139,20 +138,20 @@ def _validate_swap(
     swap_date: date | None,
     av: Availability,
 ) -> dict:
-    """調課:乙(handler)代甲請假那節;甲(請假教師)於 swap_date 補乙原本的 swap_entry。
+    """调课:乙(handler)代甲请假那节;甲(请假教师)于 swap_date 补乙原本的 swap_entry。
 
-    驗四件事,任一撞課即拒絕並指名道姓:
-      ① 乙 在甲請假那節無自己的課    ② swap_entry 確實是乙的課
-      ③ 甲 在 swap_date 那節無課、也沒請假   ④ swap_date 是乙該節課真的會上的日子
+    验四件事,任一撞课即拒绝并指名道姓:
+      ① 乙 在甲请假那节无自己的课    ② swap_entry 确实是乙的课
+      ③ 甲 在 swap_date 那节无课、也没请假   ④ swap_date 是乙该节课真的会上的日子
     """
     if handler is None:
-        raise SubstitutionError("調課需要指定對調教師")
+        raise SubstitutionError("调课需要指定对调教师")
     if swap_entry_id is None or swap_date is None:
-        raise SubstitutionError("調課需要指定對調的節次與補課日期")
+        raise SubstitutionError("调课需要指定对调的节次与补课日期")
 
     entry = db.get(ScheduleEntry, swap_entry_id)
     if entry is None:
-        raise SubstitutionError("找不到要對調的節次")
+        raise SubstitutionError("找不到要对调的节次")
     teaches = db.scalar(
         select(AssignmentTeacher).where(
             AssignmentTeacher.course_assignment_id == entry.course_assignment_id,
@@ -160,30 +159,27 @@ def _validate_swap(
         )
     )
     if teaches is None:
-        raise SubstitutionError(f"要對調的節次不是 {handler.name} 的課")
+        raise SubstitutionError(f"要对调的节次不是 {handler.name} 的课")
     effective_swap_weekday = calendar_service.effective_weekday(db, affected.semester_id, swap_date)
     if effective_swap_weekday != entry.weekday:
         actual_weekday = effective_swap_weekday or swap_date.isoweekday()
         raise SubstitutionError(
             f"{swap_date} 使用 {_wd(actual_weekday)}课表，"
             f"但调课课程在 {_wd(entry.weekday)}，补课日期与该节课星期不符"
-            if localization.is_mainland()
-            else f"{swap_date} 使用 {_wd(actual_weekday)} 課表,"
-            f"但對調的課在 {_wd(entry.weekday)},補課日期與該節課星期不符"
         )
 
-    # ① 乙 在甲請假那節不能有自己的課(代課要來上)
+    # ① 乙 在甲请假那节不能有自己的课(代课要来上)
     clash = av.teaching_at(handler.id, av.slot_of(affected))
     if clash is not None:
         raise SubstitutionError(
-            f"{handler.name} {affected.date} {affected.period_name} 有自己的課,無法對調"
+            f"{handler.name} {affected.date} {affected.period_name} 有自己的课,无法对调"
         )
 
     swap_assignment = db.get(CourseAssignment, entry.course_assignment_id)
     if swap_assignment is None:
-        raise SubstitutionError("要對調的節次已無對應配課")
+        raise SubstitutionError("要对调的节次已无对应教学任务")
 
-    # ③ 甲 在 swap_date 的 swap 節次不能有課、也不能請假
+    # ③ 甲 在 swap_date 的 swap 节次不能有课、也不能请假
     absent = affected.leave_request.teacher
     swap_slot = Interval(entry.weekday, entry.period_no, None, None)
     conflict = av.conflict_for(absent.id, swap_date, swap_slot)
@@ -191,8 +187,8 @@ def _validate_swap(
         subj = db.get(Subject, swap_assignment.subject_id)
         pname = _entry_period_name(db, entry)
         raise SubstitutionError(
-            f"{absent.name} 無法在 {swap_date} {pname} 補課:{conflict.detail}"
-            + (f"(對調的是{subj.name})" if subj else "")
+            f"{absent.name} 无法在 {swap_date} {pname} 补课:{conflict.detail}"
+            + (f"(对调的是{subj.name})" if subj else "")
         )
 
     subject = db.get(Subject, swap_assignment.subject_id)
@@ -241,44 +237,32 @@ def _notify_handler(
     db: Session, affected: AffectedPeriod, sub: Substitution, handler: Teacher
 ) -> None:
     absent = affected.leave_request.teacher
-    type_cn = localization.substitution_type_label(sub.type)
+    type_cn = school_rules.substitution_type_label(sub.type)
     where = f"{affected.date} {affected.period_name}({affected.class_names}{affected.subject_name})"
     if sub.type == SubstitutionType.swap.value:
         body = (
             f"请于 {where} 代 {absent.name} 一节；"
             f"{absent.name} 将于 {sub.swap_date} {sub.swap_period_name} 补您的"
             f"{sub.swap_class_names}{sub.swap_subject_name}"
-            if localization.is_mainland()
-            else f"請於 {where} 代 {absent.name} 一節;"
-            f"{absent.name} 將於 {sub.swap_date} {sub.swap_period_name} 補您的"
-            f"{sub.swap_class_names}{sub.swap_subject_name}"
         )
     else:
-        body = (
-            f"请于 {where} {type_cn} {absent.name} 的课"
-            if localization.is_mainland()
-            else f"請於 {where} {type_cn} {absent.name} 的課"
-        )
+        body = f"请于 {where} {type_cn} {absent.name} 的课"
     notifications.notify(
         db,
         semester_id=affected.semester_id,
         teacher_id=handler.id,
         type=NotificationType.substitution_assigned,
-        title=(
-            f"{type_cn}通知：{affected.date} {affected.period_name}"
-            if localization.is_mainland()
-            else f"{type_cn}通知:{affected.date} {affected.period_name}"
-        ),
+        title=f"{type_cn}通知：{affected.date} {affected.period_name}",
         body=body,
     )
 
 
 def clear(db: Session, affected: AffectedPeriod, *, actor_name: str) -> None:
-    """撤回處置:受影響節次退回『待處理』,已指派的教師收到取消通知。呼叫端負責 commit。"""
+    """撤回处理方式:受影响节次退回『待处理』,已指派的教师收到取消通知。调用方负责 commit。"""
     if affected.leave_request.status == LeaveStatus.cancelled.value:
-        raise SubstitutionError("此假單已銷假")
+        raise SubstitutionError("此假单已销假")
     if clock.is_past_slot(affected.date, affected.end_time):
-        raise SubstitutionError("此節次已結束,無法撤回處置")
+        raise SubstitutionError("此节次已结束,无法撤回处理方式")
     sub = db.scalar(select(Substitution).where(Substitution.affected_period_id == affected.id))
     if sub is None:
         return
@@ -288,16 +272,8 @@ def clear(db: Session, affected: AffectedPeriod, *, actor_name: str) -> None:
             semester_id=affected.semester_id,
             teacher_id=sub.handler_teacher_id,
             type=NotificationType.substitution_cancelled,
-            title=(
-                f"原定{localization.substitution_type_label(sub.type)}已取消"
-                if localization.is_mainland()
-                else f"原訂{localization.substitution_type_label(sub.type)}已取消"
-            ),
-            body=(
-                f"{actor_name} 取消了 {affected.date} {affected.period_name} 的处置"
-                if localization.is_mainland()
-                else f"{actor_name} 取消了 {affected.date} {affected.period_name} 的處置"
-            ),
+            title=f"原定{school_rules.substitution_type_label(sub.type)}已取消",
+            body=f"{actor_name} 取消了 {affected.date} {affected.period_name} 的处理",
         )
     db.delete(sub)
     affected.status = AffectedStatus.pending.value

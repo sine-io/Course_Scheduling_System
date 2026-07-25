@@ -1,4 +1,4 @@
-"""全域系統設定的讀寫(M4-3)。"""
+"""全域系统设置的读写(M4-3)。"""
 
 from dataclasses import dataclass
 
@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.app_setting import AppSetting
 
-# SMTP 設定的 key
+# SMTP 设置的 key
 SMTP_HOST = "smtp_host"
 SMTP_PORT = "smtp_port"
 SMTP_USER = "smtp_user"
@@ -27,7 +27,7 @@ class SmtpConfig:
 
     @property
     def configured(self) -> bool:
-        """只要有主機與寄件人即視為已設定;帳密可空(內網轉發常見)。"""
+        """只要有主机与发件人即视为已设置;账号和密码可空(内网转发常见)。"""
         return bool(self.host and self.sender)
 
 
@@ -66,7 +66,7 @@ def save_smtp(
     set_value(db, SMTP_HOST, host.strip())
     set_value(db, SMTP_PORT, str(port))
     set_value(db, SMTP_USER, user.strip())
-    # 空密碼視為「不變更」,避免每次存設定都要重打密碼
+    # 空密码视为「不变更」,避免每次存设置都要重打密码
     if password:
         set_value(db, SMTP_PASSWORD, password)
     set_value(db, SMTP_FROM, sender.strip())

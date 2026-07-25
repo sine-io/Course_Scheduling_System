@@ -1,86 +1,86 @@
-# 升級指南
+# 升级指南
 
-> **首次安裝的人不需要這一頁**,直接看[安裝指南](install.md)。這裡講的是「已經在用,想換到新版」。
+> **首次安装的人不需要这一页**,直接看[安装指南](install.md)。这里讲的是「已经在用,想换到新版」。
 
-系統採「向前相容遷移」:升級時**資料保留**,資料表結構的變更由 `api` 容器啟動時自動執行(`alembic upgrade head`),你不需要手動改資料庫。
+系统采「向前兼容迁移」:升级时**数据保留**,数据表结构的变更由 `api` 容器启动时自动执行(`alembic upgrade head`),你不需要手动改数据库。
 
-> **開始前先備份。** 升級本身不會刪資料,但任何重大操作前留一份備份是好習慣。到「系統管理 → 資料備份與還原 → 立即備份」,或見[備份指南](backup.md)。
+> **开始前先备份。** 升级本身不会删数据,但任何重大操作前留一份备份是好习惯。到「系统管理 → 数据备份与恢复 → 立即备份」,或见[备份指南](backup.md)。
 
-## 一條規則:`docker-compose.yml` 要跟著版本走
+## 一条规则:`docker-compose.yml` 要跟着版本走
 
-系統的容器組成會隨版本演進(例如 v1.1 就多了一個 `worker-ops` 容器)。**升級時請連 `docker-compose.yml` 一起更新到新版**——方式 A 重新下載該檔,方式 B 的 `git pull` 會自動帶到。
+系统的容器组成会随版本演进(例如 v1.1 就多了一个 `worker-ops` 容器)。**升级时请连 `docker-compose.yml` 一起更新到新版**——方式 A 重新下载该档,方式 B 的 `git pull` 会自动带到。
 
-沿用舊 compose 檔而漏了新容器時,系統不會默默壞掉:相關功能會**立刻**回一句說得出處置的錯誤(例如「維運背景服務(worker-ops)沒有在執行……請更新 docker-compose.yml」),補上新檔案再 `docker compose up -d` 即恢復,資料不受影響。
+沿用旧 Compose 文件而缺少新容器时，系统会立即返回包含处理方法的错误（例如“运维后台服务 worker-ops 未运行，请更新 docker-compose.yml”）。补齐新文件后执行 `sudo docker compose up -d` 即可恢复，数据不受影响。
 
 ---
 
-## 方式 A:拉取映像部署(最常見)
+## 方式 A:拉取镜像部署(最常见)
 
-在放 `docker-compose.yml` 的資料夾內:
+在放 `docker-compose.yml` 的文件夹内:
 
 ```bash
-# 1)(建議)先在系統內按「立即備份」
+# 1)(建议)先在系统内按「立即备份」
 
-# 2) 更新 docker-compose.yml 到新版(容器組成可能有變動)
+# 2) 更新 docker-compose.yml 到新版(容器组成可能有变动)
 #    https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
 
-# 3) 選擇版本:編輯 .env
-#    釘選版本(可控):IMAGE_TAG=v1.1.1
-#    永遠最新:        IMAGE_TAG=latest
+# 3) 选择版本:编辑 .env
+#    固定版本(可控):IMAGE_TAG=v1.1.1
+#    永远最新:        IMAGE_TAG=latest
 
-# 4) 拉新映像並重啟
-docker compose pull
-docker compose up -d
+# 4) 拉新镜像并重启
+sudo docker compose pull
+sudo docker compose up -d
 ```
 
-`docker compose up -d` 只會重建映像有變動的容器;`api` 一啟動就自動跑遷移。完成後:
+`sudo docker compose up -d` 只会重建镜像发生变化的容器；API 启动时会自动执行迁移。完成后：
 
 ```bash
-docker compose ps                 # 確認皆 healthy
+sudo docker compose ps                 # 确认均为 healthy
 curl http://localhost/api/health  # {"status":"ok"}
 ```
 
-登入確認資料都在、版本正確(頁尾/關於頁顯示版本號)。
+登录确认数据都在、版本正确(页尾/关于页显示版本号)。
 
 ---
 
-## 方式 B:從原始碼建置部署
+## 方式 B:从源代码构建部署
 
 ```bash
-git pull                 # 取得新版原始碼
-docker compose up -d --build   # 重新建置並重啟
+git pull                 # 获取新版源代码
+sudo docker compose up -d --build   # 重新构建并重启
 ```
 
 ---
 
-## 關於版本釘選
+## 关于版本固定
 
-- **正式環境建議 `IMAGE_TAG=v1.1.1` 這樣釘住特定版本**,你才能決定何時升級、升到哪一版,而不是每次 `pull` 都可能變動。
-- 想升級時,把 `IMAGE_TAG` 改成新版本號,再 `docker compose pull && up -d`。
-- 各版本的變更內容見專案根目錄的 [CHANGELOG.md](../../CHANGELOG.md);破壞性變更(若有)會在該版本明確標註 ⚠️ 與對應處置。
+- **正式环境建议 `IMAGE_TAG=v1.1.1` 这样钉住特定版本**,你才能决定何时升级、升到哪一版,而不是每次 `pull` 都可能变动。
+- 升级时，将 `IMAGE_TAG` 改为新版本号，再执行 `sudo docker compose pull && sudo docker compose up -d`。
+- 各版本的变更内容见项目根目录的 [CHANGELOG.md](../../CHANGELOG.md);破坏性变更(若有)会在该版本明确标注 ⚠️ 与对应处理方式。
 
 ---
 
-## 回滾(升級後想退回舊版)
+## 回滚(升级后想退回旧版)
 
-因為資料與映像分離,回滾映像很單純:
+因为数据与镜像分离,回滚镜像很单纯:
 
 ```bash
-# .env 改回舊版本號,例如 IMAGE_TAG=v1.1.0
-docker compose pull
-docker compose up -d
+# .env 改回旧版本号,例如 IMAGE_TAG=v1.1.0
+sudo docker compose pull
+sudo docker compose up -d
 ```
 
-> ⚠️ **注意資料庫遷移方向**:若新版本引入了資料表結構變更,退回舊映像後其程式可能不認得新結構。**最保險的回滾是:退回舊映像 + 還原「升級前那份備份」**(見[備份指南](backup.md)的還原流程)。若該次升級的 CHANGELOG 未標註 schema 變更,則單純換映像即可。
+> ⚠️ **注意数据库迁移方向**:若新版本引入了数据表结构变更,退回旧镜像后旧版程序可能无法识别新结构。**最稳妥的回滚方式是:退回旧镜像 + 恢复「升级前那份备份」**(见[备份指南](backup.md)的恢复流程)。若该次升级的 CHANGELOG 未标注 schema 变更,则只需更换镜像。
 
 ---
 
-## 升級檢查清單
+## 升级检查列表
 
-- [ ] 升級前已「立即備份」
-- [ ] 已讀該版本 CHANGELOG,確認有無 ⚠️ 破壞性變更
-- [ ] **`docker-compose.yml` 已更新到新版**(容器組成可能有變動)
-- [ ] `docker compose pull` 成功拉到新映像
-- [ ] `docker compose up -d` 後六容器 healthy
-- [ ] `/api/health` 回 ok,登入資料完整
-- [ ] (如有 schema 變更)確認關鍵頁面正常
+- [ ] 升级前已「立即备份」
+- [ ] 已读该版本 CHANGELOG,确认有无 ⚠️ 破坏性变更
+- [ ] **`docker-compose.yml` 已更新到新版**(容器组成可能有变动)
+- [ ] `sudo docker compose pull` 成功拉取新镜像
+- [ ] `sudo docker compose up -d` 后六个容器均为 healthy
+- [ ] `/api/health` 回 ok,登录数据完整
+- [ ] (如有 schema 变更)确认关键页面正常

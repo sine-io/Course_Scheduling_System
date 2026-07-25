@@ -20,7 +20,7 @@ const routes = [
     component: () => import('@/views/wizard/Wizard.vue'),
   },
   {
-    // 獨立 A4 通知單列印頁,不套用側邊欄版面(乾淨一頁供列印)
+    // 独立 A4 通知单打印页,不套用侧边栏版面(干净一页供打印)
     path: '/daily-board/print',
     name: 'daily-board-print',
     component: () => import('@/views/substitution/DailyBoardPrint.vue'),
@@ -130,8 +130,8 @@ export const router = createRouter({
 
 const AUTH_PAGES = new Set(['login', 'change-password'])
 
-// 全域守衛:管控登入、強制改密、首次登入引導至設定精靈
-// 純教師帳號可進入的頁面(請假是教師自己要做的事)
+// 全域守卫:管控登录、强制改密、首次登录引导至设置向导
+// 纯教师账号可进入的页面(请假是教师自己要做的事)
 const TEACHER_PAGES = new Set(['timetable-query', 'leaves', 'substitution-stats'])
 
 router.beforeEach(async (to) => {
@@ -157,13 +157,13 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // 純教師帳號:只開放課表查詢與請假登記(其餘頁面的後端 API 皆需教學組長以上權限)
+  // 纯教师账号:只开放课表查询与请假登记(其余页面的后端 API 均需排课管理员以上权限)
   const canManage = auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director')
   if (!canManage && auth.hasRole('teacher') && !TEACHER_PAGES.has(to.name as string)) {
     return { name: 'timetable-query' }
   }
 
-  // 首次登入引導:教學組長/管理員在尚未完成初始設定時,自動進入精靈(精靈內可略過)
+  // 首次登录引导:排课管理员/管理员在尚未完成初始设置时,自动进入向导(向导内可跳过)
   const canSetup = auth.hasRole('scheduler') || auth.hasRole('admin')
   if (canSetup && to.name !== 'wizard' && !AUTH_PAGES.has(to.name as string)) {
     const wizard = useWizardStore()

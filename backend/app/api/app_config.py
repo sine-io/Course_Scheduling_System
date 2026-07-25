@@ -1,29 +1,19 @@
-"""公开的部署配置档信息，不包含密钥、数据库连接或其他机密。"""
+"""公开的应用配置，不包含密钥、数据库连接或其他机密。"""
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter
 
-from app.core.db import get_db
+from app.core.config import settings
 from app.schemas.app_config import AppConfigOut
-from app.services.deployment_profile import ProfileMismatchError, app_config
+from app.services.school_rules import ROLE_DISPLAY_NAMES, TIMEZONE, academic_year_config
 
 router = APIRouter(tags=["app-config"])
 
 
 @router.get("/app-config", response_model=AppConfigOut)
-def get_app_config(db: Session = Depends(get_db)) -> AppConfigOut:
-    try:
-        result = app_config(db)
-        db.commit()
-        return AppConfigOut.model_validate(result)
-    except ProfileMismatchError as exc:
-        db.rollback()
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={
-                "code": "school_profile_locked",
-                "message": str(exc),
-                "locked_profile": exc.locked,
-                "requested_profile": exc.requested,
-            },
-        ) from exc
+def get_app_config() -> AppConfigOut:
+    return AppConfigOut(
+        school_name=settings.school_name,
+        timezone=TIMEZONE,
+        role_display_names=ROLE_DISPLAY_NAMES,
+        academic_year=academic_year_config(),
+    )

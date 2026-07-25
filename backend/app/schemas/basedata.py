@@ -1,4 +1,4 @@
-"""基礎資料(教師/科目/場地/班級)schema。"""
+"""基础数据(教师/科目/教室/场地/班级)schema。"""
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -7,14 +7,14 @@ from app.models.basedata import ClassTrack, RoomType, TeacherRuleType
 
 
 def _normalize_optional_email(value: str | None) -> str | None:
-    """空字串轉 None;非空則驗證 Email 格式。"""
+    """空字符串转 None;非空则验证 Email 格式。"""
     if value is None:
         return None
     value = value.strip()
     if not value:
         return None
     if not is_valid_email(value):
-        raise ValueError("Email 格式不正確")
+        raise ValueError("Email 格式不正确")
     return value
 
 
@@ -30,7 +30,7 @@ class SubjectIn(BaseModel):
     domain: str | None = Field(default=None, max_length=64)
     required_room_type: RoomType | None = None
     default_block_size: int = Field(default=1, ge=1, le=8)
-    is_major: bool = False  # 主科(排課引擎 S5:盡量排上午)
+    is_major: bool = False  # 主科(排课引擎 S5:尽量排上午)
 
 
 class SubjectOut(SubjectIn):
@@ -39,7 +39,7 @@ class SubjectOut(SubjectIn):
     semester_id: int
 
 
-# ── 教師 ──────────────────────────────
+# ── 教师 ──────────────────────────────
 class TeacherIn(BaseModel):
     name: str = Field(min_length=1, max_length=32)
     id_last4: str | None = Field(default=None, max_length=4)
@@ -52,7 +52,7 @@ class TeacherIn(BaseModel):
     email: str | None = Field(default=None, max_length=128)
     phone: str | None = Field(default=None, max_length=32)
     line_id: str | None = Field(default=None, max_length=64)
-    user_id: int | None = None  # 綁定的登入帳號(空=不綁定)
+    user_id: int | None = None  # 绑定的登录账号(空=不绑定)
 
     @field_validator("email")
     @classmethod
@@ -79,7 +79,7 @@ class TeacherOut(BaseModel):
 
 
 class BindableAccount(BaseModel):
-    """可供教師綁定的帳號(teacher 角色、於本學期尚未被綁定者)。"""
+    """可供教师绑定的账号(teacher 角色、于本学期尚未被绑定者)。"""
 
     model_config = ConfigDict(from_attributes=True)
     id: int
@@ -98,7 +98,7 @@ class TeacherTimeRuleOut(TeacherTimeRuleIn):
     id: int
 
 
-# ── 場地 ──────────────────────────────
+# ── 教室/场地 ──────────────────────────────
 class RoomIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     room_type: RoomType = RoomType.normal
@@ -116,7 +116,7 @@ class RoomOut(BaseModel):
     subjects: list[SubjectBrief] = []
 
 
-# ── 班級 ──────────────────────────────
+# ── 班级 ──────────────────────────────
 class ClassUnitIn(BaseModel):
     grade: int = Field(ge=1, le=12)
     name: str = Field(min_length=1, max_length=32)
@@ -124,7 +124,7 @@ class ClassUnitIn(BaseModel):
     department: str | None = Field(default=None, max_length=32)
     student_count: int | None = Field(default=None, ge=0)
     homeroom_teacher_id: int | None = None
-    period_table_id: int | None = None  # 空=用學期預設節次表
+    period_table_id: int | None = None  # 空=用学期默认作息时间表
 
 
 class ClassUnitOut(BaseModel):
@@ -137,5 +137,5 @@ class ClassUnitOut(BaseModel):
     department: str | None
     student_count: int | None
     homeroom_teacher_id: int | None
-    homeroom_teacher: SubjectBrief | None = None  # 借用 {id,name} 結構顯示導師
+    homeroom_teacher: SubjectBrief | None = None  # 借用 {id,name} 结构显示班主任
     period_table_id: int | None = None

@@ -1,7 +1,7 @@
-"""基礎資料 API:教師、科目、場地、班級。
+"""基础数据 API:教师、科目、教室/场地、班级。
 
-權限:讀取 = 教學組長/教務主任;寫入 = 教學組長(admin 一律通過)。
-所有資源以 semester_id 為範圍。
+权限:读取 = 排课管理员/教务主任;写入 = 排课管理员(admin 统一通过)。
+所有资源以 semester_id 为范围。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -46,7 +46,7 @@ editor = require_roles(Role.scheduler)
 
 def _require_semester(db: Session, semester_id: int) -> None:
     if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
 
 
 def _resolve_subjects(db: Session, semester_id: int, ids: list[int]) -> list[Subject]:
@@ -56,7 +56,7 @@ def _resolve_subjects(db: Session, semester_id: int, ids: list[int]) -> list[Sub
         select(Subject).where(Subject.id.in_(ids), Subject.semester_id == semester_id)
     ).all()
     if len(subjects) != len(set(ids)):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "科目清單含無效或跨學期的科目")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "科目列表含无效或跨学期的科目")
     return list(subjects)
 
 
@@ -133,7 +133,7 @@ def delete_subject(
     if t_count or r_count:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"此科目已被 {t_count} 位教師、{r_count} 間場地引用,請先解除關聯再刪除",
+            f"此科目已被 {t_count} 位教师、{r_count} 个教室/场地引用,请先解除关联再删除",
         )
     db.delete(subject)
     db.commit()
@@ -142,21 +142,21 @@ def delete_subject(
 def _validate_teacher_user(
     db: Session, semester_id: int, user_id: int | None, exclude_teacher_id: int | None = None
 ) -> None:
-    """驗證欲綁定的帳號:須存在,且同學期未被其他教師綁定(否則 409)。"""
+    """验证欲绑定的账号:须存在,且同学期未被其他教师绑定(否则 409)。"""
     if user_id is None:
         return
     if db.get(User, user_id) is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "欲綁定的帳號不存在")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "欲绑定的账号不存在")
     stmt = select(Teacher.id).where(
         Teacher.semester_id == semester_id, Teacher.user_id == user_id
     )
     if exclude_teacher_id is not None:
         stmt = stmt.where(Teacher.id != exclude_teacher_id)
     if db.scalar(stmt) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "此帳號在本學期已綁定其他教師")
+        raise HTTPException(status.HTTP_409_CONFLICT, "此账号在本学期已绑定其他教师")
 
 
-# ── 教師 ──────────────────────────────
+# ── 教师 ──────────────────────────────
 @router.get("/teachers/bindable-accounts", response_model=list[BindableAccount])
 def list_bindable_accounts(
     semester_id: int = Query(...),
@@ -164,7 +164,7 @@ def list_bindable_accounts(
     db: Session = Depends(get_db),
     _: object = Depends(viewer),
 ):
-    """teacher 角色且在本學期尚未綁定的帳號;編輯時另納入該教師目前綁定的帳號。"""
+    """teacher 角色且在本学期尚未绑定的账号;编辑时另纳入该教师目前绑定的账号。"""
     bound = set(
         db.scalars(
             select(Teacher.user_id).where(
@@ -239,7 +239,7 @@ def get_teacher(
 ) -> Teacher:
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教師")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
     return teacher
 
 
@@ -249,7 +249,7 @@ def update_teacher(
 ) -> Teacher:
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教師")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
     _validate_teacher_user(db, teacher.semester_id, body.user_id, exclude_teacher_id=teacher.id)
     teacher.name = body.name
     teacher.id_last4 = body.id_last4
@@ -274,7 +274,7 @@ def delete_teacher(
 ) -> None:
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教師")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
     homeroom_count = db.scalar(
         select(func.count()).select_from(ClassUnit).where(
             ClassUnit.homeroom_teacher_id == teacher_id
@@ -283,7 +283,7 @@ def delete_teacher(
     if homeroom_count:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"此教師為 {homeroom_count} 個班級的導師,無法刪除;請先更換導師,或將教師設為離職",
+            f"此教师为 {homeroom_count} 个班级的班主任,无法删除;请先更换班主任,或将教师设为离职",
         )
     db.delete(teacher)
     db.commit()
@@ -295,7 +295,7 @@ def get_time_rules(
 ):
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教師")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
     return teacher.time_rules
 
 
@@ -308,12 +308,12 @@ def replace_time_rules(
 ):
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教師")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
     seen: set[tuple[int, int]] = set()
     for r in rules:
         key = (r.weekday, r.period_no)
         if key in seen:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "同一格位不可重複設定規則")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "同一单元格不可重复设置规则")
         seen.add(key)
     teacher.time_rules.clear()
     db.flush()
@@ -326,7 +326,7 @@ def replace_time_rules(
     return teacher.time_rules
 
 
-# ── 場地 ──────────────────────────────
+# ── 教室/场地 ──────────────────────────────
 @router.get("/rooms", response_model=list[RoomOut])
 def list_rooms(
     semester_id: int = Query(...),
@@ -367,7 +367,7 @@ def update_room(
 ) -> Room:
     room = db.get(Room, room_id)
     if room is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到場地")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
     room.name = body.name
     room.room_type = body.room_type.value
     room.capacity = body.capacity
@@ -381,12 +381,12 @@ def update_room(
 def delete_room(room_id: int, db: Session = Depends(get_db), _: object = Depends(editor)) -> None:
     room = db.get(Room, room_id)
     if room is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到場地")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
     db.delete(room)
     db.commit()
 
 
-# ── 班級 ──────────────────────────────
+# ── 班级 ──────────────────────────────
 @router.get("/class-units", response_model=list[ClassUnitOut])
 def list_class_units(
     semester_id: int = Query(...),
@@ -403,10 +403,10 @@ def list_class_units(
 def _require_unique_class_name(
     db: Session, semester_id: int, name: str, *, exclude_id: int | None = None
 ) -> None:
-    """同學期不得有兩個同名班級(M6-5)。
+    """同学期不得有两个同名班级(M6-5)。
 
-    衝突訊息、課表、匯出全都以班名指稱班級——同學期出現兩個「301」時,組長在畫面上
-    根本分不出是哪一班。DB 有 uq 約束兜底,這裡先擋下來給人話。
+    冲突信息、课表、导出全都以班名指称班级——同学期出现两个「301」时,排课管理员在页面上
+    无法区分具体班级。DB 有 uq 约束作为最后保障,这里先拦截并返回易懂说明。
     """
     stmt = select(ClassUnit).where(
         ClassUnit.semester_id == semester_id, ClassUnit.name == name
@@ -414,7 +414,7 @@ def _require_unique_class_name(
     if exclude_id is not None:
         stmt = stmt.where(ClassUnit.id != exclude_id)
     if db.scalar(stmt):
-        raise HTTPException(status.HTTP_409_CONFLICT, f"本學期已有班級「{name}」")
+        raise HTTPException(status.HTTP_409_CONFLICT, f"本学期已有班级「{name}」")
 
 
 def _validate_homeroom(db: Session, semester_id: int, teacher_id: int | None) -> None:
@@ -422,7 +422,7 @@ def _validate_homeroom(db: Session, semester_id: int, teacher_id: int | None) ->
         return
     teacher = db.get(Teacher, teacher_id)
     if teacher is None or teacher.semester_id != semester_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "導師無效或不屬於本學期")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "班主任无效或不属于本学期")
 
 
 def _validate_period_table(db: Session, semester_id: int, table_id: int | None) -> None:
@@ -430,7 +430,7 @@ def _validate_period_table(db: Session, semester_id: int, table_id: int | None) 
         return
     table = db.get(PeriodTable, table_id)
     if table is None or table.semester_id != semester_id:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "節次表無效或不屬於本學期")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "作息时间表无效或不属于本学期")
 
 
 @router.post("/class-units", response_model=ClassUnitOut, status_code=status.HTTP_201_CREATED)
@@ -466,7 +466,7 @@ def update_class_unit(
 ) -> ClassUnit:
     cu = db.get(ClassUnit, class_id)
     if cu is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班級")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
     _require_unique_class_name(db, cu.semester_id, body.name, exclude_id=cu.id)
     _validate_homeroom(db, cu.semester_id, body.homeroom_teacher_id)
     _validate_period_table(db, cu.semester_id, body.period_table_id)
@@ -486,16 +486,16 @@ def update_class_unit(
 def class_period_table(
     class_id: int, db: Session = Depends(get_db), _: object = Depends(viewer)
 ) -> PeriodTable:
-    """該班級所屬的完整節次表(含午休/早自習等非上課格位),供排課工作台渲染。
+    """该班级所属的完整作息时间表(含午休/早自习等非上课单元格),供排课工作台渲染。
 
-    一律經 resolve_period_table,前端不需自行處理「指定表 vs 學期預設表」。
+    统一经 resolve_period_table,前端不需自行处理「指定表 vs 学期默认表」。
     """
     cu = db.get(ClassUnit, class_id)
     if cu is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班級")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
     table = pt_service.resolve_period_table(db, cu)
     if table is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "此學期尚無任何節次表")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "此学期尚无任何作息时间表")
     return table
 
 
@@ -503,13 +503,13 @@ def class_period_table(
 def class_available_slots(
     class_id: int, db: Session = Depends(get_db), _: object = Depends(viewer)
 ) -> list[AvailableSlot]:
-    """回傳該班級的可排課時段(依所屬節次表,空則用學期預設表)。M2 排課引擎使用。"""
+    """返回该班级的可排课时段(依所属作息时间表,空则用学期默认表)。M2 排课引擎使用。"""
     cu = db.get(ClassUnit, class_id)
     if cu is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班級")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
     table = pt_service.resolve_period_table(db, cu)
     if table is None:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "此學期尚無任何節次表")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "此学期尚无任何作息时间表")
     rows = pt_service.regular_slots(db, table.id)
     return [
         AvailableSlot(
@@ -526,6 +526,6 @@ def delete_class_unit(
 ) -> None:
     cu = db.get(ClassUnit, class_id)
     if cu is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班級")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
     db.delete(cu)
     db.commit()

@@ -1,4 +1,4 @@
-"""校曆例外解析與學期就緒檢查。"""
+"""校历特殊日期解析与排课准备检查。"""
 
 from datetime import date
 
@@ -20,9 +20,9 @@ def exception_for(db: Session, semester_id: int, day: date) -> SemesterCalendarE
 
 
 def effective_weekday(db: Session, semester_id: int, day: date) -> int | None:
-    """把實際日期解析成該日使用的週課表星期。
+    """把实际日期解析成该日使用的周课表星期。
 
-    普通日返回自然星期；停課日返回 None；週末補課返回設定的星期一至六。
+    普通日返回自然星期；停课日返回 None；周末补课返回设置的星期一至六。
     """
     exception = exception_for(db, semester_id, day)
     if exception is None:
@@ -64,7 +64,7 @@ def readiness_issues(db: Session, semester: Semester) -> list[dict[str, str]]:
         db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester.id))
     )
     if not tables:
-        issues.append({"code": "period_table_missing", "message": "请先建立至少一套节次表"})
+        issues.append({"code": "period_table_missing", "message": "请先创建至少一套作息时间表"})
     elif not any(
         db.scalar(
             select(func.count())
@@ -76,20 +76,22 @@ def readiness_issues(db: Session, semester: Semester) -> list[dict[str, str]]:
         )
         for table in tables
     ):
-        issues.append({"code": "regular_period_missing", "message": "节次表至少需要一个可排课节次"})
+        issues.append(
+            {"code": "regular_period_missing", "message": "作息时间表至少需要一个可排课节次"}
+        )
     return issues
 
 
 def validate_exception_date(semester: Semester, day: date) -> None:
     if semester.start_date is not None and day < semester.start_date:
-        raise ValueError("校历例外日期不能早于学期开始日期")
+        raise ValueError("特殊日期不能早于学期开始日期")
     if semester.end_date is not None and day > semester.end_date:
-        raise ValueError("校历例外日期不能晚于学期结束日期")
+        raise ValueError("特殊日期不能晚于学期结束日期")
 
 
 def validate_exception_fields(kind: str, makeup_weekday: int | None) -> None:
     if kind not in {x.value for x in CalendarExceptionKind}:
-        raise ValueError("未知的校历例外类型")
+        raise ValueError("未知的特殊日期类型")
     if kind == CalendarExceptionKind.makeup_instruction.value and makeup_weekday is None:
         raise ValueError("补课日必须指定使用周一至周六中的课表")
     if kind == CalendarExceptionKind.no_instruction.value and makeup_weekday is not None:

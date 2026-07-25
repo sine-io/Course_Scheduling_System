@@ -1,10 +1,10 @@
-"""今日看板與調代課日誌 schema(M4-4)。"""
+"""今日看板与调课与代课日志 schema(M4-4)。"""
 
 from datetime import date, time
 
 from pydantic import BaseModel
 
-# 欄位名 date/start_time 會遮蔽同名型別,故以別名標註型別
+# 字段名 date/start_time 会遮蔽同名类型,故以别名标注类型
 _Date = date
 _Time = time
 
@@ -40,7 +40,7 @@ class LogEntryOut(BaseModel):
 
 
 class DailyBoardOut(BaseModel):
-    """今日看板:表頭(校名/日期/學期)供列印通知單直接使用。"""
+    """今日看板:表头(校名/日期/学期)供打印通知单直接使用。"""
 
     date: _Date
     weekday: int

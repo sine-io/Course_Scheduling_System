@@ -1,10 +1,10 @@
-"""配課領域 model:排課單位、配課、配課教師、連堂規則。
+"""教学任务领域 model:排课单位、教学任务、教学任务教师、连堂规则。
 
-排課單位(scheduling_unit)是支撐五學制的核心抽象(architecture.md D1):
-- `single`:單一班級的課(國小包班=導師在自己班的大量 single 配課)
-- `group`:跑班群組(多班聯排,群組內配課由求解器強制排在同一時段)
+排课单位（scheduling_unit）用于统一表达不同学校的教学组织方式（architecture.md D1）：
+- `single`:单一班级的课(小学包班=班主任在自己班的大量 single 教学任务)
+- `group`:走班群组(多班联排,群组内教学任务由求解器强制排在同一时段)
 
-配課(course_assignment)掛在排課單位上,而非直接掛班級,故單班與跑班共用一套 schema。
+教学任务(course_assignment)挂在排课单位上,而非直接挂班级,故单班与走班共用一套 schema。
 """
 
 import enum
@@ -23,8 +23,8 @@ from app.models.basedata import ClassUnit, Room, Subject, Teacher
 
 
 class SchedulingUnitType(enum.StrEnum):
-    single = "single"  # 單一班級
-    group = "group"    # 跑班群組(多班聯排)
+    single = "single"  # 单一班级
+    group = "group"    # 走班群组(多班联排)
 
 
 class SchedulingUnit(Base):
@@ -35,7 +35,7 @@ class SchedulingUnit(Base):
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
     unit_type: Mapped[str] = mapped_column(String(10), default=SchedulingUnitType.single.value)
-    name: Mapped[str] = mapped_column(String(64))  # single=班名;group=群組名(如「高二多元選修」)
+    name: Mapped[str] = mapped_column(String(64))  # single=班名；group=走班分组名。
 
     members: Mapped[list["SchedulingUnitMember"]] = relationship(
         back_populates="scheduling_unit", cascade="all, delete-orphan", lazy="selectin"
@@ -69,7 +69,7 @@ class CourseAssignment(Base):
     __tablename__ = "course_assignments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    # semester_id 為去正規化欄位,方便以學期為範圍查詢(隨排課單位同屬一學期)
+    # semester_id 为去规范化字段,方便以学期为范围查询(随排课单位同属一学期)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
@@ -79,8 +79,8 @@ class CourseAssignment(Base):
     subject_id: Mapped[int] = mapped_column(
         ForeignKey("subjects.id", ondelete="CASCADE"), index=True
     )
-    periods_per_week: Mapped[int] = mapped_column(Integer)  # 每週節數
-    # 場地需求:類型(普通/專科/實習工場/戶外)或指定場地;lock_room 表是否綁死該場地
+    periods_per_week: Mapped[int] = mapped_column(Integer)  # 每周节数
+    # 教室/场地需求:类型(普通/专科/实训场地/户外)或指定教室/场地;lock_room 表是否绑死该教室/场地
     required_room_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
     room_id: Mapped[int | None] = mapped_column(
         ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True, index=True
@@ -113,7 +113,7 @@ class AssignmentTeacher(Base):
     teacher_id: Mapped[int] = mapped_column(
         ForeignKey("teachers.id", ondelete="CASCADE"), index=True
     )
-    is_lead: Mapped[bool] = mapped_column(Boolean, default=True)  # 主教(False=協同)
+    is_lead: Mapped[bool] = mapped_column(Boolean, default=True)  # 主讲(False=协同)
 
     assignment: Mapped[CourseAssignment] = relationship(back_populates="teachers")
     teacher: Mapped[Teacher] = relationship(lazy="selectin")
@@ -126,7 +126,7 @@ class BlockRule(Base):
     course_assignment_id: Mapped[int] = mapped_column(
         ForeignKey("course_assignments.id", ondelete="CASCADE"), index=True
     )
-    block_size: Mapped[int] = mapped_column(Integer)      # 連堂長度(2-4)
-    count_per_week: Mapped[int] = mapped_column(Integer)  # 每週次數
+    block_size: Mapped[int] = mapped_column(Integer)      # 连堂长度(2-4)
+    count_per_week: Mapped[int] = mapped_column(Integer)  # 每周次数
 
     assignment: Mapped[CourseAssignment] = relationship(back_populates="block_rules")

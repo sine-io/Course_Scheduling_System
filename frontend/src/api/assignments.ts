@@ -1,4 +1,4 @@
-// 配課(排課單位 / 配課 / 鐘點統計)API 型別與呼叫封裝。
+// 教学任务(排课单位 / 教学任务 / 课时统计)API 类型与调用封装。
 
 import { apiGet, apiPost, request } from '@/api/client'
 import type { RoomType } from '@/api/basedata'
@@ -67,14 +67,14 @@ export interface AssignmentPayload {
   lock_room?: boolean
 }
 
-// ── 跑班群組 ──
+// ── 走班群组 ──
 export const listGroups = (semesterId: number) =>
   apiGet<SchedulingUnit[]>(`/scheduling-units?semester_id=${semesterId}`)
 export const createGroup = (semesterId: number, body: { name: string; class_ids: number[] }) =>
   apiPost<SchedulingUnit>(`/scheduling-units?semester_id=${semesterId}`, body)
 export const deleteGroup = (id: number) => request<void>('DELETE', `/scheduling-units/${id}`)
 
-// ── 配課 ──
+// ── 教学任务 ──
 export const listAssignments = (semesterId: number) =>
   apiGet<Assignment[]>(`/assignments?semester_id=${semesterId}`)
 export const createAssignment = (semesterId: number, body: AssignmentPayload) =>
@@ -83,7 +83,7 @@ export const updateAssignment = (id: number, body: AssignmentPayload) =>
   request<Assignment>('PATCH', `/assignments/${id}`, body)
 export const deleteAssignment = (id: number) => request<void>('DELETE', `/assignments/${id}`)
 
-// ── 統計 ──
+// ── 统计 ──
 export const teacherLoad = (semesterId: number) =>
   apiGet<TeacherLoad[]>(`/assignments/teacher-load?semester_id=${semesterId}`)
 export const classLoad = (semesterId: number) =>

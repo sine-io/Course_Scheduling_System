@@ -6,14 +6,8 @@ import { listLeaveTypes } from '@/api/leaves'
 import { listSemesters } from '@/api/semesters'
 import { getSubstitutionLog } from '@/api/substitutionLog'
 import type { LogEntry } from '@/api/substitutionLog'
-import { useAppConfigStore } from '@/stores/appConfig'
 
-const appConfig = useAppConfigStore()
-const mainland = computed(() => appConfig.isMainland)
-const tr = (tw: string, cn: string) => mainland.value ? cn : tw
-const WEEKDAYS = computed(() => mainland.value
-  ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  : ['週日', '週一', '週二', '週三', '週四', '週五', '週六'])
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
 function toISODate(ts: number): string {
   const d = new Date(ts)
@@ -23,7 +17,7 @@ function toISODate(ts: number): string {
 }
 function withWeekday(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
-  return `${iso}(${WEEKDAYS.value[new Date(y, m - 1, d).getDay()]})`
+  return `${iso}（${WEEKDAYS[new Date(y, m - 1, d).getDay()]}）`
 }
 
 const semesters = ref<{ id: number; label: string }[]>([])
@@ -37,8 +31,8 @@ const leaveType = ref<string | null>(null)
 const entries = ref<LogEntry[]>([])
 const loading = ref(false)
 
-// 後端的保護性上限(substitution_log.MAX_ROWS)。取到剛好這麼多筆,幾乎必然是被截斷了——
-// 不講的話,組長會以為「這學期就只有這些紀錄」,而看不見的那些正是他要找的舊資料。
+// 后端的保护性上限(substitution_log.MAX_ROWS)。取到刚好这么多条,几乎必然是被截断了——
+// 不讲的话,排课管理员会以为「这学期就只有这些记录」,而看不见的那些正是他要找的旧数据。
 const MAX_ROWS = 1000
 const truncated = computed(() => entries.value.length >= MAX_ROWS)
 
@@ -95,16 +89,16 @@ function statusType(e: LogEntry): string {
 
 <template>
   <n-space vertical size="large">
-    <h2 style="margin: 0">{{ tr('調代課紀錄', '调代课记录') }}</h2>
+    <h2 style="margin: 0">{{ '调课与代课记录' }}</h2>
 
     <n-space align="center" :wrap="true">
       <n-select
         :value="sid" :options="semesterOptions" style="width: 200px"
-        :placeholder="tr('選擇學期', '选择学期')" @update:value="onSemesterChange"
+        :placeholder="'选择学期'" @update:value="onSemesterChange"
       />
       <n-select
         v-model:value="teacherId" :options="teacherOptions" clearable filterable
-        :placeholder="tr('教師(缺課或代課)', '教师（缺课或代课）')" style="width: 200px"
+        :placeholder="'教师（缺课或代课）'" style="width: 200px"
         data-testid="log-teacher" @update:value="reload"
       />
       <n-date-picker
@@ -113,27 +107,27 @@ function statusType(e: LogEntry): string {
       />
       <n-select
         v-model:value="leaveType" :options="leaveTypeOptions" clearable
-        :placeholder="tr('假別', '假别')" style="width: 130px"
+        :placeholder="'请假类型'" style="width: 130px"
         data-testid="log-leavetype" @update:value="reload"
       />
-      <n-button quaternary data-testid="log-reset" @click="resetFilters">{{ tr('清除', '清除') }}</n-button>
+      <n-button quaternary data-testid="log-reset" @click="resetFilters">{{ '清除' }}</n-button>
     </n-space>
 
-    <n-text depth="3" data-testid="log-count">{{ tr('共', '共') }} {{ entries.length }} {{ tr('筆', '条') }}</n-text>
+    <n-text depth="3" data-testid="log-count">{{ '共' }} {{ entries.length }} {{ '条' }}</n-text>
 
     <n-alert v-if="truncated" type="warning" :bordered="false" data-testid="log-truncated">
-      {{ tr(`只顯示最新的 ${MAX_ROWS} 筆,更早的紀錄未列出。請縮小日期區間,或加上教師、假別篩選。`, `只显示最新的 ${MAX_ROWS} 条，更早记录未列出。请缩小日期范围，或添加教师、假别筛选。`) }}
+      {{ `只显示最新的 ${MAX_ROWS} 条，更早记录未列出。请缩小日期范围，或添加教师、请假类型筛选。` }}
     </n-alert>
 
     <n-empty
-      v-if="!entries.length && !loading" :description="tr('沒有符合條件的紀錄', '没有符合条件的记录')"
+      v-if="!entries.length && !loading" :description="'没有符合条件的记录'"
       data-testid="log-empty"
     />
     <table v-else-if="entries.length" class="data-table" data-testid="log-table">
       <thead>
         <tr>
-          <th>{{ tr('日期', '日期') }}</th><th>{{ tr('節次', '节次') }}</th><th>{{ tr('班級', '班级') }}</th><th>{{ tr('科目', '科目') }}</th>
-          <th>{{ tr('原任教師', '原任教师') }}</th><th>{{ tr('假別', '假别') }}</th><th>{{ tr('處置', '处置') }}</th><th>{{ tr('狀態', '状态') }}</th>
+          <th>{{ '日期' }}</th><th>{{ '节次' }}</th><th>{{ '班级' }}</th><th>{{ '科目' }}</th>
+          <th>{{ '原授课教师' }}</th><th>{{ '请假类型' }}</th><th>{{ '处理方式' }}</th><th>{{ '状态' }}</th>
         </tr>
       </thead>
       <tbody>

@@ -1,20 +1,18 @@
-"""學校時區的「現在/今天」與「節次是否已上過」判定(config.tz,見 architecture.md D6)。
+"""学校时区的“现在/今天”与“节次是否已上过”判定。
 
-「已完成」不落盤成狀態,而是**讀取時推導**:一個受影響節次是否已經上過,由它的日期
-與節次結束時間對照學校時區的現在決定。銷假不得抹除已上過的課(鐘點照算)、已上過的
-處置不得再變更——兩道完整性關口都問這裡,不依賴任何排程器。
+「已完成」不落盘成状态,而是**读取时推导**:一个受影响节次是否已经上过,由它的日期
+与节次结束时间对照学校时区的现在决定。销假不得抹除已上过的课(课时照算)、已上过的
+处理方式不得再变更——两道完整性关口都问这里,不依赖任何调度器。
 """
 
 from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
-from app.core.config import settings
-from app.services.localization import timezone_for_profile
+from app.services.school_rules import TIMEZONE
 
 
 def school_now() -> datetime:
-    timezone = timezone_for_profile(settings.school_profile)
-    return datetime.now(ZoneInfo(timezone))
+    return datetime.now(ZoneInfo(TIMEZONE))
 
 
 def school_today() -> date:
@@ -22,10 +20,10 @@ def school_today() -> date:
 
 
 def is_past_slot(day: date, end_time: time | None) -> bool:
-    """該節次相對學校時區的現在是否已經上過(結束)。
+    """该节次相对学校时区的现在是否已经上过(结束)。
 
-    當天以節次結束時間判定;節次表沒填結束時間時保守視為尚未結束
-    (整天內仍允許處置,與 leaves.expand 的保守策略一致)。
+    当天以节次结束时间判定;作息时间表没填结束时间时保守视为尚未结束
+    (全天内仍允许处理方式,与 leaves.expand 的保守策略一致)。
     """
     now = school_now()
     today = now.date()

@@ -1,17 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useProfileText } from '@/composables/useProfileText'
 import type { DragData, DropFeedback, GridEntry, PeriodCell } from './types'
-
-const { tr } = useProfileText()
 
 const props = withDefaults(defineProps<{
   periods: PeriodCell[]
   entries?: GridEntry[]
   numWeekdays?: number
   readonly?: boolean
-  dragging?: DragData | null // 父層告知目前拖曳中的內容(供 check feedback)
-  feedback?: DropFeedback | null // 父層回填的可放/衝突判定
+  dragging?: DragData | null // 父层告知目前拖拽中的内容(供 check feedback)
+  feedback?: DropFeedback | null // 父层回填的可放/冲突判定
 }>(), {
   entries: () => [],
   numWeekdays: undefined,
@@ -42,7 +39,7 @@ const periodMap = computed(() => {
   for (const p of props.periods) m.set(`${p.weekday}-${p.period_no}`, p)
   return m
 })
-// 各節次的代表資訊(取任一天),用於左欄的節次名稱與時間
+// 各节次的代表信息(取任一天),用于左栏的节次名称与时间
 const periodInfo = computed(() => {
   const m = new Map<number, PeriodCell>()
   for (const p of props.periods) if (!m.has(p.period_no)) m.set(p.period_no, p)
@@ -53,7 +50,7 @@ const entryMap = computed(() => {
   for (const e of props.entries) m.set(`${e.weekday}-${e.period_no}`, e)
   return m
 })
-// 連堂佔用的下方格位(跳過不渲染)
+// 连堂占用的下方单元格(跳过不渲染)
 const coveredSet = computed(() => {
   const s = new Set<string>()
   const nos = periodNos.value
@@ -76,7 +73,7 @@ function weekdayLabel(w: number): string {
   return `星期${WEEKDAY_LABELS[w - 1] ?? w}`
 }
 function periodLabelName(p: number): string {
-  return periodInfo.value.get(p)?.name ?? tr(`第${p}節`, `第${p}节`)
+  return periodInfo.value.get(p)?.name ?? `第${p}节`
 }
 function periodTime(p: number): string {
   const info = periodInfo.value.get(p)
@@ -124,7 +121,7 @@ function cellClass(w: number, p: number) {
 }
 function feedbackReason(w: number, p: number): string | null {
   const fb = props.feedback
-  if (fb && !fb.ok && fb.weekday === w && fb.period_no === p) return fb.reason ?? tr('衝突', '冲突')
+  if (fb && !fb.ok && fb.weekday === w && fb.period_no === p) return fb.reason ?? '冲突'
   return null
 }
 
@@ -140,7 +137,7 @@ function onCardDragStart(e: GridEntry, ev: DragEvent) {
 }
 function onCellCheck(w: number, p: number, ev: DragEvent) {
   if (props.readonly || !isRegular(w, p) || entryAt(w, p)) return
-  ev.preventDefault() // 允許放下
+  ev.preventDefault() // 允许放下
   emit('check', { weekday: w, period_no: p, data: props.dragging })
 }
 function onCellDrop(w: number, p: number, ev: DragEvent) {
@@ -194,7 +191,7 @@ function onCellDrop(w: number, p: number, ev: DragEvent) {
               @dragend="emit('dragend')"
               @click="emit('select', entryAt(w, p)!)"
             >
-              <span v-if="entryAt(w, p)!.locked" class="tg-lock" :title="tr('已鎖定', '已锁定')">🔒</span>
+              <span v-if="entryAt(w, p)!.locked" class="tg-lock" :title="'已锁定'">🔒</span>
               <div class="tg-subject">{{ entryAt(w, p)!.subject }}</div>
               <div v-if="entryAt(w, p)!.teacher" class="tg-teacher">{{ entryAt(w, p)!.teacher }}</div>
               <div v-if="entryAt(w, p)!.room" class="tg-room">{{ entryAt(w, p)!.room }}</div>
@@ -238,7 +235,7 @@ function onCellDrop(w: number, p: number, ev: DragEvent) {
   background: repeating-linear-gradient(45deg, rgba(128,128,128,0.06),
     rgba(128,128,128,0.06) 6px, rgba(128,128,128,0.12) 6px, rgba(128,128,128,0.12) 12px);
 }
-.tg-cell.is-droppable { outline: 2px solid #0d7a43; outline-offset: -2px; }  /* 主色,見 src/theme.ts */
+.tg-cell.is-droppable { outline: 2px solid #0d7a43; outline-offset: -2px; }  /* 主色,见 src/theme.ts */
 .tg-cell.is-conflict { outline: 2px solid #d03050; outline-offset: -2px; background: rgba(208,48,80,0.06); }
 .tg-blocked-label { font-size: 12px; opacity: 0.55; text-align: center; padding-top: 14px; }
 .tg-reason { font-size: 12px; color: #d03050; text-align: center; padding-top: 12px; }

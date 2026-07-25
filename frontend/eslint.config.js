@@ -6,7 +6,7 @@ export default [
   ...tseslint.configs.recommended,
   ...pluginVue.configs['flat/recommended'],
   {
-    // .vue 檔以 vue-eslint-parser 解析,內層 <script lang="ts"> 交給 TS parser
+    // .vue 文件以 vue-eslint-parser 解析,内层 <script lang="ts"> 交给 TS parser
     files: ['**/*.vue'],
     languageOptions: {
       parser: vueParser,
@@ -21,7 +21,7 @@ export default [
     rules: {
       'vue/multi-word-component-names': 'off',
       'vue/max-attributes-per-line': 'off',
-      // 純模板排版規則,交給開發者判斷,不強制
+      // 纯模板排版规则,交给开发者判断,不强制
       'vue/singleline-html-element-content-newline': 'off',
     },
   },

@@ -1,4 +1,4 @@
-"""CN localization foundation: semester readiness and calendar exceptions.
+"""增加学期排课准备状态和校历特殊日期。
 
 Revision ID: 0018_cn_foundation
 Revises: 0017_class_name_unique

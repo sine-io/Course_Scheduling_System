@@ -3,7 +3,6 @@ import { NButton, NLayout, NLayoutContent, NLayoutHeader, NLayoutSider, NMenu, N
 import { computed, h, ref } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useAppConfigStore } from '@/stores/appConfig'
 import NotificationBell from '@/components/NotificationBell.vue'
 
 const auth = useAuthStore()
@@ -11,64 +10,61 @@ const router = useRouter()
 const route = useRoute()
 
 const roleLabels = computed(() => (auth.user?.roles ?? []).map((r) => auth.roleLabel(r)))
-const appConfig = useAppConfigStore()
-const cn = computed(() => appConfig.isMainland)
-const tr = (tw: string, mainland: string) => cn.value ? mainland : tw
 
-// 手機尺寸預設收合側邊欄:390px 寬的螢幕若被 220px 側欄佔去,課表幾乎沒有空間
+// 手机尺寸默认收合侧边栏:390px 宽的屏幕若被 220px 侧栏占去,课表几乎没有空间
 const collapsed = ref(typeof window !== 'undefined' && window.innerWidth < 768)
 
 function menuLink(name: string, label: string) {
   return () => h(RouterLink, { to: { name } }, { default: () => label })
 }
 
-// 純教師帳號只看得到課表查詢(其餘頁面的後端 API 需教學組長以上權限)
+// 纯教师账号只看得到课表查询(其余页面的后端 API 需排课管理员以上权限)
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
 
 const menuOptions = computed(() => {
-  const query = { label: menuLink('timetable-query', tr('課表查詢', '课表查询')), key: 'timetable-query' }
-  // 請假是教師自己要做的事,純教師帳號也看得到
-  const leaves = { label: menuLink('leaves', tr('請假登記', '请假登记')), key: 'leaves' }
-  // 教師可查自己的代課鐘點
-  const myStats = { label: menuLink('substitution-stats', tr('我的代課鐘點', '我的代课课时')), key: 'substitution-stats' }
+  const query = { label: menuLink('timetable-query', '课表查询'), key: 'timetable-query' }
+  // 请假是教师自己要做的事,纯教师账号也看得到
+  const leaves = { label: menuLink('leaves', '请假登记'), key: 'leaves' }
+  // 教师可查自己的代课课时
+  const myStats = { label: menuLink('substitution-stats', '我的代课课时'), key: 'substitution-stats' }
   if (!canManage.value) return [query, leaves, myStats]
   return [
-    { label: menuLink('dashboard', tr('儀表板', '仪表盘')), key: 'dashboard' },
+    { label: menuLink('dashboard', '仪表盘'), key: 'dashboard' },
     query,
     {
-      label: tr('基礎資料', '基础资料'),
+      label: '基础数据',
       key: 'basedata-group',
       children: [
-        { label: menuLink('semesters', tr('學期與節次表', '学期与节次表')), key: 'semesters' },
-        { label: menuLink('calendar', tr('校曆與就緒', '校历与就绪')), key: 'calendar' },
-        { label: menuLink('basedata', tr('教師/班級/科目/場地', '教师/班级/科目/场地')), key: 'basedata' },
+        { label: menuLink('semesters', '学期与作息时间表'), key: 'semesters' },
+        { label: menuLink('calendar', '校历与排课准备'), key: 'calendar' },
+        { label: menuLink('basedata', '教师、班级、科目和教室/场地'), key: 'basedata' },
       ],
     },
     {
-      label: tr('排課作業', '排课作业'),
+      label: '排课作业',
       key: 'scheduling-group',
       children: [
-        { label: menuLink('assignments', tr('配課管理', '配课管理')), key: 'assignments' },
-        { label: menuLink('workbench', tr('排課工作台', '排课工作台')), key: 'workbench' },
-        { label: menuLink('auto-schedule', tr('自動排課', '自动排课')), key: 'auto-schedule' },
-        { label: menuLink('versions', tr('版本與發布', '版本与发布')), key: 'versions' },
-        { label: menuLink('timetable-demo', tr('課表元件(示範)', '课表组件（演示）')), key: 'timetable-demo' },
+        { label: menuLink('assignments', '教学任务'), key: 'assignments' },
+        { label: menuLink('workbench', '排课工作台'), key: 'workbench' },
+        { label: menuLink('auto-schedule', '自动排课'), key: 'auto-schedule' },
+        { label: menuLink('versions', '版本与发布'), key: 'versions' },
+        { label: menuLink('timetable-demo', '课表组件（演示）'), key: 'timetable-demo' },
       ],
     },
     {
-      label: tr('調代課', '调代课'),
+      label: '调课与代课',
       key: 'substitution-group',
       children: [
         leaves,
-        { label: menuLink('substitutions', tr('調代課處理', '调代课处理')), key: 'substitutions' },
-        { label: menuLink('daily-board', tr('今日調代課', '今日调代课')), key: 'daily-board' },
-        { label: menuLink('substitution-log', tr('調代課紀錄', '调代课记录')), key: 'substitution-log' },
-        { label: menuLink('substitution-stats', tr('代課鐘點統計', '代课课时统计')), key: 'substitution-stats' },
-        { label: menuLink('notification-board', tr('通知確認看板', '通知确认看板')), key: 'notification-board' },
+        { label: menuLink('substitutions', '调课与代课处理'), key: 'substitutions' },
+        { label: menuLink('daily-board', '今日调课与代课'), key: 'daily-board' },
+        { label: menuLink('substitution-log', '调课与代课记录'), key: 'substitution-log' },
+        { label: menuLink('substitution-stats', '代课课时统计'), key: 'substitution-stats' },
+        { label: menuLink('notification-board', '通知确认看板'), key: 'notification-board' },
       ],
     },
-    { label: menuLink('system', tr('系統管理', '系统管理')), key: 'system' },
+    { label: menuLink('system', '系统管理'), key: 'system' },
   ]
 })
 
@@ -93,7 +89,7 @@ async function onLogout() {
       @expand="collapsed = false"
     >
       <div style="padding: 16px; font-weight: 700; white-space: nowrap; overflow: hidden">
-        {{ collapsed ? (cn ? '排课' : '排課') : tr('排課與調代課系統', '排课与调代课系统') }}
+        {{ collapsed ? '排课' : '学校排课、调课与代课管理系统' }}
       </div>
       <n-menu
         :value="activeKey"
@@ -112,7 +108,7 @@ async function onLogout() {
           <n-tag v-for="label in roleLabels" :key="label" type="info" size="small">
             {{ label }}
           </n-tag>
-          <n-button size="small" @click="onLogout">{{ tr('登出', '退出登录') }}</n-button>
+          <n-button size="small" @click="onLogout">{{ '退出登录' }}</n-button>
         </n-space>
       </n-layout-header>
 

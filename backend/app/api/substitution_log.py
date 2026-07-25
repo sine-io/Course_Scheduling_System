@@ -1,6 +1,6 @@
-"""今日調代課看板與調代課日誌(M4-4)。
+"""今日调课与代课看板与调课与代课日志(M4-4)。
 
-看板/日誌是行政的當日排課與歷史查詢工具,限教學組長/教務主任。
+看板/日志是行政的当日排课与历史查询工具,限排课管理员/教务主任。
 """
 
 from datetime import date
@@ -29,18 +29,18 @@ def _entry_out(e: log_service.LogEntry) -> LogEntryOut:
 def _get_semester(db: Session, semester_id: int) -> Semester:
     sem = db.get(Semester, semester_id)
     if sem is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
     return sem
 
 
 @router.get("/daily-board", response_model=DailyBoardOut)
 def daily_board(
     semester_id: int = Query(...),
-    on: date | None = Query(default=None, description="看板日期,預設為學校時區的今天"),
+    on: date | None = Query(default=None, description="看板日期,默认为学校时区的今天"),
     db: Session = Depends(get_db),
     _: User = Depends(viewer),
 ):
-    """某一天全校的調代課異動(預設今天);無異動則 entries 為空。"""
+    """某一天全校的调课与代课变更(默认今天);无变更则 entries 为空。"""
     sem = _get_semester(db, semester_id)
     day = on or log_service.school_today()
     entries = log_service.daily_board(db, semester_id, day)
@@ -63,7 +63,7 @@ def substitution_log(
     db: Session = Depends(get_db),
     _: User = Depends(viewer),
 ):
-    """調代課歷史查詢:依教師(缺課或代課)、日期區間、假別篩選。"""
+    """调课与代课历史查询:依教师(缺课或代课)、日期区间、请假类型筛选。"""
     _get_semester(db, semester_id)
     entries = log_service.query(
         db, semester_id,

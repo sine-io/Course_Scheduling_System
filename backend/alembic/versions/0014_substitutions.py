@@ -1,4 +1,4 @@
-"""M4-2:調代課處置。
+"""M4-2:调课与代课处理方式。
 
 Revision ID: 0014_substitutions
 Revises: 0013_leaves

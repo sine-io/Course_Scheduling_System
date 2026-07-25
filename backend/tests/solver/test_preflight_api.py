@@ -1,6 +1,7 @@
-"""M3-1:pre-flight 檢查報告 API(GET /api/solver/preflight)。"""
+"""M3-1:pre-flight 检查报告 API(GET /api/solver/preflight)。"""
 
 from app.models.user import Role
+from tests.api_helpers import create_api_semester
 from tests.conftest import make_user
 
 PW = "password123"
@@ -16,9 +17,9 @@ def _setup(client, sid, *, periods):
         f"/api/class-units?semester_id={sid}",
         json={"grade": 3, "name": "301", "track": "junior_high"},
     ).json()
-    s = client.post(f"/api/subjects?semester_id={sid}", json={"name": "國文"}).json()
+    s = client.post(f"/api/subjects?semester_id={sid}", json={"name": "语文"}).json()
     t = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王師", "base_periods": 20}
+        f"/api/teachers?semester_id={sid}", json={"name": "王师", "base_periods": 20}
     ).json()
     client.post(f"/api/assignments?semester_id={sid}", json={
         "class_id": c["id"], "subject_id": s["id"], "periods_per_week": periods,
@@ -30,9 +31,7 @@ def _setup(client, sid, *, periods):
 def test_preflight_ok(env):
     client, db = env
     _login(client, db)
-    sid = client.post(
-        "/api/semesters", json={"academic_year": 115, "term": 1, "template_key": "junior_high"}
-    ).json()["id"]
+    sid = create_api_semester(client)["id"]
     _setup(client, sid, periods=20)
 
     r = client.get(f"/api/solver/preflight?semester_id={sid}")
@@ -42,22 +41,20 @@ def test_preflight_ok(env):
     assert body["error_count"] == 0
     assert body["class_count"] == 1 and body["teacher_count"] == 1
     assert body["assignment_count"] == 1 and body["total_periods"] == 20
-    assert body["semester_label"] == "115 學年度第 1 學期"
+    assert body["semester_label"] == "2026-2027学年第一学期"
 
 
 def test_preflight_reports_class_overload(env):
     client, db = env
     _login(client, db)
-    sid = client.post(
-        "/api/semesters", json={"academic_year": 115, "term": 1, "template_key": "junior_high"}
-    ).json()["id"]
-    _setup(client, sid, periods=40)  # 40 > 35 可排節次,且超出王師應授鐘點
+    sid = create_api_semester(client)["id"]
+    _setup(client, sid, periods=40)  # 40 > 35 可排节次,且超出王师应授课时
 
     body = client.get(f"/api/solver/preflight?semester_id={sid}").json()
     assert body["ok"] is False
     codes = {i["code"] for i in body["issues"]}
     assert "class_overload" in codes
-    assert "teacher_overload" in codes  # 40 節 > 35 格
+    assert "teacher_overload" in codes  # 40 节 > 35 格
     assert "teacher_over_hours" in codes
     # error 排在 warning 之前
     assert body["issues"][0]["level"] == "error"
@@ -77,7 +74,7 @@ def test_preflight_requires_scheduler(env):
     client, db = env
     _login(client, db, username="t", roles=(Role.teacher,))
     sid = client.post(
-        "/api/semesters", json={"academic_year": 115, "term": 1, "template_key": "junior_high"}
+        "/api/semesters", json={"academic_year": 2026, "term": 1}
     ).status_code
-    assert sid == 403  # teacher 連建學期都不行
+    assert sid == 403  # teacher 连建学期都不行
     assert client.get("/api/solver/preflight?semester_id=1").status_code == 403

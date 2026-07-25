@@ -1,4 +1,4 @@
-"""校曆例外與學期就緒 schema。"""
+"""校历、特殊日期与排课准备数据结构。"""
 
 from __future__ import annotations
 

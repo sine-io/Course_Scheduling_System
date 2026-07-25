@@ -1,4 +1,4 @@
-"""配課領域服務:排課單位解析、跑班群組驗證、鐘點/負載統計、序列化。"""
+"""教学任务领域服务:排课单位解析、走班群组验证、课时/负载统计、序列化。"""
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from app.services import period_tables as pt_service
 
 
 class DomainError(Exception):
-    """商業規則違反(由 API 層轉為對應 HTTP 狀態)。"""
+    """商业规则违反(由 API 层转为对应 HTTP 状态)。"""
 
     def __init__(self, message: str, status_code: int = 400) -> None:
         super().__init__(message)
@@ -24,7 +24,7 @@ class DomainError(Exception):
 
 
 def get_or_create_single_unit(db: Session, class_unit: ClassUnit) -> SchedulingUnit:
-    """取得(或建立)某班級的單班排課單位。單班的所有配課共用同一 single unit。"""
+    """获取(或创建)某班级的单班排课单位。单班的所有教学任务共用同一 single unit。"""
     existing = db.scalar(
         select(SchedulingUnit)
         .join(SchedulingUnitMember, SchedulingUnitMember.scheduling_unit_id == SchedulingUnit.id)
@@ -50,7 +50,7 @@ def get_or_create_single_unit(db: Session, class_unit: ClassUnit) -> SchedulingU
 def create_group(
     db: Session, semester_id: int, name: str, class_ids: list[int]
 ) -> SchedulingUnit:
-    """建立跑班群組。驗證班級同屬本學期,且成員節次表一致(architecture.md D7 #4)。"""
+    """创建走班群组。验证班级同属本学期,且成员作息时间表一致(architecture.md D7 #4)。"""
     classes = list(
         db.scalars(
             select(ClassUnit).where(
@@ -59,7 +59,7 @@ def create_group(
         )
     )
     if len(classes) != len(set(class_ids)):
-        raise DomainError("班級清單含無效或跨學期的班級")
+        raise DomainError("班级列表含无效或跨学期的班级")
     _require_same_period_table(db, classes)
     unit = SchedulingUnit(
         semester_id=semester_id, unit_type=SchedulingUnitType.group.value, name=name
@@ -78,12 +78,12 @@ def _require_same_period_table(db: Session, classes: list[ClassUnit]) -> None:
         table_ids.add(table.id if table is not None else None)
     if len(table_ids) > 1:
         raise DomainError(
-            "跑班群組的成員班級必須使用同一套節次表(否則無法同時段開課)", status_code=409
+            "走班群组的成员班级必须使用同一套作息时间表(否则无法同时段开课)", status_code=409
         )
 
 
 def teacher_loads(db: Session, semester_id: int) -> list[dict]:
-    """每位教師的鐘點統計:應授(base-減課)vs 已配課,delta 正為超鐘點。"""
+    """每位教师的课时统计:应授(base-减课)vs 已教学任务,delta 正为超课时。"""
     rows = db.execute(
         select(
             AssignmentTeacher.teacher_id,
@@ -110,12 +110,12 @@ def teacher_loads(db: Session, semester_id: int) -> list[dict]:
 
 
 def _unit_slot_consumption(db: Session, semester_id: int) -> dict[int, int]:
-    """每個排課單位佔用成員班級的節數。
+    """每个排课单位占用成员班级的节数。
 
-    single:單位內各筆配課的節數總和(同一班的不同科目依序上課)。
-    group(跑班):群組內的配課「同時段開課」(H7),學生分流到不同教室,
-    班級實際被佔用的是最長的那一筆,而非全部相加——5 門 3 節的選修同時開,
-    班級只被佔掉 3 節。
+    single:单位内各项教学任务的节数总和(同一班的不同科目依序上课)。
+    group(走班):群组内的教学任务「同时段开课」(H7),学生分流到不同教室,
+    班级实际被占用的是课时最长的那一项,而非全部相加——5 门 3 节的选修同时开,
+    班级只被占掉 3 节。
     """
     rows = db.execute(
         select(
@@ -135,7 +135,7 @@ def _unit_slot_consumption(db: Session, semester_id: int) -> dict[int, int]:
 
 
 def class_loads(db: Session, semester_id: int) -> list[dict]:
-    """每班每週配課總節數 vs 可排節次數(超出即警告,對應驗收④)。"""
+    """每班每周教学任务总节数 vs 可排节次数(超出即警告,对应验收④)。"""
     consumption = _unit_slot_consumption(db, semester_id)
     assigned_by: dict[int, int] = {}
     if consumption:

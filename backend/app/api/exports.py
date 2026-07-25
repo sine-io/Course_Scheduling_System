@@ -1,7 +1,7 @@
-"""課表匯出:班級/教師/場地 Excel/PDF/PNG、全校總表、批次 zip(M5-1)。
+"""课表导出:班级、教师和教室/场地 Excel/PDF/PNG、全校总表、批量 zip(M5-1)。
 
-Excel 在 api 同步產生(openpyxl 輕量);PDF/PNG 派到 worker(WeasyPrint + 中文字型)
-再取回。單一對象匯出開放給所有登入者(課表本就全校可查);全校總表/批次限教學組長以上。
+Excel 在 api 同步生成(openpyxl 轻量);PDF/PNG 派到 worker(WeasyPrint + 中文字体)
+再取回。单一对象导出开放给所有登录者(课表本就全校可查);全校总表/批量限排课管理员以上。
 """
 
 from urllib.parse import quote
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.models.user import Role, User
-from app.services import localization
+from app.services import school_rules
 from app.services import timetable_export as tex
 from app.workers import queue as job_queue
 
@@ -29,7 +29,7 @@ _MIME = {
 
 
 def _download(data: bytes, filename: str, ext: str) -> Response:
-    # 中文檔名以 RFC 5987 filename* 表達;filename 提供 ASCII 後備
+    # 中文文件名以 RFC 5987 filename* 表达;filename 提供 ASCII 后备
     quoted = quote(filename)
     disposition = f"attachment; filename=\"export.{ext}\"; filename*=UTF-8''{quoted}.{ext}"
     return Response(
@@ -48,7 +48,7 @@ def export_timetable(
     db: Session = Depends(get_db),
     _: User = Depends(get_active_user),
 ):
-    """單一班級/教師/場地的課表,格式 xlsx/pdf/png。"""
+    """单一班级、教师或教室/场地的课表,格式 xlsx/pdf/png。"""
     try:
         grid, meta = tex.build_grid(db, semester_id, view, target_id)
     except tex.ExportError as e:
@@ -72,12 +72,12 @@ def export_school(
     db: Session = Depends(get_db),
     _: User = Depends(manager),
 ):
-    """全校總表:一個 Excel,每班一個分頁。"""
+    """全校总表:一个 Excel,每班一个分页。"""
     try:
         data = tex.school_workbook(db, semester_id)
     except tex.ExportError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
-    return _download(data, f"{localization.export_label('school_timetable')}_{semester_id}", "xlsx")
+    return _download(data, f"{school_rules.export_label('school_timetable')}_{semester_id}", "xlsx")
 
 
 @router.get("/export/batch.zip")
@@ -86,9 +86,9 @@ def export_batch(
     db: Session = Depends(get_db),
     _: User = Depends(manager),
 ):
-    """批次匯出:全部班級各一個 Excel,打包成 zip。"""
+    """批量导出:全部班级各一个 Excel,打包成 zip。"""
     try:
         data = tex.class_batch_zip(db, semester_id)
     except tex.ExportError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
-    return _download(data, f"{localization.export_label('class_timetables')}_{semester_id}", "zip")
+    return _download(data, f"{school_rules.export_label('class_timetables')}_{semester_id}", "zip")

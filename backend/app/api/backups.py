@@ -1,7 +1,7 @@
-"""資料庫備份與還原(M5-2)。系統管理員專用。
+"""数据库备份与恢复(M5-2)。系统管理员专用。
 
-清單/下載/上傳由 api 直接讀寫共掛的備份 volume;實際 pg_dump/pg_restore 派到 worker。
-還原一律**先自動備份現狀**(可反悔),完成後強制全員重新登入。
+列表/下载/上传由 api 直接读写共挂的备份 volume;实际 pg_dump/pg_restore 派到 worker。
+恢复统一**先自动备份现状**(可反悔),完成后强制全员重新登录。
 """
 
 import logging
@@ -36,11 +36,11 @@ def list_backups(_: User = Depends(admin_only)):
 
 @router.post("/backups", response_model=BackupOut, status_code=status.HTTP_201_CREATED)
 def create_backup(db: Session = Depends(get_db), user: User = Depends(admin_only)):
-    """立即備份(pg_dump 於 worker)。"""
+    """立即备份(pg_dump 于 worker)。"""
     try:
         data = job_queue.run_backup("manual")
     except job_queue.BackupJobError as e:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"備份失敗:{e}") from e
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"备份失败:{e}") from e
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="create_backup",
         target_type="backup", target_id=None, detail=data["name"],
@@ -52,7 +52,7 @@ def create_backup(db: Session = Depends(get_db), user: User = Depends(admin_only
 def _get_backup(name: str) -> backup_service.BackupInfo:
     info = next((i for i in backup_service.list_backups() if i.name == name), None)
     if info is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到備份")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到备份")
     return info
 
 
@@ -74,7 +74,7 @@ def delete_backup(name: str, db: Session = Depends(get_db), user: User = Depends
     try:
         os.remove(f"{settings.backup_dir}/{info.name}")
     except OSError as e:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "刪除失敗") from e
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "删除失败") from e
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="delete_backup",
         target_type="backup", target_id=None, detail=info.name,
@@ -84,18 +84,18 @@ def delete_backup(name: str, db: Session = Depends(get_db), user: User = Depends
 
 
 def _restore(db: Session, user: User, target_name: str) -> RestoreResult:
-    """先備份現狀,再還原;完成後強制全員重新登入。"""
-    # 排課進行中不可還原:pg_restore --clean 覆蓋整個資料庫,而排課中的 worker 正要把
-    # 結果寫回同一個庫;寫回的草稿會落進一個剛被抹掉的世界(Fable 5 M5 複審 A)。
+    """先备份现状,再恢复;完成后强制全员重新登录。"""
+    # 排课进行中不可恢复:pg_restore --clean 覆盖整个数据库,而排课中的 worker 正要把
+    # 结果写回同一个库;写回的草稿会落进一个刚被抹掉的世界(Fable 5 M5 复审 A)。
     if job_queue.solver_busy():
-        raise HTTPException(status.HTTP_409_CONFLICT, "排課進行中,請待排課完成後再還原")
+        raise HTTPException(status.HTTP_409_CONFLICT, "排课进行中,请待排课完成后再恢复")
 
-    # 還原前先關掉本請求的 session。pg_restore --clean 會中止資料庫上的所有連線,包含
-    # 驗證身分時開的這條;而 FastAPI 的 yield 依賴是在**回應送出後**才收尾,屆時
-    # db.close() 會對一條已死的連線送出 ROLLBACK,在 log 噴出一段 AdminShutdown
-    # traceback——回應與資料都是對的,但剛按下「還原」的組長看到那段紅字,只會以為
-    # 還原失敗了。還原期間本來就用不到這條 session(稽核另開新連線寫)。
-    # 關閉前先把等下要用的欄位取成純量,免得 user 成為 detached instance。
+    # 恢复前先关掉本请求的 session。pg_restore --clean 会中止数据库上的所有连接,包含
+    # 验证身份时建立的连接;而 FastAPI 的 yield 依赖是在**响应发送后**才收尾,届时
+    # db.close() 会通过已经失效的连接发送 ROLLBACK,在日志中输出一段 AdminShutdown
+    # traceback——响应与数据都是对的,但刚按下「恢复」的排课管理员看到那段红字,只会以为
+    # 恢复失败了。恢复期间本来就用不到这个数据库会话(审计记录通过新连接写入)。
+    # 关闭前先把后续要用的字段取成标量值,避免 user 成为 detached instance。
     actor_id, actor_name = user.id, user.username
     db.close()
 
@@ -103,14 +103,14 @@ def _restore(db: Session, user: User, target_name: str) -> RestoreResult:
         presafe = job_queue.run_backup("presafe")
         warnings = job_queue.run_restore(target_name)
     except job_queue.BackupJobError as e:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"還原失敗:{e}") from e
-    # 還原已覆蓋整個資料庫並中止舊連線,且原本的資料已被取代;稽核要以**新連線**寫進
-    # **還原後**的資料庫,否則不是連線已死就是紀錄被覆蓋掉。
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"恢复失败:{e}") from e
+    # 恢复已覆盖整个数据库并中止旧连接,且原本的数据已被取代;审计要以**新连接**写进
+    # **恢复后**的数据库,否则不是连接已死就是记录被覆盖掉。
     from app.core.db import SessionLocal, engine
     engine.dispose()
-    audit_detail = f"還原自 {target_name};現狀已備份為 {presafe['name']}"
+    audit_detail = f"恢复自 {target_name};现状已备份为 {presafe['name']}"
     if warnings:
-        audit_detail += f";可忽略警告 {len(warnings)} 則"
+        audit_detail += f";可忽略警告 {len(warnings)} 则"
     try:
         with SessionLocal() as fresh:
             fresh.add(AuditLog(
@@ -118,8 +118,8 @@ def _restore(db: Session, user: User, target_name: str) -> RestoreResult:
                 target_type="backup", target_id=None, detail=audit_detail[:500],
             ))
             fresh.commit()
-    except Exception:  # noqa: BLE001 - 稽核補寫失敗不該推翻已完成的還原
-        logger.warning("還原後補寫稽核失敗", exc_info=True)
+    except Exception:  # noqa: BLE001 - 审计补写失败不该推翻已完成的恢复
+        logger.warning("恢复后补写审计失败", exc_info=True)
     return RestoreResult(
         restored_from=target_name, presafe_backup=presafe["name"], warnings=warnings,
     )
@@ -129,7 +129,7 @@ def _restore(db: Session, user: User, target_name: str) -> RestoreResult:
 def restore_backup(
     name: str, db: Session = Depends(get_db), user: User = Depends(admin_only)
 ):
-    """從既有備份還原(還原前自動備份現狀)。"""
+    """从现有备份恢复(恢复前自动备份现状)。"""
     _get_backup(name)
     return _restore(db, user, name)
 
@@ -140,7 +140,7 @@ async def restore_from_upload(
     db: Session = Depends(get_db),
     user: User = Depends(admin_only),
 ):
-    """上傳備份檔並還原。非法檔案直接拒絕、不動資料庫(驗收②)。"""
+    """上传备份文件并恢复。非法文件直接拒绝、不动数据库(验收②)。"""
     content = await file.read()
     try:
         name = backup_service.save_uploaded(file.filename or "upload", content)

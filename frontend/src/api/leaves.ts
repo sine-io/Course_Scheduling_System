@@ -1,4 +1,4 @@
-// 請假登記與受影響節次(M4-1)。
+// 请假登记与受影响节次(M4-1)。
 
 import { apiGet, apiPost } from '@/api/client'
 
@@ -7,7 +7,7 @@ export interface AffectedPeriod {
   date: string
   weekday: number
   period_no: number
-  period_name: string // 「第三節」——節次表的名稱,不是內部 period_no
+  period_name: string // 「第三节」——作息时间表的名称,不是内部 period_no
   start_time: string | null
   end_time: string | null
   subject_name: string
@@ -46,7 +46,7 @@ export interface LeaveCancelled {
 }
 
 export interface NewLeave {
-  teacher_id?: number | null // 組長代登時指定;教師自登留空
+  teacher_id?: number | null // 排课管理员代登时指定;教师自登留空
   leave_type: string
   start_date: string
   start_time?: string | null

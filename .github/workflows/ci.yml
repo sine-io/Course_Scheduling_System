@@ -7,8 +7,16 @@ on:
     tags: ["v*"]
 
 jobs:
+  text:
+    name: 简体中文与术语检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 扫描受版本控制的文本文件
+        run: python3 scripts/check_simplified_chinese.py
+
   backend:
-    name: 後端 lint / type / test
+    name: 后端 lint / type / test
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -19,13 +27,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: 安裝相依
+      - name: 安装依赖
         run: pip install -e ".[dev]"
-      - name: Ruff(格式與規則)
+      - name: Ruff(格式与规则)
         run: ruff check .
-      - name: Mypy(型別檢查)
+      - name: Mypy(类型检查)
         run: mypy app
-      - name: Pytest(單元測試)
+      - name: Pytest(单元测试)
         run: python -m pytest -q
 
   frontend:
@@ -41,17 +49,17 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: 安裝相依(依 lock 檔完全重現)
+      - name: 安装依赖(依 lock 文件完全重现)
         run: npm ci --no-audit --no-fund
       - name: ESLint
         run: npm run lint
-      - name: 建置(含 vue-tsc 型別檢查)
+      - name: 构建(含 vue-tsc 类型检查)
         run: npm run build
-      - name: Vitest(單元測試)
+      - name: Vitest(单元测试)
         run: npm run test
 
   migrations:
-    name: 資料庫遷移驗證(PostgreSQL)
+    name: 数据库迁移验证(PostgreSQL)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -76,24 +84,24 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: 安裝相依
+      - name: 安装依赖
         run: pip install -e ".[dev]"
-      - name: 對全新 PostgreSQL 執行 alembic upgrade head
+      - name: 对全新 PostgreSQL 执行 alembic upgrade head
         env:
           DATABASE_URL: postgresql+psycopg://scheduler:scheduler@localhost:5432/scheduler
         run: alembic upgrade head
 
   e2e:
-    name: E2E 驗收(Playwright 對 Docker 全棧)
+    name: E2E 验收(Playwright 对 Docker 全栈)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      # 在 runner 上以 buildx 建三個映像(不推送,load 進本機 daemon)。
-      # 不拉 :main 現成映像的原因:PR 必須驗 PR 自己的程式碼;
-      # 快取 scope 與 images job 共用,main 建過之後 PR 的建置只剩分鐘級。
-      - name: 建置 api 映像
+      # 在 runner 上以 buildx 建三个镜像(不推送,load 进本机 daemon)。
+      # 不拉 :main 现成镜像的原因:PR 必须验 PR 自己的代码;
+      # 缓存 scope 与 images job 共用,main 建过之后 PR 的构建只剩分钟级。
+      - name: 构建 api 镜像
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -102,7 +110,7 @@ jobs:
           tags: ghcr.io/begin0808/course_scheduling_system-api:ci
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
-      - name: 建置 worker 映像
+      - name: 构建 worker 镜像
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -111,7 +119,7 @@ jobs:
           tags: ghcr.io/begin0808/course_scheduling_system-worker:ci
           cache-from: type=gha,scope=worker
           cache-to: type=gha,scope=worker,mode=max
-      - name: 建置 web 映像
+      - name: 构建 web 镜像
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -120,13 +128,12 @@ jobs:
           tags: ghcr.io/begin0808/course_scheduling_system-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
-      - name: 準備 .env 並啟動全棧
+      - name: 准备 .env 并启动全栈
         run: |
           cat > .env <<'EOF'
           ADMIN_USERNAME=admin
           ADMIN_PASSWORD=ci-admin-password
-          SCHOOL_NAME=CI 測試學校
-          TZ=Asia/Taipei
+          SCHOOL_NAME=CI 测试学校
           SECRET_KEY=ci-e2e-not-a-secret-0123456789abcdef
           HTTP_PORT=80
           IMAGE_TAG=ci
@@ -136,26 +143,26 @@ jobs:
           DATABASE_URL=postgresql+psycopg://scheduler:scheduler@postgres:5432/scheduler
           REDIS_URL=redis://redis:6379/0
           EOF
-          docker compose up -d --no-build --wait --wait-timeout 180
-      - name: 建立 E2E 帳號與精靈狀態
-        run: docker compose exec -T api python -m app.scripts.seed_e2e
+          sudo docker compose up -d --no-build --wait --wait-timeout 180
+      - name: 创建 E2E 账号与向导状态
+        run: sudo docker compose exec -T api python -m app.scripts.seed_e2e
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: 安裝前端相依與 Playwright 瀏覽器
+      - name: 安装前端依赖与 Playwright 浏览器
         working-directory: frontend
         run: |
           npm ci --no-audit --no-fund
           npx playwright install --with-deps chromium
-      - name: 執行 E2E 迴歸套件(chromium project)
+      - name: 执行 E2E 回归测试（Chromium）
         working-directory: frontend
         run: npm run e2e
-      - name: 失敗時收集容器紀錄
+      - name: 失败时收集容器记录
         if: failure()
-        run: docker compose logs --no-color > compose-logs.txt || true
-      - name: 上傳診斷產物(報告 / trace / 失敗截圖 / 容器紀錄)
+        run: sudo docker compose logs --no-color > compose-logs.txt || true
+      - name: 上传诊断产物(报告 / trace / 失败截图 / 容器记录)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -168,30 +175,30 @@ jobs:
           if-no-files-found: ignore
 
   images:
-    name: 建置並發布映像
+    name: 构建并发布镜像
     runs-on: ubuntu-latest
-    # e2e 為前置:E2E 紅燈時不得發布映像
-    needs: [backend, frontend, migrations, e2e]
-    # main push:僅 amd64(快速);版本標籤 v*:amd64+arm64 雙架構(正式發布)
+    # e2e 为前置:E2E 测试失败时不得发布镜像
+    needs: [text, backend, frontend, migrations, e2e]
+    # main push:仅 amd64(快速);版本标签 v*:amd64+arm64 双架构(正式发布)
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: 計算映像名稱(需小寫)
+      - name: 计算镜像名称(需小写)
         run: echo "IMAGE_BASE=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-      - name: 決定建置架構與 channel 標籤
+      - name: 决定构建架构与 channel 标签
         id: platforms
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "value=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
             if [[ "${{ github.ref_name }}" == *-* ]]; then
-              # 預發布(如 v1.0.0-rc1):建雙架構供演練,但 channel 用自身標籤,不動 :latest
+              # 预发布(如 v1.0.0-rc1):建双架构供演练,但 channel 用自身标签,不动 :latest
               echo "channel=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
             else
-              # 正式版才更新 :latest;main push 僅單架構,不可覆蓋 :latest
-              # 否則 ARM 用戶(IMAGE_TAG=latest)pull 到只有 amd64 的 manifest 會起不來
+              # 正式版才更新 :latest;main push 仅单架构,不可覆盖 :latest
+              # 否则 ARM 用户(IMAGE_TAG=latest)pull 到只有 amd64 的 manifest 会起不来
               echo "channel=latest" >> "$GITHUB_OUTPUT"
             fi
           else
@@ -200,27 +207,27 @@ jobs:
           fi
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - name: 登入 GHCR
+      - name: 登录 GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: 建置並推送 api 映像
+      - name: 构建并推送 api 镜像
         uses: docker/build-push-action@v6
         with:
           context: ./backend
           target: base
           platforms: ${{ steps.platforms.outputs.value }}
           push: true
-          # ref_name:main push 為 "main";版本標籤推送則為 "v1.0.0"(供 .env 的 IMAGE_TAG 釘選)
+          # ref_name:main push 为 "main";版本标签推送则为 "v1.0.0"(供 .env 的 IMAGE_TAG 固定)
           tags: |
             ${{ env.IMAGE_BASE }}-api:${{ steps.platforms.outputs.channel }}
             ${{ env.IMAGE_BASE }}-api:${{ github.ref_name }}
             ${{ env.IMAGE_BASE }}-api:${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
-      - name: 建置並推送 worker 映像(含 PDF/字型依賴)
+      - name: 构建并推送 worker 镜像(含 PDF/字体依赖)
         uses: docker/build-push-action@v6
         with:
           context: ./backend
@@ -233,7 +240,7 @@ jobs:
             ${{ env.IMAGE_BASE }}-worker:${{ github.sha }}
           cache-from: type=gha,scope=worker
           cache-to: type=gha,scope=worker,mode=max
-      - name: 建置並推送 web 映像
+      - name: 构建并推送 web 镜像
         uses: docker/build-push-action@v6
         with:
           context: .

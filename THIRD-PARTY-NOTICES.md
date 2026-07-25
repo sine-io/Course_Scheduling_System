@@ -1,12 +1,12 @@
-# 第三方元件與授權 Third-Party Notices
+# 第三方组件与授权 Third-Party Notices
 
-本專案(排課與調代課系統)以 **MIT** 授權釋出。系統運行時會用到下列第三方元件。這些元件皆以**獨立函式庫**(動態相依)或**獨立程式**(子行程呼叫)的形式使用,不會將其授權條款加諸於本專案的原始碼——因此與本專案的 MIT 授權相容,可自由散布。
+本项目(学校排课、调课与代课管理系统)以 **MIT** 授权释出。系统运行时会用到下列第三方组件。这些组件均以**独立函数库**(动态依赖)或**独立程序**(子进程调用)的形式使用,不会将其授权条款加诸于本项目的源代码——因此与本项目的 MIT 授权兼容,可自由散布。
 
-各元件的權威授權以其官方專案為準;下表為概述,便於採用單位做合規查核。
+各组件的权威授权以其官方项目为准;下表为概述,便于采用单位做合规查核。
 
-## 後端執行相依(Python)
+## 后端执行依赖(Python)
 
-| 元件 | 授權 |
+| 组件 | 授权 |
 |---|---|
 | FastAPI | MIT |
 | Uvicorn | BSD-3-Clause |
@@ -21,37 +21,37 @@
 | itsdangerous | BSD-3-Clause |
 | openpyxl | MIT |
 | OR-Tools | Apache-2.0 |
-| WeasyPrint(worker 匯出用) | BSD-3-Clause |
+| WeasyPrint(worker 导出用) | BSD-3-Clause |
 
-## worker 映像的系統套件(Debian,以系統程式庫或子行程使用)
+## worker 镜像的系统组件(Debian,以系统程序库或子进程使用)
 
-| 元件 | 授權 | 使用方式 |
+| 组件 | 授权 | 使用方式 |
 |---|---|---|
-| **poppler-utils**(`pdftoppm`) | **GPL-2.0** | 以**子行程**呼叫,轉 PDF→PNG |
-| Pango / Cairo / gdk-pixbuf | LGPL | WeasyPrint 的系統相依(動態連結) |
-| fonts-noto-cjk(Noto Sans/Serif CJK) | SIL Open Font License 1.1 | 內嵌於匯出的 PDF |
-| postgresql-client(`pg_dump`/`pg_restore`) | PostgreSQL License(寬鬆) | 以子行程呼叫,備份/還原 |
+| **poppler-utils**(`pdftoppm`) | **GPL-2.0** | 以**子进程**调用,转 PDF→PNG |
+| Pango / Cairo / gdk-pixbuf | LGPL | WeasyPrint 的系统依赖(动态链接) |
+| fonts-noto-cjk(Noto Sans/Serif CJK) | SIL Open Font License 1.1 | 内嵌于导出的 PDF |
+| postgresql-client(`pg_dump`/`pg_restore`) | PostgreSQL License(宽松) | 以子进程调用,备份/恢复 |
 
-## 前端相依
+## 前端依赖
 
-| 元件 | 授權 |
+| 组件 | 授权 |
 |---|---|
 | Vue 3 / Vue Router / Pinia | MIT |
 | Naive UI | MIT |
 | Vite | MIT |
 
-## 執行時基礎映像(由部署者自官方來源拉取,非本專案散布)
+## 执行时基础镜像(由部署者自官方来源拉取,非本项目散布)
 
-| 映像 | 授權 |
+| 镜像 | 授权 |
 |---|---|
 | PostgreSQL(`postgres:16-alpine`) | PostgreSQL License |
-| Redis(`redis:7-alpine`) | BSD-3-Clause / 視版本 |
+| Redis(`redis:7-alpine`) | BSD-3-Clause / 视版本 |
 | Caddy(`caddy:2-alpine`) | Apache-2.0 |
 
-## 關於 copyleft 元件的說明
+## 关于 copyleft 组件的说明
 
-- **psycopg(LGPL-3.0)**:以獨立函式庫**動態相依**方式使用(未修改、未靜態連結進本專案)。LGPL 對此種使用不要求本專案採用相同授權,故 MIT 相容。
-- **poppler-utils / `pdftoppm`(GPL-2.0)**:僅以**子行程**呼叫的獨立命令列程式(mere aggregation),GPL 的 copyleft 不延伸至呼叫它的本專案程式碼。
-- **Pango / Cairo 等(LGPL)**:動態連結的系統程式庫,與上述 LGPL 說明同理。
+- **psycopg(LGPL-3.0)**:以独立函数库**动态依赖**方式使用(未修改、未静态链接进本项目)。LGPL 对此种使用不要求本项目采用相同授权,故 MIT 兼容。
+- **poppler-utils / `pdftoppm`(GPL-2.0)**:仅以**子进程**调用的独立命令列程序(mere aggregation),GPL 的 copyleft 不延伸至调用它的本项目代码。
+- **Pango / Cairo 等(LGPL)**:动态链接的系统程序库,与上述 LGPL 说明同理。
 
-若你要**修改並再散布**這些 copyleft 元件本身(而非僅使用),請遵循其各自的授權條款。單純部署與使用本系統不涉及此義務。
+若你要**修改并再散布**这些 copyleft 组件本身(而非仅使用),请遵循其各自的授权条款。单纯部署与使用本系统不涉及此义务。

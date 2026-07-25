@@ -1,4 +1,4 @@
-"""教師帳號綁定與聯絡資訊測試。對應 M2-0 驗收標準。"""
+"""教师账号绑定与联系信息测试。对应 M2-0 验收标准。"""
 
 import io
 
@@ -15,11 +15,11 @@ PW = "password123"
 
 @pytest.fixture
 def sched(env):
-    """已登入教學組長 + 一個學期。回傳 (client, semester_id, db)。"""
+    """已登录排课管理员 + 一个学期。返回 (client, semester_id, db)。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.scheduler])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sem = client.post("/api/semesters", json={"academic_year": 115, "term": 1}).json()
+    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
     return client, sem["id"], db
 
 
@@ -27,75 +27,75 @@ def _make_teacher_account(db, username: str) -> int:
     return make_user(db, username, PW, roles=[Role.teacher]).id
 
 
-# ── 聯絡資訊 ──────────────────────────
+# ── 联系信息 ──────────────────────────
 def test_contact_fields_crud(sched):
     client, sid, _ = sched
     r = client.post(
         f"/api/teachers?semester_id={sid}",
-        json={"name": "王老師", "email": "wang@example.edu.tw", "phone": "0912345678",
+        json={"name": "王老师", "email": "wang@example.edu.cn", "phone": "13812345678",
               "line_id": "wang_line"},
     )
     assert r.status_code == 201
     t = r.json()
-    assert t["email"] == "wang@example.edu.tw"
-    assert t["phone"] == "0912345678"
+    assert t["email"] == "wang@example.edu.cn"
+    assert t["phone"] == "13812345678"
     assert t["line_id"] == "wang_line"
-    # 更新聯絡資訊
-    r = client.patch(f"/api/teachers/{t['id']}", json={"name": "王老師", "email": "new@a.bc"})
+    # 更新联系信息
+    r = client.patch(f"/api/teachers/{t['id']}", json={"name": "王老师", "email": "new@a.bc"})
     assert r.json()["email"] == "new@a.bc"
-    assert r.json()["phone"] is None  # 未帶入 → 清空
+    assert r.json()["phone"] is None  # 未带入 → 清空
 
 
 def test_invalid_email_rejected(sched):
-    """驗收④:Email 格式錯誤回報錯誤。"""
+    """验收④:Email 格式错误报告错误。"""
     client, sid, _ = sched
     r = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老師", "email": "not-an-email"}
+        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "email": "not-an-email"}
     )
     assert r.status_code == 422
 
 
 def test_empty_email_becomes_null(sched):
     client, sid, _ = sched
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老師", "email": ""})
+    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "email": ""})
     assert r.status_code == 201
     assert r.json()["email"] is None
 
 
-# ── 帳號綁定 ──────────────────────────
+# ── 账号绑定 ──────────────────────────
 def test_bind_account_success(sched):
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": uid})
+    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid})
     assert r.status_code == 201
     assert r.json()["user_id"] == uid
 
 
 def test_bind_nonexistent_account_400(sched):
     client, sid, _ = sched
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": 99999})
+    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": 99999})
     assert r.status_code == 400
 
 
 def test_bind_same_account_twice_409(sched):
-    """驗收③:同帳號在同學期綁第二位教師 → 409。"""
+    """验收③:同账号在同学期绑第二位教师 → 409。"""
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
     assert client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": uid}
+        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid}
     ).status_code == 201
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "李老師", "user_id": uid})
+    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "李老师", "user_id": uid})
     assert r.status_code == 409
 
 
 def test_rebind_same_teacher_ok(sched):
-    """同一教師重存自己已綁的帳號不應被當成衝突。"""
+    """同一教师重存自己已绑的账号不应被当成冲突。"""
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
     t = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": uid}
+        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid}
     ).json()
-    r = client.patch(f"/api/teachers/{t['id']}", json={"name": "王老師", "user_id": uid})
+    r = client.patch(f"/api/teachers/{t['id']}", json={"name": "王老师", "user_id": uid})
     assert r.status_code == 200
     assert r.json()["user_id"] == uid
 
@@ -104,8 +104,8 @@ def test_bindable_accounts_excludes_bound(sched):
     client, sid, db = sched
     u1 = _make_teacher_account(db, "wang001")
     u2 = _make_teacher_account(db, "lee001")
-    # 綁定 u1 給某教師
-    client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": u1})
+    # 绑定 u1 给某教师
+    client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": u1})
     avail = client.get(f"/api/teachers/bindable-accounts?semester_id={sid}").json()
     ids = {a["id"] for a in avail}
     assert u2 in ids and u1 not in ids
@@ -115,9 +115,9 @@ def test_bindable_accounts_includes_current_in_edit(sched):
     client, sid, db = sched
     u1 = _make_teacher_account(db, "wang001")
     t = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": u1}
+        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": u1}
     ).json()
-    # 編輯情境:帶 current_teacher_id → 應含目前綁定的 u1
+    # 编辑场景:带 current_teacher_id → 应含目前绑定的 u1
     avail = client.get(
         f"/api/teachers/bindable-accounts?semester_id={sid}&current_teacher_id={t['id']}"
     ).json()
@@ -128,20 +128,20 @@ def test_bindable_accounts_includes_current_in_edit(sched):
 def test_current_teacher_helper(sched):
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
-    client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老師", "user_id": uid})
+    client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid})
     user = db.get(User, uid)
     t = current_teacher(db, user, sid)
-    assert t is not None and t.name == "王老師"
-    # 未綁定學期回 None
+    assert t is not None and t.name == "王老师"
+    # 未绑定学期回 None
     assert current_teacher(db, user, 99999) is None
 
 
-# ── Excel 匯入綁定 ──────────────────────
+# ── Excel 导入绑定 ──────────────────────
 def _make_xlsx(rows: list[list], ncols: int) -> bytes:
     wb = Workbook()
     ws = wb.active
     for _ in range(3):
-        ws.append(["表頭"] * ncols)
+        ws.append(["表头"] * ncols)
     for r in rows:
         ws.append(r)
     buf = io.BytesIO()
@@ -158,11 +158,11 @@ def _upload_teachers(client, sid, rows, ncols=11, create_accounts=True):
 
 
 def test_import_binds_account(sched):
-    """驗收①:匯入教師勾建立帳號 → user_id 正確綁定;含聯絡欄位。"""
+    """验收①:导入教师勾创建账号 → user_id 正确绑定;含联系字段。"""
     client, sid, _ = sched
     rows = [
         ["王小明", "1234", "", 20, "", "", "否", "wang001", "wang@a.bc", "0911", "wl"],
-        ["李小華", "5678", "", 18, "", "", "否", "lee001", "", "", ""],
+        ["李小华", "5678", "", 18, "", "", "否", "lee001", "", "", ""],
     ]
     r = _upload_teachers(client, sid, rows)
     assert r.json()["imported"] == 2
@@ -171,7 +171,7 @@ def test_import_binds_account(sched):
     assert wang["user_id"] is not None
     assert wang["email"] == "wang@a.bc"
     assert wang["phone"] == "0911"
-    # 綁定帳號可用預設密碼登入
+    # 绑定账号可用默认密码登录
     client.post("/api/auth/logout")
     login = client.post("/api/auth/login", json={"username": "wang001", "password": "changeme"})
     assert login.status_code == 200
@@ -179,25 +179,25 @@ def test_import_binds_account(sched):
 
 def test_import_invalid_email_zero_write(sched):
     client, sid, _ = sched
-    rows = [["王小明", "", "", "", "", "", "", "", "壞掉的email", "", ""]]
+    rows = [["王小明", "", "", "", "", "", "", "", "坏掉的email", "", ""]]
     body = _upload_teachers(client, sid, rows, create_accounts=False).json()
     assert body["imported"] == 0
     assert any("Email" in e for e in body["errors"])
     assert client.get(f"/api/teachers?semester_id={sid}").json() == []
 
 
-# ── 開新學期複製保留綁定 ──────────────
+# ── 开新学期复制保留绑定 ──────────────
 def test_copy_preserves_binding_and_contact(sched):
-    """驗收②:複製後新學期教師仍綁同一帳號、聯絡資訊完整。"""
+    """验收②:复制后新学期教师仍绑同一账号、联系信息完整。"""
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
     client.post(
         f"/api/teachers?semester_id={sid}",
-        json={"name": "王老師", "user_id": uid, "email": "wang@a.bc", "phone": "0911"},
+        json={"name": "王老师", "user_id": uid, "email": "wang@a.bc", "phone": "0911"},
     )
     r = client.post(
         f"/api/semesters/{sid}/copy",
-        json={"academic_year": 116, "term": 1, "grade_promotion": False},
+        json={"academic_year": 2027, "term": 1, "grade_promotion": False},
     )
     assert r.status_code == 201
     nid = r.json()["id"]

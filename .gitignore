@@ -1,4 +1,4 @@
-# 環境設定(含密碼)
+# 环境设置(含密码)
 .env
 
 # Python
@@ -16,19 +16,19 @@ node_modules/
 dist/
 *.local
 
-# 編輯器 / 作業系統
+# 编辑器 / 操作系统
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
 
-# Claude Code 本機工具設定(不納入版本庫)
+# Claude Code 本机工具设置(不纳入版本库)
 .claude/
 
-# 備份輸出
+# 备份输出
 backups/
 
-# Playwright e2e 產物
+# Playwright e2e 产物
 frontend/e2e/screenshots/
 frontend/playwright-report/
 frontend/test-results/

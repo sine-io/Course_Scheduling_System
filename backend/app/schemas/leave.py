@@ -1,4 +1,4 @@
-"""請假與受影響節次 schema(M4-1)。"""
+"""请假与受影响节次 schema(M4-1)。"""
 
 from datetime import date, datetime, time
 
@@ -10,7 +10,7 @@ class AffectedPeriodOut(BaseModel):
     date: date
     weekday: int
     period_no: int
-    period_name: str  # 「第三節」——一律用節次表的名稱,不用內部 period_no
+    period_name: str  # 「第三节」——统一用作息时间表的名称,不用内部 period_no
     start_time: time | None = None
     end_time: time | None = None
     subject_name: str
@@ -24,9 +24,9 @@ class AffectedPeriodOut(BaseModel):
 
 
 class LeaveRequestIn(BaseModel):
-    """時間為空 = 該端點整天。單日 + 起訖時間 = 半天假。"""
+    """时间为空 = 该端点全天。单日 + 起止时间 = 半天假。"""
 
-    teacher_id: int | None = None  # 組長代登時指定;教師自登留空
+    teacher_id: int | None = None  # 排课管理员代登时指定;教师自登留空
     leave_type: str
     start_date: date
     start_time: time | None = None
@@ -58,6 +58,6 @@ class LeaveRequestOut(BaseModel):
 class LeaveCancelled(BaseModel):
     id: int
     status: str
-    revoked_count: int  # 原本已指派、現在被取消的節次數
+    revoked_count: int  # 原本已指派、现在被取消的节次数
     notified_teachers: list[str] = []
 

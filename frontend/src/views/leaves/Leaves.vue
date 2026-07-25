@@ -11,15 +11,11 @@ import type { AffectedPeriod, LeaveRequest } from '@/api/leaves'
 import { listSemesters } from '@/api/semesters'
 import { publishedSemesters } from '@/api/timetables'
 import { useAuthStore } from '@/stores/auth'
-import { useAppConfigStore } from '@/stores/appConfig'
 
 const auth = useAuthStore()
-const appConfig = useAppConfigStore()
 const message = useMessage()
-const mainland = computed(() => appConfig.isMainland)
-const tr = (tw: string, cn: string) => mainland.value ? cn : tw
 
-// 組長/主任可代登、可看全校;教師只登記自己的假、只看自己的假單
+// 排课管理员/主任可代登、可看全校;教师只登记自己的假、只看自己的假单
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
 
@@ -30,14 +26,14 @@ const teachers = ref<{ id: number; name: string }[]>([])
 const leaves = ref<LeaveRequest[]>([])
 const saving = ref(false)
 
-// 後端的保護性上限(leaves.MAX_LEAVE_ROWS)。剛好取到上限筆數,幾乎必然是被截斷了。
+// 后端的保护性上限(leaves.MAX_LEAVE_ROWS)。刚好取到条数上限,几乎必然是被截断了。
 const MAX_LEAVE_ROWS = 1000
 const truncated = computed(() => leaves.value.length >= MAX_LEAVE_ROWS)
 
 const form = ref({
   teacherId: null as number | null,
   leaveType: 'sick',
-  // NDatePicker 給的是 timestamp,送出前才轉成 YYYY-MM-DD
+  // NDatePicker 返回 timestamp,提交前再转成 YYYY-MM-DD
   startDate: null as number | null,
   endDate: null as number | null,
   halfDay: false,
@@ -51,7 +47,7 @@ const teacherOptions = computed(() => teachers.value.map((t) => ({ label: t.name
 const typeOptions = computed(() =>
   Object.entries(leaveTypes.value).map(([value, label]) => ({ label, value })))
 
-/** 本機日期,不用 toISOString——那會轉成 UTC,台灣時區的凌晨會倒退一天。 */
+/** 本机日期，不使用 toISOString，避免 UTC 换算导致日期变化。 */
 function toDate(ts: number | null): string | null {
   if (ts === null) return null
   const d = new Date(ts)
@@ -103,13 +99,13 @@ async function onSubmit() {
     })
     message.success(
       created.affected_count
-        ? tr(`已登記,共 ${created.affected_count} 節課受影響`, `已登记，共 ${created.affected_count} 节课受影响`)
-        : tr('已登記(這段期間沒有課)', '已登记（这段期间没有课）'),
+        ? `已登记，共 ${created.affected_count} 节课受影响`
+        : '已登记（这段期间没有课）',
     )
     form.value.reason = ''
     await reload()
   } catch (e) {
-    message.error((e as ApiError).message || tr('登記失敗', '登记失败'))
+    message.error((e as ApiError).message || '登记失败')
   } finally {
     saving.value = false
   }
@@ -118,33 +114,28 @@ async function onSubmit() {
 async function onCancel(leave: LeaveRequest) {
   const result = await cancelLeave(leave.id)
   if (result.notified_teachers.length) {
-    message.success(tr(
-      `已銷假,已通知 ${result.notified_teachers.join('、')} 取消代課`,
-      `已销假，已通知 ${result.notified_teachers.join('、')} 取消代课`,
-    ))
+    message.success(`已销假，已通知 ${result.notified_teachers.join('、')} 取消代课`)
   } else {
-    message.success(tr('已銷假', '已销假'))
+    message.success('已销假')
   }
   await reload()
 }
 
-// 已取消不該和「待處理」一樣搶眼——組長掃過這張表時,要一眼看出還有幾節沒人處理。
-// (Naive 的 type="default" 在此情境仍沿用前一次的主題色,索性不用 tag。)
+// 已取消不该和「待处理」一样抢眼——排课管理员扫过这张表时,要一眼看出还有几节没人处理。
+// (Naive 的 type="default" 在此场景仍沿用前一次的主题色,索性不用 tag。)
 const STATUS_TAG = computed<Record<AffectedPeriod['status'], { type: string; label: string }>>(() => ({
-  pending: { type: 'warning', label: tr('待處理', '待处理') },
-  resolved: { type: 'info', label: tr('已確認', '已确认') },
-  completed: { type: 'success', label: tr('已完成', '已完成') },
-  cancelled: { type: 'default', label: tr('已取消', '已取消') },
+  pending: { type: 'warning', label: '待处理' },
+  resolved: { type: 'info', label: '已处理' },
+  completed: { type: 'success', label: '已完成' },
+  cancelled: { type: 'default', label: '已取消' },
 }))
 
-const WEEKDAYS = computed(() => mainland.value
-  ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  : ['週日', '週一', '週二', '週三', '週四', '週五', '週六'])
+const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
-/** 「2026-11-11(週三)」——沒有星期,教學組長無從一眼看出為什麼跨了六天卻只有一天有課。 */
+/** “2026-11-11（星期三）”便于排课管理员快速核对日期。 */
 function withWeekday(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
-  return `${iso}(${WEEKDAYS.value[new Date(y, m - 1, d).getDay()]})`
+  return `${iso}（${WEEKDAYS[new Date(y, m - 1, d).getDay()]}）`
 }
 
 function rangeText(l: LeaveRequest): string {
@@ -152,51 +143,51 @@ function rangeText(l: LeaveRequest): string {
     return `${withWeekday(l.start_date)} ~ ${withWeekday(l.end_date)}`
   }
   if (l.start_time || l.end_time) {
-    const from = l.start_time?.slice(0, 5) ?? tr('上課起', '上课起')
-    const to = l.end_time?.slice(0, 5) ?? tr('放學', '放学')
+    const from = l.start_time?.slice(0, 5) ?? '上课起'
+    const to = l.end_time?.slice(0, 5) ?? '放学'
     return `${withWeekday(l.start_date)} ${from}~${to}`
   }
-  return `${withWeekday(l.start_date)} ${tr('整天', '全天')}`
+  return `${withWeekday(l.start_date)} ${'全天'}`
 }
 </script>
 
 <template>
   <n-space vertical size="large">
     <n-space align="center">
-      <h2 style="margin: 0">{{ tr('請假登記', '请假登记') }}</h2>
+      <h2 style="margin: 0">{{ '请假登记' }}</h2>
       <n-select
         :value="sid" :options="semesterOptions" style="width: 220px"
-        :placeholder="tr('選擇學期', '选择学期')" @update:value="onSemesterChange"
+        :placeholder="'选择学期'" @update:value="onSemesterChange"
       />
     </n-space>
 
-    <n-empty v-if="!sid" :description="tr('尚無可登記請假的學期', '暂无可登记请假的学期')" />
+    <n-empty v-if="!sid" :description="'暂无可登记请假的学期'" />
 
     <template v-else>
-      <n-card :title="canManage ? tr('登記請假(可代教師登記)', '登记请假（可代教师登记）') : tr('登記我的請假', '登记我的请假')" size="small">
+      <n-card :title="canManage ? '登记请假（可代教师登记）' : '登记我的请假'" size="small">
         <n-space vertical>
           <n-space align="center" :wrap="true">
             <template v-if="canManage">
-              <n-text>{{ tr('教師', '教师') }}</n-text>
+              <n-text>{{ '教师' }}</n-text>
               <n-select
                 v-model:value="form.teacherId" :options="teacherOptions" filterable
-                style="width: 160px" :placeholder="tr('選擇教師', '选择教师')" data-testid="lv-teacher"
+                style="width: 160px" :placeholder="'选择教师'" data-testid="lv-teacher"
               />
             </template>
-            <n-text>{{ tr('假別', '假别') }}</n-text>
+            <n-text>{{ '请假类型' }}</n-text>
             <n-select
               v-model:value="form.leaveType" :options="typeOptions"
               style="width: 120px" data-testid="lv-type"
             />
-            <n-text>{{ tr('起', '起') }}</n-text>
+            <n-text>{{ '起' }}</n-text>
             <n-date-picker v-model:value="form.startDate" type="date" data-testid="lv-start" />
-            <n-text>{{ tr('訖', '止') }}</n-text>
+            <n-text>{{ '止' }}</n-text>
             <n-date-picker v-model:value="form.endDate" type="date" data-testid="lv-end" />
           </n-space>
 
           <n-space align="center">
             <n-switch v-model:value="form.halfDay" data-testid="lv-halfday" />
-            <n-text>{{ tr('指定時間(半天假)', '指定时间（半天假）') }}</n-text>
+            <n-text>{{ '指定时间（半天假）' }}</n-text>
             <template v-if="form.halfDay">
               <n-time-picker
                 v-model:value="form.startTime" format="HH:mm" data-testid="lv-start-time"
@@ -209,55 +200,55 @@ function rangeText(l: LeaveRequest): string {
           </n-space>
 
           <n-input
-            v-model:value="form.reason" :placeholder="tr('事由(選填)', '事由（可选）')" maxlength="200"
+            v-model:value="form.reason" :placeholder="'事由（可选）'" maxlength="200"
             data-testid="lv-reason"
           />
           <n-text depth="3">
-            {{ tr('受影響節次依「已發布課表」自動展開;週末與沒有課的日子不會列入。', '受影响节次按“已发布课表”自动展开；周末与没有课的日子不会列入。') }}
+            {{ '受影响节次按“已发布课表”自动展开；周末与没有课的日子不会列入。' }}
           </n-text>
           <div>
             <n-button
               type="primary" :loading="saving" :disabled="!canSubmit"
               data-testid="lv-submit" @click="onSubmit"
             >
-              {{ tr('登記請假', '登记请假') }}
+              {{ '登记请假' }}
             </n-button>
           </div>
         </n-space>
       </n-card>
 
       <n-alert v-if="truncated" type="warning" :bordered="false" data-testid="lv-truncated">
-        {{ tr(`只顯示最新的 ${MAX_LEAVE_ROWS} 張假單,更早的未列出;要查更早的請到「調代課紀錄」以日期區間查詢。`, `只显示最新的 ${MAX_LEAVE_ROWS} 张请假单，更早的未列出；要查询更早记录，请到“调代课记录”按日期范围查询。`) }}
+        {{ `只显示最新的 ${MAX_LEAVE_ROWS} 张请假单，更早的未列出；要查询更早记录，请到“调课与代课记录”按日期范围查询。` }}
       </n-alert>
 
-      <n-empty v-if="!leaves.length" :description="tr('尚無請假紀錄', '暂无请假记录')" />
+      <n-empty v-if="!leaves.length" :description="'暂无请假记录'" />
       <n-card
         v-for="l in leaves" :key="l.id" size="small" data-testid="lv-card"
         :title="`${l.teacher_name} · ${l.leave_type_label} · ${rangeText(l)}`"
       >
         <template #header-extra>
           <n-space align="center">
-            <n-tag v-if="l.status === 'cancelled'" type="default" size="small">{{ tr('已銷假', '已销假') }}</n-tag>
+            <n-tag v-if="l.status === 'cancelled'" type="default" size="small">{{ '已销假' }}</n-tag>
             <n-tag v-else type="warning" size="small" data-testid="lv-pending">
-              {{ tr('待處理', '待处理') }} {{ l.pending_count }} {{ tr('節', '节') }}
+              {{ '待处理' }} {{ l.pending_count }} {{ '节' }}
             </n-tag>
             <n-popconfirm v-if="l.status === 'registered'" @positive-click="onCancel(l)">
               <template #trigger>
-                <n-button size="small" tertiary type="error" data-testid="lv-cancel">{{ tr('銷假', '销假') }}</n-button>
+                <n-button size="small" tertiary type="error" data-testid="lv-cancel">{{ '销假' }}</n-button>
               </template>
-              {{ tr('銷假將取消所有受影響節次的處置,已被指派的代課教師會收到取消通知。確定?', '销假将取消所有受影响节次的处置，已被指派的代课教师会收到取消通知。确定吗？') }}
+              {{ '销假将取消所有受影响节次的处理方式，已被指派的代课教师会收到取消通知。确定吗？' }}
             </n-popconfirm>
           </n-space>
         </template>
 
         <n-space vertical size="small">
-          <n-text v-if="l.reason" depth="3">{{ tr('事由', '事由') }}：{{ l.reason }}</n-text>
+          <n-text v-if="l.reason" depth="3">{{ '事由' }}：{{ l.reason }}</n-text>
           <n-alert v-if="!l.affected_count" type="info" :bordered="false">
-            {{ tr('這段期間沒有課(週末,或課表尚未發布)', '这段期间没有课（周末，或课表尚未发布）') }}
+            {{ '这段期间没有课（周末，或课表尚未发布）' }}
           </n-alert>
           <table v-else class="data-table" data-testid="lv-affected">
             <thead>
-              <tr><th>{{ tr('日期', '日期') }}</th><th>{{ tr('節次', '节次') }}</th><th>{{ tr('班級', '班级') }}</th><th>{{ tr('科目', '科目') }}</th><th>{{ tr('場地', '场地') }}</th><th>{{ tr('狀態', '状态') }}</th></tr>
+              <tr><th>{{ '日期' }}</th><th>{{ '节次' }}</th><th>{{ '班级' }}</th><th>{{ '科目' }}</th><th>{{ '教室/场地' }}</th><th>{{ '状态' }}</th></tr>
             </thead>
             <tbody>
               <tr v-for="p in l.affected_periods" :key="p.id">
@@ -268,7 +259,7 @@ function rangeText(l: LeaveRequest): string {
                 <td>{{ p.room_name || '—' }}</td>
                 <td>
                   <n-text v-if="p.status === 'cancelled'" depth="3" data-testid="lv-status">
-                    {{ tr('已取消', '已取消') }}
+                    {{ '已取消' }}
                   </n-text>
                   <n-tag
                     v-else size="small" data-testid="lv-status"
@@ -281,7 +272,7 @@ function rangeText(l: LeaveRequest): string {
               </tr>
             </tbody>
           </table>
-          <n-text depth="3">{{ tr('登記人', '登记人') }}：{{ l.created_by_name }}</n-text>
+          <n-text depth="3">{{ '登记人' }}：{{ l.created_by_name }}</n-text>
         </n-space>
       </n-card>
     </template>

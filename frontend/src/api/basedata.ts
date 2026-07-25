@@ -1,4 +1,4 @@
-// 基礎資料(教師/科目/場地/班級)API 型別與呼叫封裝。
+// 基础数据(教师/科目/教室/场地/班级)API 类型与调用封装。
 
 import { apiGet, apiPost, request } from '@/api/client'
 
@@ -17,7 +17,7 @@ export interface Subject {
   domain: string | null
   required_room_type: RoomType | null
   default_block_size: number
-  /** 主科(國英數等):自動排課會盡量把主科排在上午 */
+  /** 主科(国英数等):自动排课会尽量把主科排在上午 */
   is_major: boolean
 }
 export interface Teacher {
@@ -69,20 +69,20 @@ export interface ClassUnit {
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   normal: '普通教室',
-  special: '專科教室',
-  workshop: '實習工場',
-  outdoor: '戶外',
+  special: '专用教室',
+  workshop: '实训场地',
+  outdoor: '户外',
 }
 export const TRACK_LABELS: Record<ClassTrack, string> = {
-  elementary: '國小',
-  junior_high: '國中',
-  senior_high: '普通型高中',
-  comprehensive: '綜合型高中',
-  vocational: '技術型高中',
+  elementary: '小学',
+  junior_high: '初中',
+  senior_high: '普通高中',
+  comprehensive: '综合高中',
+  vocational: '中职',
 }
 export const RULE_TYPE_LABELS: Record<TeacherRuleType, string> = {
   unavailable: '不可排',
-  avoid: '盡量避開',
+  avoid: '尽量避开',
   prefer: '偏好',
 }
 
@@ -95,7 +95,7 @@ export const updateSubject = (id: number, body: Partial<Subject>) =>
   request<Subject>('PATCH', `/subjects/${id}`, body)
 export const deleteSubject = (id: number) => request<void>('DELETE', `/subjects/${id}`)
 
-// ── 教師 ──
+// ── 教师 ──
 export const listTeachers = (semesterId: number, q?: string) =>
   apiGet<Teacher[]>(`/teachers?semester_id=${semesterId}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
 export const createTeacher = (semesterId: number, body: Record<string, unknown>) =>
@@ -112,7 +112,7 @@ export const getTimeRules = (id: number) => apiGet<TeacherTimeRule[]>(`/teachers
 export const replaceTimeRules = (id: number, rules: TeacherTimeRule[]) =>
   request<TeacherTimeRule[]>('PUT', `/teachers/${id}/time-rules`, rules)
 
-// ── 場地 ──
+// ── 教室/场地 ──
 export const listRooms = (semesterId: number, q?: string) =>
   apiGet<Room[]>(`/rooms?semester_id=${semesterId}${q ? `&q=${encodeURIComponent(q)}` : ''}`)
 export const createRoom = (semesterId: number, body: Record<string, unknown>) =>
@@ -121,7 +121,7 @@ export const updateRoom = (id: number, body: Record<string, unknown>) =>
   request<Room>('PATCH', `/rooms/${id}`, body)
 export const deleteRoom = (id: number) => request<void>('DELETE', `/rooms/${id}`)
 
-// ── 班級 ──
+// ── 班级 ──
 export const listClassUnits = (semesterId: number, q?: string) =>
   apiGet<ClassUnit[]>(
     `/class-units?semester_id=${semesterId}${q ? `&q=${encodeURIComponent(q)}` : ''}`,

@@ -1,15 +1,15 @@
-"""調代課處置 model(M4-2,architecture.md §5.3)。
+"""调课与代课处理方式 model(M4-2,architecture.md §5.3)。
 
-一筆 `substitution` = 對一個受影響節次的處置決定。**指派即生效**——沒有邀請/婉拒流程
-(2026-07-09 定案:組長實務上已事先口頭徵得同意,通知僅為正式告知)。
+一条 `substitution` = 对一个受影响节次的处理方式决定。**指派即生效**——没有邀请/婉拒流程
+(2026-07-09 确定:实际工作中,排课管理员已事先口头征得同意,通知仅用于正式告知)。
 
-處置方式的真相在這裡;`affected_period.handler_teacher_id` / `.status` 只是冗餘指標,
-供今日看板、月結統計直接查詢,不必每次回頭 join。一個受影響節次至多一筆有效處置
-(改派時更新同一筆),故 `affected_period_id` 唯一。
+处理方式的事实记录保存在这里；`affected_period.handler_teacher_id` / `.status`
+是便于查询的冗余字段，供今日看板和月结统计直接查询。一个受影响节次至多有一条有效处理记录
+(改派时更新同一条),故 `affected_period_id` 唯一。
 
-**swap(調課)的語意**:甲請假日的某節由乙代;交換條件是甲之後補乙一節(乙原本那節放掉)。
-因此要驗四件事都無衝突:乙在甲那節、甲在乙那節、以及兩個班各自不重複排課。
-`swap_*` 欄位記錄「乙原本要放掉、改由甲補」的那一節(以快照保存,課表改版不影響已成立的調課)。
+**swap(调课)的语义**:甲请假日的某节由乙代;交换条件是甲之后补乙一节(乙原本那节放掉)。
+因此要验四件事都无冲突:乙在甲那节、甲在乙那节、以及两个班各自不重复排课。
+`swap_*` 字段记录「乙原本要放掉、改由甲补」的那一节(以快照保存,课表改版不影响已成立的调课)。
 """
 
 import enum
@@ -32,22 +32,14 @@ from app.models.basedata import Teacher
 
 
 class SubstitutionType(enum.StrEnum):
-    substitute = "substitute"    # 代課(找人代)
-    swap = "swap"                # 調課(兩位教師互換節次)
-    merge = "merge"              # 併班(併入他班,不另計代課鐘點)
-    self_study = "self_study"    # 自習(學生自習,不另計代課鐘點)
-    cancel = "cancel"            # 不處理(當天停課/彈性運用)
+    substitute = "substitute"    # 代课(找人代)
+    swap = "swap"                # 调课(两位教师互换节次)
+    merge = "merge"              # 合班(并入他班,不另计代课课时)
+    self_study = "self_study"    # 自习(学生自习,不另计代课课时)
+    cancel = "cancel"            # 不处理(当天停课/弹性运用)
 
 
-SUBSTITUTION_TYPE_CN = {
-    SubstitutionType.substitute.value: "代課",
-    SubstitutionType.swap.value: "調課",
-    SubstitutionType.merge.value: "併班",
-    SubstitutionType.self_study.value: "自習",
-    SubstitutionType.cancel.value: "不處理",
-}
-
-# 需要指定一位「處理教師」的處置(代課的代課老師、調課的對調老師、併班的接收老師)
+# 需要指定一位「处理教师」的处理方式(代课的代课老师、调课的对调老师、合班的接收老师)
 TYPES_WITH_HANDLER = frozenset({
     SubstitutionType.substitute.value,
     SubstitutionType.swap.value,
@@ -62,22 +54,22 @@ class Substitution(Base):
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
-    # 一個受影響節次至多一筆有效處置;改派時更新同一筆
+    # 一个受影响节次至多一条有效处理方式;改派时更新同一条
     affected_period_id: Mapped[int] = mapped_column(
         ForeignKey("affected_periods.id", ondelete="CASCADE"), unique=True, index=True
     )
     type: Mapped[str] = mapped_column(String(20))
 
-    # 處理教師:代課/調課/併班的接手者;自習/不處理為空
+    # 处理教师:代课/调课/合班的接手者;自习/不处理为空
     handler_teacher_id: Mapped[int | None] = mapped_column(
         ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    # 是否計代課鐘點:代課通常計;併班/自習/不處理不計(architecture.md §5.4 月結)
+    # 是否计代课课时:代课通常计;合班/自习/不处理不计(architecture.md §5.4 月结)
     counts_toward_hours: Mapped[bool] = mapped_column(Boolean, default=True)
-    funding_source: Mapped[str] = mapped_column(String(32), default="")  # 經費來源標記(選填)
+    funding_source: Mapped[str] = mapped_column(String(32), default="")  # 经费来源标记(选填)
 
-    # ── 調課的交換節次(乙原本要放掉、改由甲補的那一節)──
-    # 以快照保存:課表改版不影響已成立的調課
+    # ── 调课的交换节次(乙原本要放掉、改由甲补的那一节)──
+    # 以快照保存:课表改版不影响已成立的调课
     swap_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     swap_period_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     swap_period_name: Mapped[str] = mapped_column(String(32), default="")

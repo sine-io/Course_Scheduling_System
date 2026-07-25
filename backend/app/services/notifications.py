@@ -1,10 +1,10 @@
-"""通知服務(M4-1 起,M4-3 補齊寄送管道)。
+"""通知服务(M4-1 起,M4-3 补齐发送渠道)。
 
-**站內通知永遠送達**:寫入 `notifications` 一列即完成——鈴鐺輪詢讀這張表。
-**Email 是加分**:資料 commit 後才排入寄送佇列,寄失敗不影響課務。
+**站内通知始终可用**：写入 `notifications` 记录即完成，通知铃会轮询读取。
+**电子邮件为补充渠道**：数据提交后才进入发送队列，发送失败不影响教学任务。
 
-寄送以 `NotificationChannel` 分層(architecture.md §5.3):MVP 兩個管道,站內與 Email;
-v2 加 webhook / LINE 只需再實作一個 channel、append 進 `CHANNELS`。
+发送逻辑以 `NotificationChannel` 分层（architecture.md §5.3）：MVP 包含站内通知和
+电子邮件两个渠道；后续增加 webhook 时只需实现新渠道并加入 `CHANNELS`。
 """
 
 import logging
@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 
 from app.models.basedata import Teacher
 from app.models.notification import Notification, NotificationType
-from app.services import localization
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,7 @@ class _Email:
     body: str
 
 
-# ── 寄送管道 ────────────────────────────────────────────────
+# ── 发送渠道 ────────────────────────────────────────────────
 class NotificationChannel(Protocol):
     key: str
 
@@ -40,7 +39,7 @@ class NotificationChannel(Protocol):
 
 
 class InAppChannel:
-    """站內通知:`notifications` 那一列本身即送達,無額外動作。"""
+    """站内通知:`notifications` 那一列本身即送达,无额外动作。"""
 
     key = "in_app"
 
@@ -49,9 +48,9 @@ class InAppChannel:
 
 
 class EmailChannel:
-    """Email:把信放進交易的寄件匣;commit 後由 after_commit 事件排入 RQ。
+    """Email:把邮件放进事务发件箱;commit 后由 after_commit 事件排入 RQ。
 
-    這裡不直接 enqueue——交易若回滾,就不該寄出一封對應到不存在通知的信。
+    这里不直接 enqueue——事务若回滚,就不该发送对应于不存在通知的邮件。
     """
 
     key = "email"
@@ -76,7 +75,7 @@ def notification_subject_prefix() -> str:
     return settings.school_name
 
 
-# ── 寫入 ────────────────────────────────────────────────────
+# ── 写入 ────────────────────────────────────────────────────
 def notify(
     db: Session,
     *,
@@ -87,9 +86,7 @@ def notify(
     body: str = "",
     link: str = "",
 ) -> Notification:
-    """建立通知並經各管道送達。呼叫端負責 commit;Email 於 commit 後自動寄出。"""
-    title = localization.localize_text(title)
-    body = localization.localize_text(body)
+    """创建通知并通过各渠道发送。调用方负责提交事务；电子邮件在提交后自动发送。"""
     n = Notification(
         semester_id=semester_id, teacher_id=teacher_id, type=type.value,
         title=title[:120], body=body, link=link[:200],
@@ -101,7 +98,7 @@ def notify(
     return n
 
 
-# ── commit 後把寄件匣排入 RQ ─────────────────────────────────
+# ── commit 后把发件箱中的邮件排入 RQ ─────────────────────────
 @event.listens_for(Session, "after_commit")
 def _flush_email_outbox(session: Session) -> None:
     outbox: list[_Email] = session.info.pop(_OUTBOX_KEY, [])
@@ -109,14 +106,14 @@ def _flush_email_outbox(session: Session) -> None:
         return
     try:
         from app.workers.queue import enqueue_email
-    except Exception:  # noqa: BLE001 - 測試或無 Redis 環境:靜默略過 Email
+    except Exception:  # noqa: BLE001 - 测试或无 Redis 环境:静默跳过 Email
         return
     for msg in outbox:
         try:
             enqueue_email(msg.to, msg.subject, msg.body)
-        except Exception:  # noqa: BLE001 - 佇列不可用不該讓已成功的交易報錯
-            # 站內通知已送達;Email 只是加分。但要留痕,否則 Redis 掛掉時無聲消失無從查起
-            logger.warning("代課通知 Email 排入佇列失敗(收件:%s),站內通知不受影響", msg.to)
+        except Exception:  # noqa: BLE001 - 队列不可用不该让已提交的事务报错
+            # 站内通知已送达;Email 只是加分。但要留痕,否则 Redis 挂掉时无声消失无从查起
+            logger.warning("代课通知 Email 排入队列失败(收件:%s),站内通知不受影响", msg.to)
 
 
 @event.listens_for(Session, "after_rollback")
@@ -124,7 +121,7 @@ def _discard_email_outbox(session: Session) -> None:
     session.info.pop(_OUTBOX_KEY, None)
 
 
-# ── 讀取與狀態 ──────────────────────────────────────────────
+# ── 读取与状态 ──────────────────────────────────────────────
 @dataclass
 class NotificationView:
     items: list[Notification] = field(default_factory=list)

@@ -1,4 +1,4 @@
-"""學期校曆例外與就緒确认 API。"""
+"""学期校历、特殊日期与排课准备 API。"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -18,7 +18,6 @@ from app.schemas.calendar import (
     SemesterReadinessOut,
 )
 from app.services import calendar as calendar_service
-from app.services import deployment_profile
 
 router = APIRouter(tags=["calendar"])
 
@@ -27,18 +26,6 @@ editor = require_roles(Role.scheduler, Role.director)
 
 
 def _semester(db: Session, semester_id: int) -> Semester:
-    try:
-        deployment_profile.assert_profile(db)
-    except deployment_profile.ProfileMismatchError as exc:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={
-                "code": "school_profile_locked",
-                "message": str(exc),
-                "locked_profile": exc.locked,
-                "requested_profile": exc.requested,
-            },
-        ) from exc
     semester = db.get(Semester, semester_id)
     if semester is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
@@ -116,7 +103,7 @@ def create_exception(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "该日期已经存在校历例外") from exc
+        raise HTTPException(status.HTTP_409_CONFLICT, "该日期已登记为特殊日期") from exc
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="create_calendar_exception",
         target_type="semester_calendar_exception", target_id=row.id,
@@ -136,15 +123,14 @@ def update_exception(
 ) -> CalendarExceptionOut:
     row = db.get(SemesterCalendarException, exception_id)
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到校历例外")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到该特殊日期")
     semester = _semester(db, row.semester_id)
     data = body.model_dump(exclude_unset=True)
     kind = data.get("kind", row.kind)
     if hasattr(kind, "value"):
         kind = kind.value
     makeup = data["makeup_weekday"] if "makeup_weekday" in data else row.makeup_weekday
-    # Changing a makeup day back to a closure must not leave an invalid weekday
-    # value behind when the client omits the now-hidden field.
+    # 将补课日改为停课日时，即使客户端省略了隐藏字段，也必须清除原补课星期。
     if kind == "no_instruction" and "makeup_weekday" not in data:
         makeup = None
     day = data.get("date", row.date)
@@ -166,7 +152,7 @@ def update_exception(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "该日期已经存在校历例外") from exc
+        raise HTTPException(status.HTTP_409_CONFLICT, "该日期已登记为特殊日期") from exc
     db.refresh(row)
     return _out(row)
 
@@ -177,12 +163,12 @@ def delete_exception(
 ) -> None:
     row = db.get(SemesterCalendarException, exception_id)
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到校历例外")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到该特殊日期")
     semester = _semester(db, row.semester_id)
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="delete_calendar_exception",
         target_type="semester_calendar_exception", target_id=row.id,
-        detail=f"删除校历例外 {row.date}"[:500],
+        detail=f"删除特殊日期 {row.date}"[:500],
     ))
     db.delete(row)
     semester.readiness = SemesterReadiness.draft.value
@@ -207,7 +193,7 @@ def confirm_readiness(
             status.HTTP_409_CONFLICT,
             detail={
                 "code": "semester_not_ready",
-                "message": "学期资料尚未准备完成",
+                "message": "学期数据尚未准备完成",
                 "issues": issues,
             },
         )
@@ -215,7 +201,7 @@ def confirm_readiness(
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="confirm_semester_readiness",
         target_type="semester", target_id=semester.id,
-        detail=f"确认 {semester.label} 资料就绪"[:500],
+        detail=f"确认 {semester.label} 排课准备完成"[:500],
     ))
     db.commit()
     db.refresh(semester)
@@ -238,7 +224,7 @@ def revoke_readiness(
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="revoke_semester_readiness",
         target_type="semester", target_id=semester.id,
-        detail=f"撤回 {semester.label} 资料就绪确认"[:500],
+        detail=f"撤回 {semester.label} 排课准备确认"[:500],
     ))
     db.commit()
     db.refresh(semester)

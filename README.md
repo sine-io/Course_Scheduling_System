@@ -1,127 +1,126 @@
-# 排課與調代課系統 · Course Scheduling System
+# 学校排课、调课与代课管理系统 · Course Scheduling System
 
 [![CI](https://github.com/begin0808/Course_Scheduling_System/actions/workflows/ci.yml/badge.svg)](https://github.com/begin0808/Course_Scheduling_System/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**開源免費、單校自架、純 Web 的中小學排課與調代課系統。** 適用國小、國中、普通型高中、綜合型高中、技術型高中,以**教學組長**的日常工作流程為中心設計。
+**开源免费、单校自建、纯 Web 的中小学排课、调课与代课管理系统。** 适用于小学、初中、普通高中、综合高中和中职，以**排课管理员**的日常工作流程为中心设计。
 
-從學期基礎資料、手動與自動排課(OR-Tools CP-SAT 引擎),到學期中最繁瑣的請假、代課、調課、通知與鐘點統計,一套涵蓋。以 Docker Compose 一鍵部署在校內一台主機上,資料不出校。
+系统覆盖学期基础数据、教学任务、手动与自动排课（OR-Tools CP-SAT 引擎），以及学期中的请假、调课、代课、通知和课时统计。使用 Docker Compose 即可部署到校内主机，业务数据保存在学校自己的环境中。
 
-> **English summary:** A free, open-source (MIT), self-hosted, web-based course-scheduling and teacher-substitution system for Taiwanese K–12 schools. It covers the school-timetabling office's full workflow: semester/period setup, manual drag-and-drop scheduling, automatic scheduling via an OR-Tools CP-SAT engine with human-readable conflict explanation, and the day-to-day of leave requests, substitute assignment, notifications, and substitution-hour reporting. One school, one self-hosted deployment (no multi-tenant SaaS). One-command Docker Compose install. UI is Traditional Chinese with Taiwan educational terminology.
+> **English summary:** A free, open-source (MIT), self-hosted scheduling, course-change, and substitute-teaching system for schools in mainland China. It provides a Simplified Chinese interface, Gregorian academic years, the Asia/Shanghai timezone, manual and automatic scheduling, leave handling, notifications, exports, and backups.
 
 ---
 
-## 功能總覽
+## 功能总览
 
-| 領域 | 內容 |
+| 领域 | 内容 |
 |---|---|
-| **基礎資料** | 學期/節次表(多學制範本)、教師/班級/科目/場地、Excel 匯入、設定精靈、開新學期複製、混合學制(班級↔節次表指派) |
-| **配課與手動排課** | 配課管理(跑班群組、協同教學、連堂)、鐘點即時統計、拖拉式週課表、單格衝突檢查(<100ms)、多草稿版本管理與發布 |
-| **自動排課** | OR-Tools CP-SAT 引擎,H1–H10 硬約束 + S1–S8 軟約束加權;背景求解含即時進度;**無解時以教務語言定位衝突**並支援部分排課 |
-| **調代課** | 請假登記與受影響節次展開、代課推薦引擎、調課驗證、指派即生效、站內+Email 通知與確認、今日看板與 A4 公告列印、月結鐘點統計(Excel) |
-| **報表/匯出** | 班級/教師/場地課表匯出 Excel / PDF(內嵌中文字型)/ PNG、全校總表、批次 zip |
-| **維運** | 每日自動備份 + 手動備份 / 下載 / 上傳還原(還原前自動保護、還原後強制重登)、稽核紀錄、RBAC(管理員/主任/組長/教師) |
+| **基础数据** | 学期与作息时间表、教师、班级、科目、教室/场地、Excel 导入、设置向导、开新学期复制、班级作息时间表指派 |
+| **教学任务与手动排课** | 教学任务管理(走班群组、协同教学、连堂)、课时实时统计、拖拽式周课表、单格冲突检查(<100ms)、多草稿版本管理与发布 |
+| **自动排课** | OR-Tools CP-SAT 引擎,H1–H10 硬约束 + S1–S8 软约束加权;后台求解显示实时进度;**无解时以教务语言定位冲突**并支持部分排课 |
+| **调课与代课** | 请假登记与受影响节次展开、代课推荐引擎、调课验证、指派即生效、站内+Email 通知与确认、今日看板与 A4 公告打印、月结课时统计(Excel) |
+| **报表/导出** | 班级、教师、教室/场地课表导出 Excel / PDF（内嵌中文字体）/ PNG、全校总表、批量 ZIP |
+| **运维** | 每日自动备份 + 手动备份 / 下载 / 上传恢复(恢复前自动保护、恢复后强制重登)、审计记录、RBAC(管理员/主任/排课管理员/教师) |
 
 ---
 
-## 快速開始
+## 快速开始
 
-需先安裝 [Docker](https://docs.docker.com/get-docker/)。**完整步驟(含 Windows / Linux / NAS)見 [部署手冊](docs/deploy/README.md)。**
+需先安装 [Docker](https://docs.docker.com/get-docker/)。**完整步骤(含 Windows / Linux / NAS)见 [部署手册](docs/deploy/README.md)。**
 
-### 拉取官方映像(推薦)
+### 拉取官方镜像(推荐)
 
 ```bash
 mkdir scheduling && cd scheduling
 curl -fLO https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
 curl -fL  https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/.env.example -o .env
-# 編輯 .env:改 ADMIN_PASSWORD、SCHOOL_NAME、SECRET_KEY
-docker compose pull
-docker compose up -d
+# 编辑 .env:改 ADMIN_PASSWORD、SCHOOL_NAME、SECRET_KEY
+sudo docker compose pull
+sudo docker compose up -d
 ```
 
-### 從原始碼建置
+### 从源代码构建
 
 ```bash
 git clone https://github.com/begin0808/Course_Scheduling_System.git
 cd Course_Scheduling_System
 cp .env.example .env      # 改 ADMIN_PASSWORD、SCHOOL_NAME、SECRET_KEY
-docker compose up -d      # 首次會建置映像,需數分鐘
+sudo docker compose up -d # 首次会构建镜像，需数分钟
 ```
 
-啟動後開瀏覽器連 `http://<主機IP>`(本機為 <http://localhost>),以 `.env` 的管理員帳密登入,依設定精靈完成建置。
+启动后开浏览器连 `http://<主机IP>`(本机为 <http://localhost>),以 `.env` 的管理员账号和密码登录,依设置向导完成构建。
 
-- 健康檢查:`http://localhost/api/health` → `{"status":"ok"}`
-- 容器狀態:`docker compose ps`(六個容器皆應 healthy)
+- 健康检查:`http://localhost/api/health` → `{"status":"ok"}`
+- 容器状态：`sudo docker compose ps`（六个容器均应为 healthy）
 
-### 硬體最低需求
+### 硬件最低需求
 
-2 核 / 4GB RAM / 10GB 磁碟(自動排課建議 4 核 8GB)。支援 x86-64 與 ARM64(NAS / 樹莓派)。
+2 核 / 4GB RAM / 10GB 磁盘(自动排课建议 4 核 8GB)。支持 x86-64 与 ARM64(NAS / 树莓派)。
 
 ---
 
-## 畫面
+## 页面
 
-| 排課工作台(拖拉排課、三視角、即時衝突) | 自動排課(進度、軟約束達成度) |
+| 排课工作台(拖拽排课、三视角、实时冲突检查) | 自动排课(进度、软约束达成度) |
 |---|---|
-| ![排課工作台](docs/manual-img/04-workbench.png) | ![自動排課](docs/manual-img/05-auto-schedule.png) |
+| ![排课工作台](docs/manual-img/04-workbench.png) | ![自动排课](docs/manual-img/05-auto-schedule.png) |
 
-| 今日調代課看板(可列印 A4 通知單) | 課表查詢與匯出(Excel / PDF / PNG) |
+| 今日调课与代课看板(可打印 A4 通知单) | 课表查询与导出(Excel / PDF / PNG) |
 |---|---|
-| ![今日調代課](docs/manual-img/08-daily-board.png) | ![課表查詢](docs/manual-img/09-timetable-query.png) |
+| ![今日调课与代课](docs/manual-img/08-daily-board.png) | ![课表查询](docs/manual-img/09-timetable-query.png) |
 
-完整逐章圖解見[教學組長操作手冊](https://begin0808.github.io/Course_Scheduling_System/)。
+完整逐章图解见[排课管理员操作手册](https://begin0808.github.io/Course_Scheduling_System/)。
 
 ---
 
 ## 文件
 
-| 文件 | 內容 |
+| 文件 | 内容 |
 |---|---|
-| [**教學組長操作手冊**](https://begin0808.github.io/Course_Scheduling_System/)（[原始檔](docs/index.html)） | 給使用者:設定精靈、配課、排課、調代課、匯出、備份、FAQ(11 章圖文網頁) |
-| [部署手冊](docs/deploy/README.md) | 給安裝者:安裝、升級、備份、網域 HTTPS、FAQ |
-| [中国大陆部署说明](docs/deploy/mainland-zh-CN.md) | `cn_mainland` 配置档、天津初中草稿与校历就绪流程 |
-| [架構設計](docs/architecture.md) | 需求、資料模型、排課引擎、技術棧(規格權威來源) |
-| [開發任務卡](docs/tasks.md) | Milestone 與逐卡實作紀錄 |
-| [變更紀錄](CHANGELOG.md) | 各版本變更 |
-| [貢獻指南](CONTRIBUTING.md) | 開發環境、程式風格、測試、發布流程 |
+| [**排课管理员操作手册**](https://begin0808.github.io/Course_Scheduling_System/)（[源文件](docs/index.html)） | 面向用户：设置向导、教学任务、排课、调课与代课、导出、备份和常见问题 |
+| [部署手册](docs/deploy/README.md) | 给安装者:安装、升级、备份、域名 HTTPS、FAQ |
+| [架构设计](docs/architecture.md) | 需求、数据模型、排课引擎和技术栈（架构规范来源） |
+| [开发任务卡](docs/tasks.md) | Milestone 与逐卡实现记录 |
+| [变更记录](CHANGELOG.md) | 各版本变更 |
+| [贡献指南](CONTRIBUTING.md) | 开发环境、程序风格、测试、发布流程 |
 
 ---
 
-## 技術棧
+## 技术栈
 
-| 層 | 技術 |
+| 层 | 技术 |
 |---|---|
 | 前端 | Vue 3 + TypeScript + Vite + Pinia + Naive UI |
-| 後端 | Python 3.12 + FastAPI + SQLAlchemy 2 + Pydantic v2 |
-| 排課引擎 | Google OR-Tools CP-SAT(RQ + Redis 背景執行) |
-| 匯出 | openpyxl(Excel)、WeasyPrint(PDF,內嵌 Noto CJK)、poppler(PNG) |
-| 資料庫 | PostgreSQL 16 |
-| 反向代理 | Caddy(內網 HTTP;設網域即自動 HTTPS) |
-| 部署 | Docker Compose(6 容器:web / api / worker(排課)/ worker-ops(匯出·備份·定時)/ postgres / redis) |
+| 后端 | Python 3.12 + FastAPI + SQLAlchemy 2 + Pydantic v2 |
+| 排课引擎 | Google OR-Tools CP-SAT(RQ + Redis 背景执行) |
+| 导出 | openpyxl(Excel)、WeasyPrint(PDF,内嵌 Noto CJK)、poppler(PNG) |
+| 数据库 | PostgreSQL 16 |
+| 反向代理 | Caddy(内网 HTTP;设域名即自动 HTTPS) |
+| 部署 | Docker Compose(6 容器:web / api / worker(排课)/ worker-ops(导出·备份·定时)/ postgres / redis) |
 
 ---
 
-## 專案狀態
+## 项目状态
 
-**v1.1.1 已發行(2026-07-14)。** 六大里程碑 M0–M5 全部完成,功能齊備並經完整驗收(後端 490 項單元/整合測試、32 項 Playwright 端對端測試,每次提交皆對真實 Docker 全棧跑過)。官方映像(amd64 + arm64)已發布於 GHCR。
+**v1.1.1 已发行(2026-07-14)。** 六大里程碑 M0–M5 全部完成,功能齐备并经完整验收(后端 490 项单元/整合测试、32 项 Playwright 端对端测试,每次提交均对真实 Docker 全栈跑过)。官方镜像(amd64 + arm64)已发布于 GHCR。
 
-**請直接從最新版開始安裝**(見上方快速開始);`v1.1.1` 是目前建議使用的版本。各版變更見 [CHANGELOG](CHANGELOG.md),開發歷程見 [docs/tasks.md](docs/tasks.md)。
+**请直接从最新版开始安装**(见上方快速开始);`v1.1.1` 是目前建议使用的版本。各版变更见 [CHANGELOG](CHANGELOG.md),开发历程见 [docs/tasks.md](docs/tasks.md)。
 
-系統仍在實際校園環境試用中,若你是第一批使用者,歡迎透過 [Issues](https://github.com/begin0808/Course_Scheduling_System/issues) 回報任何問題。
+系统仍在实际校园环境试用中。如果你是第一批用户，欢迎通过 [Issues](https://github.com/begin0808/Course_Scheduling_System/issues) 报告问题。
 
 ---
 
-## 回報問題與意見回饋
+## 反馈问题与意见反馈
 
-發現錯誤、有功能建議,或想分享貴校的使用經驗,都非常歡迎:
+发现错误、有功能建议,或想分享贵校的使用经验,都非常欢迎:
 
-- **回報問題 / 提出建議**:於本專案開 [GitHub Issue](https://github.com/begin0808/Course_Scheduling_System/issues)(附上操作步驟與 `docker compose logs` 片段會更快解決)
-- **來信聯絡**:專案開發者 **國立南大附中 李佳恩老師** — [begin0808@gmail.com](mailto:begin0808@gmail.com)
+- **反馈问题 / 提出建议**：在本项目创建 [GitHub Issue](https://github.com/begin0808/Course_Scheduling_System/issues)；附上操作步骤和 `sudo docker compose logs` 片段有助于更快定位问题。
+- **来信联系**:项目开发者 **国立南大附中 李佳恩老师** — [begin0808@gmail.com](mailto:begin0808@gmail.com)
 
-這套系統是為第一線教學組長而寫的,你的實際使用回饋對它的改進最有幫助。
+这套系统是为第一线排课管理员而写的,你的实际使用反馈对它的改进最有帮助。
 
-## 授權
+## 授权
 
-[MIT](LICENSE) — 可自由使用、修改、散布。歡迎各校自架與二次開發。
+[MIT](LICENSE) — 可自由使用、修改、散布。欢迎各校自架与二次开发。
 
-執行時使用的第三方元件與其授權見 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)(皆與 MIT 相容)。
+执行时使用的第三方组件与其授权见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)(均与 MIT 兼容)。

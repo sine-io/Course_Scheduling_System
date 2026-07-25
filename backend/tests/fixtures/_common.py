@@ -1,14 +1,15 @@
-"""三套學制驗證資料集的共用 builder。
+"""三套学制验证数据集的共用 builder。
 
-測試策略總則(tasks.md)要求全案共用三套 fixtures(國小/國中/技高),作為排課引擎
-(M3)與 E2E 總驗收(M5-4)的基準資料。
+测试策略总则(tasks.md)要求整个项目共用三套 fixtures(小学/初中/中职),作为排课引擎
+(M3)与 E2E 总验收(M5-4)的基准数据。
 
-以 Python builder 而非靜態 JSON 表達,因為資料之間有數值相依:
-教師配課數 ≤ 可排格數、連堂節數 ≤ 每週節數、跑班群組成員須同節次表(D7#4)。
-用程式建構才能在改動時一起維護,並直接複用 app.services 既有的驗證邏輯。
+以 Python builder 而非静态 JSON 表达,因为数据之间有数值依赖:
+教师教学任务数 ≤ 可排格数、连堂节数 ≤ 每周节数、走班群组成员须同作息时间表(D7#4)。
+使用程序构建,便于在修改时统一维护,并直接复用 app.services 现有的验证逻辑。
 """
 
 from dataclasses import dataclass, field
+from datetime import time
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -31,12 +32,97 @@ from app.models.basedata import (
 from app.models.period import Period, PeriodTable, PeriodType
 from app.models.semester import Semester
 from app.services.assignments import create_group, get_or_create_single_unit
-from app.services.templates import create_semester_from_template
+
+_SUBJECTS: dict[str, tuple[str, ...]] = {
+    "elementary": (
+        "语文", "数学", "生活", "科学", "道德与法治", "体育与健康", "艺术", "综合实践活动",
+        "英语", "地方课程",
+    ),
+    "junior_high": (
+        "语文", "英语", "数学", "生物学", "道德与法治", "体育与健康", "艺术", "综合实践活动",
+        "信息科技", "劳动",
+    ),
+    "vocational": (
+        "语文", "英语", "数学", "体育", "专业实习", "专业核心课程", "实训课程",
+        "校本课程", "选修课程",
+    ),
+}
+
+_JUNIOR_SLOTS = (
+    (1, "早自习", "07:50", "08:20", PeriodType.morning),
+    (2, "第一节", "08:20", "09:05", PeriodType.regular),
+    (3, "第二节", "09:15", "10:00", PeriodType.regular),
+    (4, "第三节", "10:20", "11:05", PeriodType.regular),
+    (5, "第四节", "11:15", "12:00", PeriodType.regular),
+    (6, "午休", "12:00", "13:10", PeriodType.lunch),
+    (7, "第五节", "13:10", "13:55", PeriodType.regular),
+    (8, "第六节", "14:05", "14:50", PeriodType.regular),
+    (9, "第七节", "15:10", "15:55", PeriodType.regular),
+)
+
+_LONG_SLOTS = (
+    (1, "早自习", "07:50", "08:10", PeriodType.morning),
+    (2, "第一节", "08:10", "09:00", PeriodType.regular),
+    (3, "第二节", "09:10", "10:00", PeriodType.regular),
+    (4, "第三节", "10:10", "11:00", PeriodType.regular),
+    (5, "第四节", "11:10", "12:00", PeriodType.regular),
+    (6, "午休", "12:00", "13:10", PeriodType.lunch),
+    (7, "第五节", "13:10", "14:00", PeriodType.regular),
+    (8, "第六节", "14:10", "15:00", PeriodType.regular),
+    (9, "第七节", "15:20", "16:10", PeriodType.regular),
+    (10, "第八节", "16:20", "17:10", PeriodType.regular),
+)
+
+
+def _clock(value: str) -> time:
+    hour, minute = value.split(":")
+    return time(int(hour), int(minute))
+
+
+def _create_fixture_semester(
+    db: Session, academic_year: int, term: int, template_key: str
+) -> Semester:
+    """直接构建测试数据，不依赖公开学校模板。"""
+    if template_key not in _SUBJECTS:
+        raise ValueError(f"未知测试数据类型：{template_key}")
+    semester = Semester(academic_year=academic_year, term=term)
+    table = PeriodTable(
+        name={
+            "elementary": "小学作息时间表",
+            "junior_high": "初中作息时间表",
+            "vocational": "中职作息时间表",
+        }[template_key],
+        num_weekdays=5,
+        is_default=True,
+    )
+    slots = _LONG_SLOTS if template_key == "vocational" else _JUNIOR_SLOTS
+    for weekday in range(1, 6):
+        for period_no, name, start, end, period_type in slots:
+            cell_type = period_type
+            if template_key == "elementary" and weekday == 3 and period_no in {7, 8, 9}:
+                cell_type = PeriodType.reserved
+            table.periods.append(
+                Period(
+                    weekday=weekday,
+                    period_no=period_no,
+                    name=name,
+                    start_time=_clock(start),
+                    end_time=_clock(end),
+                    type=cell_type.value,
+                )
+            )
+    semester.period_tables.append(table)
+    db.add(semester)
+    db.flush()
+    for name in _SUBJECTS[template_key]:
+        db.add(Subject(semester_id=semester.id, name=name))
+    db.flush()
+    return semester
 
 
 @dataclass
 class Fixture:
-    """一套建置完成的學期資料集。以名稱索引,測試可直接取用實體。"""
+    """一套构建完成的学期数据集。以名称索引,测试可直接取用实体。"""
 
     semester: Semester
     table: PeriodTable
@@ -53,11 +139,11 @@ class Fixture:
 
 
 class Builder:
-    """以學制範本開一個學期,再逐步疊上教師/班級/場地/配課。"""
+    """直接创建测试学期，再逐步添加教师、班级、教室/场地和教学任务。"""
 
     def __init__(self, db: Session, academic_year: int, term: int, template_key: str) -> None:
         self.db = db
-        self.semester = create_semester_from_template(db, academic_year, term, template_key)
+        self.semester = _create_fixture_semester(db, academic_year, term, template_key)
         self.table = self.semester.period_tables[0]
         self.subjects: dict[str, Subject] = {
             s.name: s
@@ -69,7 +155,7 @@ class Builder:
         self.groups: dict[str, SchedulingUnit] = {}
         self.assignments: list[CourseAssignment] = []
 
-    # ── 節次表 ────────────────────────
+    # ── 作息时间表 ────────────────────────
     def set_period(self, weekday: int, period_no: int, ptype: PeriodType, name: str) -> None:
         p = self.db.scalar(
             select(Period).where(
@@ -78,7 +164,7 @@ class Builder:
                 Period.period_no == period_no,
             )
         )
-        assert p is not None, f"節次表無此格位:週{weekday} 第{period_no}格"
+        assert p is not None, f"作息时间表无此单元格:周{weekday} 第{period_no}格"
         p.type = ptype.value
         p.name = name
         self.db.flush()
@@ -95,7 +181,7 @@ class Builder:
             )
         )
 
-    # ── 實體 ──────────────────────────
+    # ── 实体 ──────────────────────────
     def subject(
         self,
         name: str,
@@ -145,7 +231,7 @@ class Builder:
         return t
 
     def unavailable_days(self, teacher_name: str, weekdays: list[int]) -> None:
-        """該教師在指定星期的所有一般課節次皆不可排(業界師資只有特定到校日)。"""
+        """该教师在指定星期的所有一般课节次均不可排(企业兼职教师只有特定到校日)。"""
         t = self.teachers[teacher_name]
         for p in self.regular_slots():
             if p.weekday in weekdays:
@@ -205,7 +291,7 @@ class Builder:
         return c
 
     def group(self, name: str, class_names: list[str]) -> SchedulingUnit:
-        """跑班群組。create_group 會驗證成員班級同節次表(D7#4)。"""
+        """走班群组。create_group 会验证成员班级同作息时间表(D7#4)。"""
         g = create_group(
             self.db,
             self.semester.id,
@@ -215,7 +301,7 @@ class Builder:
         self.groups[name] = g
         return g
 
-    # ── 配課 ──────────────────────────
+    # ── 教学任务 ──────────────────────────
     def assign(
         self,
         *,
@@ -229,12 +315,12 @@ class Builder:
         blocks: tuple[int, int] | None = None,
         lock_room: bool = False,
     ) -> list[CourseAssignment]:
-        """建立配課。classes → 每班一筆(single unit);group → 群組一筆。
+        """创建教学任务。classes → 每班一项(single unit);group → 群组一项。
 
-        teachers 第一位為主教,其餘為協同。blocks=(連堂長度, 每週次數)。
+        teachers 第一位为主讲教师,其余为协同教师。blocks=(连堂长度, 每周次数)。
         """
         if (classes is None) == (group is None):
-            raise ValueError("classes 與 group 擇一")
+            raise ValueError("classes 与 group 择一")
         units = (
             [get_or_create_single_unit(self.db, self.classes[n]) for n in classes]
             if classes
@@ -278,12 +364,12 @@ class Builder:
         )
 
 
-# ── 分析 helper(供煙霧測試與日後 pre-flight 對照)────────────────
+# ── 分析 helper(供烟雾测试与日后 pre-flight 对照)────────────────
 def teacher_available_slots(db: Session, fx: Fixture, teacher: Teacher) -> int:
-    """教師可排格數 = 一般課格數 − 其 unavailable 規則落在一般課格位的數量。
+    """教师可排格数 = 一般课格数 − 其 unavailable 规则落在一般课单元格的数量。
 
-    單一節次表(絕大多數學校)的定義;跨表任教的教師以牆鐘區間聯集去重,
-    留待 M3-1 pre-flight 實作。
+    单一作息时间表(绝大多数学校)的定义;跨表任教的教师以墙钟区间并集去重,
+    留待 M3-1 pre-flight 实现。
     """
     regular = {
         (p.weekday, p.period_no)
@@ -303,7 +389,7 @@ def teacher_available_slots(db: Session, fx: Fixture, teacher: Teacher) -> int:
 
 
 def room_demand(fx: Fixture) -> dict[int, int]:
-    """每個「已指定場地」的配課節數需求(room_id → 節數)。"""
+    """每个「已指定教室/场地」的教学任务节数需求(room_id → 节数)。"""
     demand: dict[int, int] = {}
     for a in fx.assignments:
         if a.room_id:
