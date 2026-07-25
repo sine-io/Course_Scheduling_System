@@ -366,7 +366,7 @@ Course_Scheduling_System/
 - **站内永远可用,Email 是加分**:SMTP 未设置时 `email.send` 回 False、`email_job` 只记 log,整个调课与代课流程照常。这是验收③,实际环境在 mailhog 上验过双通道。
 - **SMTP 设置存 `app_settings`**(全域 key/value,非学期范围);密码留空 = 不变更,返回不含明文。管理员专属。`POST /settings/smtp/test` 当场寄测试信报告结果(不走 RQ)。
 - **确认收到 = 通知层已读确认**,不影响教学任务(指派即生效,2026-07-09 确定)。教师铃铛(轮询 20s + 未读数 badge)、排课管理员看板(确认状态 + 对未确认者「再次提醒」重发,已确认则 409)。
-- **开发用 MailHog**：docker-compose 增加 `mailhog`（profile 为 `dev`，不影响正式部署）；执行 `sudo docker compose --profile dev up` 后启动，Web 界面端口为 8025。
+- **开发用 MailHog**：docker-compose 增加 `mailhog`（profile 为 `dev`，不影响正式部署）；执行 `sudo docker compose --profile dev up` 后启动，Web 界面默认仅在本机端口 8025 开放，可通过 `.env` 的 `MAILHOG_UI_PORT` 调整。
 - **E2E 教训**:共用 e2e_teacher 账号 + 发布课表的测试会用「最近学期」默认互相污染;测试中途失败会跳过收尾清理,故改用 `test.afterEach` 兜底删除学期。另 Naive 的 message toast 与 tag 同字符串会触发 strict-mode(getByText 命中两个),toast 文案要与 tag 区隔。
 
 ### [x] M4-4 今日看板与调课与代课日志

@@ -20,9 +20,11 @@ sudo docker compose -f docker-compose.dev.yml up
 ```
 
 - 前端(热重载):<http://localhost:5173>
-- API 互动文件:<http://localhost:8000/api/docs>
+- API 互动文档:<http://localhost:5173/api/docs>
 
-前后端源代码挂载进容器,保存文件后立即生效。含 `mailhog`(拦截外发邮件,Web UI <http://localhost:8025>)须以 `--profile dev` 启动。
+前后端源代码挂载进容器,保存文件后立即生效。前端端口由 `.env` 的 `DEV_FRONTEND_PORT` 配置；默认仅绑定 `127.0.0.1`,需从局域网访问时可将 `DEV_BIND_ADDRESS` 改为 `0.0.0.0`。API、PostgreSQL 和 Redis 不映射宿主机端口；需要命令行访问时使用 `sudo docker compose exec`。
+
+含 `mailhog`(拦截外发邮件,Web UI <http://localhost:8025>)须以 `--profile dev` 启动，其界面端口由 `MAILHOG_UI_PORT` 配置。
 
 ### 各自本机测试
 
