@@ -23,8 +23,9 @@ from openpyxl.styles import Font
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.leave import LEAVE_TYPE_CN, AffectedPeriod, AffectedStatus
-from app.models.substitution import SUBSTITUTION_TYPE_CN, Substitution
+from app.models.leave import AffectedPeriod, AffectedStatus
+from app.models.substitution import Substitution
+from app.services import localization
 
 _Date = date
 
@@ -53,7 +54,7 @@ class StatDetail:
 class TeacherSummary:
     teacher_id: int
     teacher_name: str
-    handled_count: int = 0   # 代課節數(所有接手處置)
+    handled_count: int = 0  # 代課節數(所有接手處置)
     billable_count: int = 0  # 計費節數(counts_toward_hours 為真)
 
 
@@ -103,22 +104,24 @@ def monthly_report(
         if handler is None:  # handler 已被移除(SET NULL 尚未反映在關聯)
             continue
         leave = ap.leave_request
-        report.details.append(StatDetail(
-            handler_teacher_id=handler.id,
-            handler_name=handler.name,
-            date=ap.date,
-            period_no=ap.period_no,
-            period_name=ap.period_name,
-            class_names=ap.class_names,
-            subject_name=ap.subject_name,
-            absent_teacher_name=leave.teacher.name if leave.teacher else "(已移除)",
-            leave_type=leave.leave_type,
-            leave_type_label=LEAVE_TYPE_CN.get(leave.leave_type, leave.leave_type),
-            sub_type=sub.type,
-            sub_type_label=SUBSTITUTION_TYPE_CN.get(sub.type, sub.type),
-            counts_toward_hours=sub.counts_toward_hours,
-            funding_source=sub.funding_source,
-        ))
+        report.details.append(
+            StatDetail(
+                handler_teacher_id=handler.id,
+                handler_name=handler.name,
+                date=ap.date,
+                period_no=ap.period_no,
+                period_name=ap.period_name,
+                class_names=ap.class_names,
+                subject_name=ap.subject_name,
+                absent_teacher_name=leave.teacher.name if leave.teacher else "(已移除)",
+                leave_type=leave.leave_type,
+                leave_type_label=localization.leave_type_label(leave.leave_type),
+                sub_type=sub.type,
+                sub_type_label=localization.substitution_type_label(sub.type),
+                counts_toward_hours=sub.counts_toward_hours,
+                funding_source=sub.funding_source,
+            )
+        )
         s = summaries.get(handler.id)
         if s is None:
             s = TeacherSummary(teacher_id=handler.id, teacher_name=handler.name)
@@ -132,10 +135,25 @@ def monthly_report(
     return report
 
 
-_DETAIL_HEADERS = (
-    "教師", "日期", "節次", "班級", "科目", "原任教師", "假別", "處置", "計費", "經費來源",
-)
-_SUMMARY_HEADERS = ("教師", "代課節數", "計費節數")
+def _detail_headers() -> tuple[str, ...]:
+    label = localization.export_label
+    return (
+        label("teacher"),
+        label("date"),
+        label("period"),
+        label("class"),
+        label("subject"),
+        label("absent_teacher"),
+        label("leave_type"),
+        label("disposition"),
+        label("billable"),
+        label("funding_source"),
+    )
+
+
+def _summary_headers() -> tuple[str, ...]:
+    label = localization.export_label
+    return (label("teacher"), label("substitution_periods"), label("billable_periods"))
 
 
 def build_workbook(report: MonthlyReport) -> bytes:
@@ -143,19 +161,32 @@ def build_workbook(report: MonthlyReport) -> bytes:
     wb = Workbook()
 
     ws_sum = wb.active
-    ws_sum.title = "彙總"
-    ws_sum.append(list(_SUMMARY_HEADERS))
+    ws_sum.title = localization.export_label("summary")
+    ws_sum.append(list(_summary_headers()))
     for s in report.summaries:
         ws_sum.append([s.teacher_name, s.handled_count, s.billable_count])
 
-    ws_detail = wb.create_sheet("明細")
-    ws_detail.append(list(_DETAIL_HEADERS))
+    ws_detail = wb.create_sheet(localization.export_label("detail"))
+    ws_detail.append(list(_detail_headers()))
     for d in report.details:
-        ws_detail.append([
-            d.handler_name, d.date.isoformat(), d.period_name, d.class_names, d.subject_name,
-            d.absent_teacher_name, d.leave_type_label, d.sub_type_label,
-            "是" if d.counts_toward_hours else "否", d.funding_source,
-        ])
+        ws_detail.append(
+            [
+                d.handler_name,
+                d.date.isoformat(),
+                d.period_name,
+                d.class_names,
+                d.subject_name,
+                d.absent_teacher_name,
+                d.leave_type_label,
+                d.sub_type_label,
+                (
+                    localization.export_label("yes")
+                    if d.counts_toward_hours
+                    else localization.export_label("no")
+                ),
+                d.funding_source,
+            ]
+        )
 
     for ws in (ws_sum, ws_detail):
         for cell in ws[1]:

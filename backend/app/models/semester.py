@@ -11,6 +11,7 @@ from sqlalchemy import Date, DateTime, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
+from app.services.localization import format_semester_label
 
 if TYPE_CHECKING:
     from app.models.period import PeriodTable
@@ -20,6 +21,11 @@ class SemesterStatus(enum.StrEnum):
     preparing = "preparing"  # 準備中(建置資料、排課)
     active = "active"        # 進行中(課表已發布、日常調代課)
     archived = "archived"    # 已封存(歷史保存)
+
+
+class SemesterReadiness(enum.StrEnum):
+    draft = "draft"  # 尚未確認校曆/節次等部署資料
+    ready = "ready"  # 可進入排課與發布流程
 
 
 class Semester(Base):
@@ -35,6 +41,10 @@ class Semester(Base):
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default=SemesterStatus.preparing.value)
+    readiness: Mapped[str] = mapped_column(
+        String(20), default=SemesterReadiness.draft.value,
+        server_default=SemesterReadiness.draft.value,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -47,4 +57,4 @@ class Semester(Base):
 
     @property
     def label(self) -> str:
-        return f"{self.academic_year} 學年度第 {self.term} 學期"
+        return format_semester_label(self.academic_year, self.term)

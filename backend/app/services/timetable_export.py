@@ -21,9 +21,8 @@ from app.models.basedata import ClassUnit, Room, Teacher
 from app.models.period import Period, PeriodTable, PeriodType
 from app.models.semester import Semester
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
+from app.services import localization
 from app.services import period_tables as pt_service
-
-_WEEKDAYS = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
 
 
 class ExportError(Exception):
@@ -33,9 +32,9 @@ class ExportError(Exception):
 # ── 格線模型 ────────────────────────────────────────────────
 @dataclass(frozen=True, slots=True)
 class Cell:
-    lines: tuple[str, ...] = ()   # 科目 / 教師或班級 / 教室(逐行)
-    span: int = 1                 # 連堂佔幾列
-    covered: bool = False         # 被上方連堂覆蓋,不繪
+    lines: tuple[str, ...] = ()  # 科目 / 教師或班級 / 教室(逐行)
+    span: int = 1  # 連堂佔幾列
+    covered: bool = False  # 被上方連堂覆蓋,不繪
 
 
 @dataclass
@@ -54,7 +53,7 @@ class Grid:
 
     @property
     def weekday_names(self) -> list[str]:
-        return _WEEKDAYS[: self.num_weekdays]
+        return list(localization.weekday_names()[: self.num_weekdays])
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,13 +103,13 @@ class _Published:
             )
         ]
         self.tables = {
-            t.id: t for t in db.scalars(
-                select(PeriodTable).where(PeriodTable.semester_id == semester_id)
-            )
+            t.id: t
+            for t in db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester_id))
         }
 
     def meta(self) -> Meta:
         from app.core import clock
+
         return Meta(
             school_name=settings.school_name,
             semester_label=self.semester.label,
@@ -132,7 +131,9 @@ def _view(e: ScheduleEntry) -> _EntryView:
     su = a.scheduling_unit
     room = e.room if e.room is not None else a.room
     return _EntryView(
-        weekday=e.weekday, period_no=e.period_no, span=e.span,
+        weekday=e.weekday,
+        period_no=e.period_no,
+        span=e.span,
         subject=a.subject.name,
         teachers="、".join(at.teacher.name for at in a.teachers),
         classes="、".join(m.class_unit.name for m in su.members),
@@ -161,9 +162,7 @@ def _grid_from(
     order = sorted(by_no)
 
     # (weekday, period_no) → entry
-    placed: dict[tuple[int, int], _EntryView] = {
-        (e.weekday, e.period_no): e for e in entries
-    }
+    placed: dict[tuple[int, int], _EntryView] = {(e.weekday, e.period_no): e for e in entries}
     covered: set[tuple[int, int]] = set()
     for e in entries:
         for k in range(1, e.span):
@@ -201,17 +200,32 @@ def _room_lines(e: _EntryView) -> list[str]:
 
 def class_grid(pub: _Published, cls: ClassUnit) -> Grid:
     entries = [e for e in pub.entries if cls.id in e.class_ids]
-    return _grid_from(pub.class_table(cls), f"{cls.grade}年{cls.name} 課表", entries, _class_lines)
+    return _grid_from(
+        pub.class_table(cls),
+        f"{cls.grade}年{cls.name} {localization.export_label('timetable')}",
+        entries,
+        _class_lines,
+    )
 
 
 def teacher_grid(pub: _Published, teacher: Teacher) -> Grid:
     entries = [e for e in pub.entries if teacher.id in e.teacher_ids]
-    return _grid_from(pub.default_table(), f"{teacher.name} 課表", entries, _teacher_lines)
+    return _grid_from(
+        pub.default_table(),
+        f"{teacher.name} {localization.export_label('timetable')}",
+        entries,
+        _teacher_lines,
+    )
 
 
 def room_grid(pub: _Published, room: Room) -> Grid:
     entries = [e for e in pub.entries if e.room_id == room.id]
-    return _grid_from(pub.default_table(), f"{room.name} 課表", entries, _room_lines)
+    return _grid_from(
+        pub.default_table(),
+        f"{room.name} {localization.export_label('timetable')}",
+        entries,
+        _room_lines,
+    )
 
 
 def build_grid(db: Session, semester_id: int, view: str, target_id: int) -> tuple[Grid, Meta]:
@@ -235,10 +249,13 @@ def build_grid(db: Session, semester_id: int, view: str, target_id: int) -> tupl
 
 
 def _classes(db: Session, semester_id: int) -> list[ClassUnit]:
-    return list(db.scalars(
-        select(ClassUnit).where(ClassUnit.semester_id == semester_id)
-        .order_by(ClassUnit.grade, ClassUnit.name)
-    ))
+    return list(
+        db.scalars(
+            select(ClassUnit)
+            .where(ClassUnit.semester_id == semester_id)
+            .order_by(ClassUnit.grade, ClassUnit.name)
+        )
+    )
 
 
 def school_workbook(db: Session, semester_id: int) -> bytes:
@@ -264,9 +281,9 @@ def class_batch_zip(db: Session, semester_id: int) -> bytes:
 def _safe_sheet_title(title: str, used: set[str]) -> str:
     # Excel 分頁名 ≤31 字、不可含 : \ / ? * [ ]
     clean = title
-    for ch in ':\\/?*[]':
+    for ch in ":\\/?*[]":
         clean = clean.replace(ch, " ")
-    clean = clean[:28].strip() or "課表"
+    clean = clean[:28].strip() or localization.export_label("timetable")
     name, i = clean, 1
     while name in used:
         name = f"{clean[:26]}~{i}"
@@ -292,9 +309,14 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
     for grid in grids:
         ws = wb.create_sheet(_safe_sheet_title(grid.title, used))
         ws.append([grid.title])
-        ws.append([f"{meta.school_name}　{meta.semester_label}　列印日:{meta.printed_on}"])
+        ws.append(
+            [
+                f"{meta.school_name}　{meta.semester_label}　"
+                f"{localization.export_label('printed_on')}:{meta.printed_on}"
+            ]
+        )
         ws["A1"].font = Font(bold=True, size=14)
-        header = ["節次", *grid.weekday_names]
+        header = [localization.export_label("period"), *grid.weekday_names]
         ws.append(header)
         head_row = ws.max_row
         for c in ws[head_row]:
@@ -318,8 +340,9 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
             for ci, cell in enumerate(row.cells):
                 if cell.span > 1:
                     col = ci + 2
-                    ws.merge_cells(start_row=r, start_column=col,
-                                   end_row=r + cell.span - 1, end_column=col)
+                    ws.merge_cells(
+                        start_row=r, start_column=col, end_row=r + cell.span - 1, end_column=col
+                    )
 
         ws.column_dimensions["A"].width = 10
         for col in range(2, 2 + grid.num_weekdays):
@@ -327,7 +350,7 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
         ws.freeze_panes = ws.cell(row=head_row + 1, column=2)
 
     if not wb.sheetnames:  # 全空:給一張空白頁避免壞檔
-        wb.create_sheet("課表")
+        wb.create_sheet(localization.export_label("timetable"))
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
@@ -335,14 +358,23 @@ def grids_to_xlsx(grids: list[Grid], meta: Meta) -> bytes:
 
 # ── HTML 渲染(供 worker 轉 PDF/PNG)─────────────────────────
 def _esc(s: str) -> str:
-    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
 def grid_to_html(grid: Grid, meta: Meta) -> str:
     """單一對象的 A4 直式課表 HTML。中文由 worker 映像內嵌的 Noto CJK 呈現。"""
     head_cells = "".join(f"<th>{_esc(w)}</th>" for w in grid.weekday_names)
-    subtitle = (f"{_esc(meta.school_name)}　{_esc(meta.semester_label)}　"
-                f"{_esc(meta.timetable_name)}　列印日:{meta.printed_on}")
+    period_label = _esc(localization.export_label("period"))
+    subtitle = (
+        f"{_esc(meta.school_name)}　{_esc(meta.semester_label)}　"
+        f"{_esc(meta.timetable_name)}　"
+        f"{_esc(localization.export_label('printed_on'))}:{meta.printed_on}"
+    )
+    font_stack = (
+        '"Noto Sans CJK SC", "Noto Sans SC", sans-serif'
+        if localization.is_mainland()
+        else '"Noto Sans CJK TC", "Noto Sans TC", sans-serif'
+    )
     body_rows = []
     for row in grid.rows:
         tds = [f'<th class="pno">{_esc(row.label)}</th>']
@@ -356,7 +388,7 @@ def grid_to_html(grid: Grid, meta: Meta) -> str:
         body_rows.append(f"<tr>{''.join(tds)}</tr>")
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
 @page {{ size: A4 portrait; margin: 14mm; }}
-* {{ font-family: "Noto Sans CJK TC", "Noto Sans TC", sans-serif; }}
+* {{ font-family: {font_stack}; }}
 h1 {{ font-size: 18px; text-align: center; margin: 0 0 4px; }}
 .meta {{ text-align: center; font-size: 12px; color: #444; margin-bottom: 10px; }}
 table {{ border-collapse: collapse; width: 100%; table-layout: fixed; }}
@@ -369,6 +401,6 @@ td.rest {{ background: #f7f7f7; color: #888; }}
 </style></head><body>
 <h1>{_esc(grid.title)}</h1>
 <div class="meta">{subtitle}</div>
-<table><thead><tr><th class="pno">節次</th>{head_cells}</tr></thead>
-<tbody>{''.join(body_rows)}</tbody></table>
+<table><thead><tr><th class="pno">{period_label}</th>{head_cells}</tr></thead>
+<tbody>{"".join(body_rows)}</tbody></table>
 </body></html>"""

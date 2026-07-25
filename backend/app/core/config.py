@@ -4,10 +4,12 @@ import logging
 import secrets
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+SUPPORTED_SCHOOL_PROFILES = {"tw_k12", "cn_mainland"}
 
 # 已知不安全的 SECRET_KEY 值(程式碼預設 + .env.example 範例)。啟動時若仍是這些,
 # 代表部署者沒設定——用隨機金鑰取代並警告,避免以公開金鑰簽署 session。
@@ -30,6 +32,9 @@ class Settings(BaseSettings):
     # 基本
     app_name: str = "排課與調代課系統"
     school_name: str = "示範學校"
+    # 部署時固定的地區/語言設定。使用 SCHOOL_PROFILE=cn_mainland 啟用大陸中文檔；
+    # 未設定時保持既有台灣 K-12 行為。
+    school_profile: str = "tw_k12"
     debug: bool = False
     # 學校所在時區,用於「今日/本週」等領域判定(見 architecture.md D6)
     tz: str = "Asia/Taipei"
@@ -72,8 +77,26 @@ class Settings(BaseSettings):
     # 開發用 compose 會顯式打開(M6-5)。
     api_docs_enabled: bool = False
 
+    @field_validator("school_profile")
+    @classmethod
+    def _validate_school_profile(cls, value: str) -> str:
+        value = value.strip().lower()
+        if value not in SUPPORTED_SCHOOL_PROFILES:
+            raise ValueError(
+                f"SCHOOL_PROFILE 必須是以下其中一個:{', '.join(sorted(SUPPORTED_SCHOOL_PROFILES))}"
+            )
+        return value
+
     @model_validator(mode="after")
     def _harden(self) -> "Settings":
+        # Mainland deployments use a fixed Beijing time zone so date-based
+        # scheduling semantics cannot drift with an inherited TZ value.
+        if self.school_profile == "cn_mainland" and self.tz != "Asia/Shanghai":
+            logger.warning(
+                "SCHOOL_PROFILE=cn_mainland 固定使用 Asia/Shanghai，忽略 TZ=%s",
+                self.tz,
+            )
+            self.tz = "Asia/Shanghai"
         # A:SECRET_KEY 仍為預設/範例值 → 換隨機金鑰,避免以公開金鑰簽署 session
         if self.secret_key in _INSECURE_SECRETS:
             self.secret_key = secrets.token_hex(32)

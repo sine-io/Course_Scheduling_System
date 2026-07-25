@@ -27,8 +27,11 @@ from app.schemas.semester import (
     TemplateOut,
 )
 from app.schemas.wizard import SemesterSummary
+from app.services import deployment_profile
 from app.services import period_tables as pt_service
 from app.services import templates as tpl
+from app.services.calendar import readiness_issues
+from app.services.localization import validate_academic_year
 from app.services.semester_copy import CopyOptions, copy_semester
 
 router = APIRouter(tags=["semesters"])
@@ -38,7 +41,32 @@ editor = require_roles(Role.scheduler)
 
 
 # ── 內部工具 ──────────────────────────
+def _ensure_profile(db: Session) -> str:
+    try:
+        return deployment_profile.assert_profile(db)
+    except deployment_profile.ProfileMismatchError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "school_profile_locked",
+                "message": str(exc),
+                "locked_profile": exc.locked,
+                "requested_profile": exc.requested,
+            },
+        ) from exc
+
+
+def _template_allowed(template_key: str, profile: str) -> bool:
+    is_mainland_template = template_key.startswith("cn_")
+    return is_mainland_template if profile == "cn_mainland" else not is_mainland_template
+
+
+def _available_templates(profile: str) -> list[dict]:
+    return [t for t in tpl.load_templates() if _template_allowed(t["key"], profile)]
+
+
 def _get_semester(db: Session, semester_id: int) -> Semester:
+    _ensure_profile(db)
     semester = db.get(Semester, semester_id)
     if semester is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
@@ -46,6 +74,7 @@ def _get_semester(db: Session, semester_id: int) -> Semester:
 
 
 def _get_period_table(db: Session, table_id: int) -> PeriodTable:
+    _ensure_profile(db)
     table = db.get(PeriodTable, table_id)
     if table is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到節次表")
@@ -65,21 +94,24 @@ def _unset_other_defaults(db: Session, semester_id: int, keep_id: int | None) ->
 
 # ── 學制範本 ──────────────────────────
 @router.get("/school-templates", response_model=list[TemplateOut])
-def list_templates(_: object = Depends(viewer)) -> list[TemplateOut]:
+def list_templates(db: Session = Depends(get_db), _: object = Depends(viewer)) -> list[TemplateOut]:
+    profile = _ensure_profile(db)
     return [
         TemplateOut(
             key=t["key"],
             name=t["name"],
             minutes_per_period=t["minutes_per_period"],
             subject_count=len(t.get("subjects", [])),
+            editable=bool(t.get("editable", False)),
         )
-        for t in tpl.load_templates()
+        for t in _available_templates(profile)
     ]
 
 
 # ── 學期 ──────────────────────────────
 @router.get("/semesters", response_model=list[SemesterListItem])
 def list_semesters(db: Session = Depends(get_db), _: object = Depends(viewer)):
+    _ensure_profile(db)
     return db.scalars(
         select(Semester).order_by(Semester.academic_year.desc(), Semester.term.desc())
     ).all()
@@ -89,6 +121,16 @@ def list_semesters(db: Session = Depends(get_db), _: object = Depends(viewer)):
 def create_semester(
     body: SemesterCreate, db: Session = Depends(get_db), _: object = Depends(editor)
 ) -> Semester:
+    try:
+        profile = deployment_profile.assert_profile(db)
+        validate_academic_year(body.academic_year, profile)
+    except deployment_profile.ProfileMismatchError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "school_profile_locked", "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     exists = db.scalar(
         select(Semester).where(
             Semester.academic_year == body.academic_year, Semester.term == body.term
@@ -98,7 +140,10 @@ def create_semester(
         raise HTTPException(status.HTTP_409_CONFLICT, "該學年度學期已存在")
 
     if body.template_key:
-        if tpl.get_template(body.template_key) is None:
+        if (
+            not _template_allowed(body.template_key, profile)
+            or tpl.get_template(body.template_key) is None
+        ):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的學制範本")
         semester = tpl.create_semester_from_template(
             db,
@@ -130,6 +175,16 @@ def copy_to_new_semester(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> Semester:
+    try:
+        profile = deployment_profile.assert_profile(db)
+        validate_academic_year(body.academic_year, profile)
+    except deployment_profile.ProfileMismatchError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "school_profile_locked", "message": str(exc)},
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     source = _get_semester(db, source_id)
     exists = db.scalar(
         select(Semester).where(
@@ -189,12 +244,28 @@ def update_semester(
 ) -> Semester:
     semester = _get_semester(db, semester_id)
     data = body.model_dump(exclude_unset=True)
+    dates_changed = "start_date" in data or "end_date" in data
     if "status" in data and data["status"] is not None:
         semester.status = data["status"].value
     if "start_date" in data:
         semester.start_date = data["start_date"]
     if "end_date" in data:
         semester.end_date = data["end_date"]
+    if "readiness" in data and data["readiness"] is not None:
+        if data["readiness"].value == "ready":
+            issues = readiness_issues(db, semester)
+            if issues:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "semester_not_ready",
+                        "message": "学期资料尚未准备完成",
+                        "issues": issues,
+                    },
+                )
+        semester.readiness = data["readiness"].value
+    elif dates_changed and semester.readiness == "ready":
+        semester.readiness = "draft"
     db.commit()
     db.refresh(semester)
     return semester
@@ -225,7 +296,8 @@ def create_period_table(
 
     if body.template_key:
         template = tpl.get_template(body.template_key)
-        if template is None:
+        profile = deployment_profile.assert_profile(db)
+        if not _template_allowed(body.template_key, profile) or template is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的學制範本")
         table = tpl.build_period_table_from_template(
             template, name=body.name, is_default=body.is_default
@@ -239,6 +311,9 @@ def create_period_table(
     db.flush()
     if table.is_default:
         _unset_other_defaults(db, semester_id, table.id)
+    semester = db.get(Semester, semester_id)
+    if semester is not None:
+        semester.readiness = "draft"
     db.commit()
     db.refresh(table)
     return table
@@ -259,6 +334,7 @@ def update_period_table(
     _: object = Depends(editor),
 ) -> PeriodTable:
     table = _get_period_table(db, table_id)
+    semester = db.get(Semester, table.semester_id)
     data = body.model_dump(exclude_unset=True)
     if data.get("name") is not None:
         table.name = data["name"]
@@ -266,6 +342,8 @@ def update_period_table(
         table.is_default = data["is_default"]
         if data["is_default"]:
             _unset_other_defaults(db, table.semester_id, table.id)
+    if semester is not None and semester.readiness == "ready":
+        semester.readiness = "draft"
     db.commit()
     db.refresh(table)
     return table
@@ -276,6 +354,7 @@ def delete_period_table(
     table_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
 ) -> None:
     table = _get_period_table(db, table_id)
+    semester = db.get(Semester, table.semester_id)
     ref_count = db.scalar(
         select(func.count()).select_from(ClassUnit).where(ClassUnit.period_table_id == table_id)
     )
@@ -285,6 +364,8 @@ def delete_period_table(
             f"此節次表已被 {ref_count} 個班級指定使用,請先改用其他節次表再刪除",
         )
     db.delete(table)
+    if semester is not None:
+        semester.readiness = "draft"
     db.commit()
 
 
@@ -297,6 +378,7 @@ def replace_periods(
 ) -> PeriodTable:
     """整批取代節次表的所有格位(視覺化編輯器儲存用)。"""
     table = _get_period_table(db, table_id)
+    semester = db.get(Semester, table.semester_id)
 
     seen: set[tuple[int, int]] = set()
     for p in periods:
@@ -321,6 +403,8 @@ def replace_periods(
                 type=p.type.value,
             )
         )
+    if semester is not None and semester.readiness == "ready":
+        semester.readiness = "draft"
     db.commit()
     db.refresh(table)
     return table

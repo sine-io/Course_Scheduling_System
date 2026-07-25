@@ -11,8 +11,12 @@ import {
   assignSubstitution, clearSubstitution, getRecommendations, listSubstitutionTypes,
 } from '@/api/substitutions'
 import type { Candidate, Recommendation } from '@/api/substitutions'
+import { useAppConfigStore } from '@/stores/appConfig'
 
 const message = useMessage()
+const appConfig = useAppConfigStore()
+const mainland = computed(() => appConfig.isMainland)
+const tr = (tw: string, cn: string) => mainland.value ? cn : tw
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
@@ -23,10 +27,12 @@ const rec = ref<Recommendation | null>(null)
 const loadingRec = ref(false)
 const countsHours = ref(true)
 
-const WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六']
+const WEEKDAYS = computed(() => mainland.value
+  ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  : ['週日', '週一', '週二', '週三', '週四', '週五', '週六'])
 function withWeekday(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
-  return `${iso}(${WEEKDAYS[new Date(y, m - 1, d).getDay()]})`
+  return `${iso}(${WEEKDAYS.value[new Date(y, m - 1, d).getDay()]})`
 }
 
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
@@ -76,27 +82,27 @@ async function assign(p: AffectedPeriod, type: string, candidate?: Candidate) {
       counts_toward_hours: type === 'substitute' ? countsHours.value : null,
     })
     message.success(candidate
-      ? `已指派 ${candidate.teacher_name} ${types.value[type]}`
-      : `已設為${types.value[type]}`)
+      ? tr(`已指派 ${candidate.teacher_name} ${types.value[type]}`, `已指派 ${candidate.teacher_name} ${types.value[type]}`)
+      : tr(`已設為${types.value[type]}`, `已设为${types.value[type]}`))
     openId.value = null
     await reload()
   } catch (e) {
-    message.error((e as ApiError).message || '指派失敗')
+    message.error((e as ApiError).message || tr('指派失敗', '指派失败'))
   }
 }
 
 async function undo(p: AffectedPeriod) {
   await clearSubstitution(p.id)
-  message.info('已撤回處置,退回待處理')
+  message.info(tr('已撤回處置,退回待處理', '已撤回处置，退回待处理'))
   await reload()
 }
 
-const STATUS: Record<AffectedPeriod['status'], { type: string; label: string }> = {
-  pending: { type: 'warning', label: '待處理' },
-  resolved: { type: 'success', label: '已確認' },
-  completed: { type: 'info', label: '已完成' },
-  cancelled: { type: 'default', label: '已取消' },
-}
+const STATUS = computed<Record<AffectedPeriod['status'], { type: string; label: string }>>(() => ({
+  pending: { type: 'warning', label: tr('待處理', '待处理') },
+  resolved: { type: 'success', label: tr('已確認', '已确认') },
+  completed: { type: 'info', label: tr('已完成', '已完成') },
+  cancelled: { type: 'default', label: tr('已取消', '已取消') },
+}))
 
 function candidateTagType(c: Candidate): string {
   if (c.same_subject) return 'success'
@@ -108,20 +114,20 @@ function candidateTagType(c: Candidate): string {
 <template>
   <n-space vertical size="large">
     <n-space align="center">
-      <h2 style="margin: 0">調代課處理</h2>
+      <h2 style="margin: 0">{{ tr('調代課處理', '调代课处理') }}</h2>
       <n-select
         :value="sid" :options="semesterOptions" style="width: 220px"
-        placeholder="選擇學期" @update:value="onSemesterChange"
+        :placeholder="tr('選擇學期', '选择学期')" @update:value="onSemesterChange"
       />
     </n-space>
 
-    <n-empty v-if="!sid" description="請先建立學期" />
-    <n-empty v-else-if="!activeLeaves.length" description="目前沒有待處理的請假" />
+    <n-empty v-if="!sid" :description="tr('請先建立學期', '请先建立学期')" />
+    <n-empty v-else-if="!activeLeaves.length" :description="tr('目前沒有待處理的請假', '当前没有待处理的请假')" />
 
     <template v-else>
       <n-card
         v-for="l in activeLeaves" :key="l.id" size="small" data-testid="sub-leave"
-        :title="`${l.teacher_name} · ${l.leave_type_label} · 待處理 ${l.pending_count} 節`"
+        :title="`${l.teacher_name} · ${l.leave_type_label} · ${tr('待處理', '待处理')} ${l.pending_count} ${tr('節', '节')}`"
       >
         <n-space vertical size="small">
           <div v-for="p in l.affected_periods" :key="p.id" data-testid="sub-period">
@@ -141,13 +147,13 @@ function candidateTagType(c: Candidate): string {
                 v-if="p.status === 'pending'" size="small" type="primary"
                 data-testid="sub-handle" @click="openPeriod(p)"
               >
-                {{ openId === p.id ? '收合' : '處理' }}
+                {{ openId === p.id ? tr('收合', '收起') : tr('處理', '处理') }}
               </n-button>
               <n-button
                 v-else-if="p.status === 'resolved'" size="small" tertiary
                 data-testid="sub-undo" @click="undo(p)"
               >
-                撤回
+                {{ tr('撤回', '撤回') }}
               </n-button>
             </n-space>
 
@@ -157,7 +163,7 @@ function candidateTagType(c: Candidate): string {
               data-testid="sub-panel"
             >
               <n-space vertical size="small">
-                <n-text v-if="loadingRec" depth="3">計算可代教師中…</n-text>
+                <n-text v-if="loadingRec" depth="3">{{ tr('計算可代教師中…', '正在计算可代课教师…') }}</n-text>
 
                 <template v-else-if="rec">
                   <n-alert
@@ -169,9 +175,9 @@ function candidateTagType(c: Candidate): string {
 
                   <template v-else>
                     <n-space align="center">
-                      <n-text depth="3">代課鐘點</n-text>
+                      <n-text depth="3">{{ tr('代課鐘點', '代课课时') }}</n-text>
                       <n-switch v-model:value="countsHours" size="small" />
-                      <n-text depth="3">{{ countsHours ? '計入' : '不計' }}</n-text>
+                      <n-text depth="3">{{ countsHours ? tr('計入', '计入') : tr('不計', '不计') }}</n-text>
                     </n-space>
                     <div
                       v-for="c in rec.candidates" :key="c.teacher_id"
@@ -182,7 +188,7 @@ function candidateTagType(c: Candidate): string {
                           size="small" type="primary" ghost
                           data-testid="sub-pick" @click="assign(p, 'substitute', c)"
                         >
-                          指派 {{ c.teacher_name }}
+                          {{ tr('指派', '指派') }} {{ c.teacher_name }}
                         </n-button>
                         <n-tag size="small" :type="candidateTagType(c) as never">
                           {{ c.reasons.join(' · ') }}
@@ -193,17 +199,17 @@ function candidateTagType(c: Candidate): string {
                 </template>
 
                 <n-space size="small" style="margin-top: 8px">
-                  <n-text depth="3">或改採:</n-text>
+                  <n-text depth="3">{{ tr('或改採', '或改为') }}：</n-text>
                   <n-button size="tiny" data-testid="sub-merge" @click="assign(p, 'merge')">
-                    併班
+                    {{ tr('併班', '合班') }}
                   </n-button>
                   <n-button
                     size="tiny" data-testid="sub-selfstudy" @click="assign(p, 'self_study')"
                   >
-                    自習
+                    {{ tr('自習', '自习') }}
                   </n-button>
                   <n-button size="tiny" data-testid="sub-cancel" @click="assign(p, 'cancel')">
-                    不處理
+                    {{ tr('不處理', '不处理') }}
                   </n-button>
                 </n-space>
               </n-space>

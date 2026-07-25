@@ -9,10 +9,12 @@ from datetime import date, datetime, time
 from zoneinfo import ZoneInfo
 
 from app.core.config import settings
+from app.services.localization import timezone_for_profile
 
 
 def school_now() -> datetime:
-    return datetime.now(ZoneInfo(settings.tz))
+    timezone = timezone_for_profile(settings.school_profile)
+    return datetime.now(ZoneInfo(timezone))
 
 
 def school_today() -> date:

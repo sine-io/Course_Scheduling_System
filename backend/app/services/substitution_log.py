@@ -18,15 +18,13 @@ from sqlalchemy.orm import Session
 
 from app.core import clock
 from app.models.leave import (
-    AFFECTED_STATUS_CN,
-    LEAVE_TYPE_CN,
     AffectedPeriod,
     AffectedStatus,
     LeaveRequest,
     LeaveStatus,
 )
-from app.models.substitution import SUBSTITUTION_TYPE_CN, Substitution
-from app.services import leaves
+from app.models.substitution import Substitution
+from app.services import leaves, localization
 
 # 欄位名 date/start_time 會遮蔽同名型別,故以別名標註型別
 _Date = date
@@ -79,9 +77,7 @@ def _subs_map(db: Session, affected_ids: list[int]) -> dict[int, Substitution]:
     """一次撈齊這些受影響節次的處置,免逐列 join。"""
     if not affected_ids:
         return {}
-    rows = db.scalars(
-        select(Substitution).where(Substitution.affected_period_id.in_(affected_ids))
-    )
+    rows = db.scalars(select(Substitution).where(Substitution.affected_period_id.in_(affected_ids)))
     return {s.affected_period_id: s for s in rows}
 
 
@@ -108,12 +104,12 @@ def _build(ap: AffectedPeriod, sub: Substitution | None) -> LogEntry:
         absent_teacher_id=leave.teacher_id,
         absent_teacher_name=leave.teacher.name if leave.teacher else "(已移除)",
         leave_type=leave.leave_type,
-        leave_type_label=LEAVE_TYPE_CN.get(leave.leave_type, leave.leave_type),
+        leave_type_label=localization.leave_type_label(leave.leave_type),
         status=status,
-        status_label=AFFECTED_STATUS_CN.get(status, status),
+        status_label=localization.affected_status_label(status),
         disposed=sub is not None,
         sub_type=sub.type if sub else None,
-        sub_type_label=SUBSTITUTION_TYPE_CN.get(sub.type) if sub else None,
+        sub_type_label=localization.substitution_type_label(sub.type) if sub else None,
         handler_teacher_id=handler_id,
         handler_name=handler_name,
         counts_toward_hours=sub.counts_toward_hours if sub else None,
@@ -131,17 +127,21 @@ def daily_board(db: Session, semester_id: int, on: date) -> list[LogEntry]:
     只看仍有效(未銷假)的假單;已因銷假取消的節次不列(那天沒有異動)。
     包含尚未處置(待處理)的節次,好讓組長一眼看出還有幾節沒排代課。
     """
-    rows = db.scalars(
-        select(AffectedPeriod)
-        .join(LeaveRequest, AffectedPeriod.leave_request_id == LeaveRequest.id)
-        .where(
-            AffectedPeriod.semester_id == semester_id,
-            AffectedPeriod.date == on,
-            LeaveRequest.status == LeaveStatus.registered.value,
-            AffectedPeriod.status != AffectedStatus.cancelled.value,
+    rows = (
+        db.scalars(
+            select(AffectedPeriod)
+            .join(LeaveRequest, AffectedPeriod.leave_request_id == LeaveRequest.id)
+            .where(
+                AffectedPeriod.semester_id == semester_id,
+                AffectedPeriod.date == on,
+                LeaveRequest.status == LeaveStatus.registered.value,
+                AffectedPeriod.status != AffectedStatus.cancelled.value,
+            )
+            .order_by(AffectedPeriod.period_no, AffectedPeriod.class_names)
         )
-        .order_by(AffectedPeriod.period_no, AffectedPeriod.class_names)
-    ).unique().all()
+        .unique()
+        .all()
+    )
     subs = _subs_map(db, [r.id for r in rows])
     return [_build(r, subs.get(r.id)) for r in rows]
 
@@ -176,12 +176,16 @@ def query(
     if leave_type is not None:
         stmt = stmt.where(LeaveRequest.leave_type == leave_type)
     if teacher_id is not None:
-        stmt = stmt.where(or_(
-            LeaveRequest.teacher_id == teacher_id,
-            AffectedPeriod.handler_teacher_id == teacher_id,
-        ))
-    rows = db.scalars(
-        stmt.order_by(AffectedPeriod.date.desc(), AffectedPeriod.period_no).limit(limit)
-    ).unique().all()
+        stmt = stmt.where(
+            or_(
+                LeaveRequest.teacher_id == teacher_id,
+                AffectedPeriod.handler_teacher_id == teacher_id,
+            )
+        )
+    rows = (
+        db.scalars(stmt.order_by(AffectedPeriod.date.desc(), AffectedPeriod.period_no).limit(limit))
+        .unique()
+        .all()
+    )
     subs = _subs_map(db, [r.id for r in rows])
     return [_build(r, subs.get(r.id)) for r in rows]

@@ -14,6 +14,16 @@ export const ENTITY_LABELS: Record<ImportEntity, string> = {
   assignments: '配課',
 }
 
+export function entityLabels(mainland: boolean): Record<ImportEntity, string> {
+  if (!mainland) return ENTITY_LABELS
+  return {
+    subjects: '科目',
+    teachers: '教师',
+    classes: '班级',
+    assignments: '配课',
+  }
+}
+
 /** 下載範本檔並觸發瀏覽器儲存。 */
 export async function downloadTemplate(entity: ImportEntity): Promise<void> {
   const resp = await fetch(`/api/import/templates/${entity}`, { credentials: 'include' })

@@ -14,6 +14,7 @@ from app.core.db import get_db
 from app.models.semester import Semester
 from app.models.user import Role, User
 from app.schemas.substitution_log import DailyBoardOut, LogEntryOut
+from app.services import calendar as calendar_service
 from app.services import substitution_log as log_service
 
 router = APIRouter(tags=["substitution-log"])
@@ -45,7 +46,7 @@ def daily_board(
     entries = log_service.daily_board(db, semester_id, day)
     return DailyBoardOut(
         date=day,
-        weekday=day.isoweekday(),
+        weekday=calendar_service.effective_weekday(db, semester_id, day) or day.isoweekday(),
         school_name=settings.school_name,
         semester_label=sem.label,
         entries=[_entry_out(e) for e in entries],

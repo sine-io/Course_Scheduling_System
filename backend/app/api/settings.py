@@ -9,6 +9,7 @@ from app.models.audit import AuditLog
 from app.models.user import Role, User
 from app.schemas.notification import SmtpSettingsIn, SmtpSettingsOut
 from app.services import email as email_service
+from app.services import localization
 from app.services import settings as app_settings
 
 router = APIRouter(tags=["settings"])
@@ -57,8 +58,13 @@ def test_smtp(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "尚未設定 SMTP 主機與寄件人")
     try:
         sent = email_service.send(
-            db, to=to, subject="排課系統測試信",
-            body="這是一封測試信,收到代表 SMTP 設定正確。",
+            db,
+            to=to,
+            subject=localization.profile_text("排課系統測試信", "排课系统测试邮件"),
+            body=localization.profile_text(
+                "這是一封測試信,收到代表 SMTP 設定正確。",
+                "这是一封测试邮件，收到表示 SMTP 设置正确。",
+            ),
         )
     except Exception as exc:  # noqa: BLE001 - 把 SMTP 錯誤原文回給管理員
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"寄送失敗:{exc}") from exc

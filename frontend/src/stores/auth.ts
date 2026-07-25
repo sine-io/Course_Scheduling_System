@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost } from '@/api/client'
+import { useAppConfigStore } from '@/stores/appConfig'
 
 export interface CurrentUser {
   id: number
@@ -52,6 +53,10 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.roles.includes(role) ?? false
   }
 
+  function roleLabel(role: string): string {
+    return useAppConfigStore().config.role_display_names[role] ?? role
+  }
+
   // 由全域 401 處理器呼叫:清除本地登入狀態(不打後端,session 已失效)
   function reset(): void {
     user.value = null
@@ -68,6 +73,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     changePassword,
     hasRole,
+    roleLabel,
     reset,
   }
 })

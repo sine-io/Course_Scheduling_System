@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useProfileText } from '@/composables/useProfileText'
 import type { DragData, DropFeedback, GridEntry, PeriodCell } from './types'
+
+const { tr } = useProfileText()
 
 const props = withDefaults(defineProps<{
   periods: PeriodCell[]
@@ -73,7 +76,7 @@ function weekdayLabel(w: number): string {
   return `星期${WEEKDAY_LABELS[w - 1] ?? w}`
 }
 function periodLabelName(p: number): string {
-  return periodInfo.value.get(p)?.name ?? `第${p}節`
+  return periodInfo.value.get(p)?.name ?? tr(`第${p}節`, `第${p}节`)
 }
 function periodTime(p: number): string {
   const info = periodInfo.value.get(p)
@@ -121,7 +124,7 @@ function cellClass(w: number, p: number) {
 }
 function feedbackReason(w: number, p: number): string | null {
   const fb = props.feedback
-  if (fb && !fb.ok && fb.weekday === w && fb.period_no === p) return fb.reason ?? '衝突'
+  if (fb && !fb.ok && fb.weekday === w && fb.period_no === p) return fb.reason ?? tr('衝突', '冲突')
   return null
 }
 
@@ -191,7 +194,7 @@ function onCellDrop(w: number, p: number, ev: DragEvent) {
               @dragend="emit('dragend')"
               @click="emit('select', entryAt(w, p)!)"
             >
-              <span v-if="entryAt(w, p)!.locked" class="tg-lock" title="已鎖定">🔒</span>
+              <span v-if="entryAt(w, p)!.locked" class="tg-lock" :title="tr('已鎖定', '已锁定')">🔒</span>
               <div class="tg-subject">{{ entryAt(w, p)!.subject }}</div>
               <div v-if="entryAt(w, p)!.teacher" class="tg-teacher">{{ entryAt(w, p)!.teacher }}</div>
               <div v-if="entryAt(w, p)!.room" class="tg-room">{{ entryAt(w, p)!.room }}</div>

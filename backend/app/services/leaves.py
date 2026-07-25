@@ -22,7 +22,6 @@ from app.core import clock
 from app.models.assignment import AssignmentTeacher, CourseAssignment
 from app.models.basedata import Room, Subject, Teacher
 from app.models.leave import (
-    LEAVE_TYPE_CN,
     AffectedPeriod,
     AffectedStatus,
     LeaveRequest,
@@ -32,7 +31,8 @@ from app.models.notification import NotificationType
 from app.models.period import Period, PeriodType
 from app.models.semester import Semester
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
-from app.services import notifications
+from app.services import calendar as calendar_service
+from app.services import localization, notifications
 from app.services import period_tables as pt_service
 
 MAX_LEAVE_DAYS = 180  # 產假上限約 8 週;180 天足夠,同時擋住手殘輸入的 2099 年
@@ -107,7 +107,7 @@ class _Expander:
     def __init__(self, db: Session) -> None:
         self.db = db
         self._periods: dict[int, dict[tuple[int, int], Period]] = {}
-        self._num_weekdays: dict[int, int] = {}
+        self._semester_id: int = 0
 
     def table_of(self, assignment: CourseAssignment) -> int | None:
         members = assignment.scheduling_unit.members
@@ -120,13 +120,16 @@ class _Expander:
         if table_id not in self._periods:
             rows = list(self.db.scalars(select(Period).where(Period.period_table_id == table_id)))
             self._periods[table_id] = {(p.weekday, p.period_no): p for p in rows}
-            self._num_weekdays[table_id] = max((p.weekday for p in rows), default=0)
         return self._periods[table_id]
 
     def is_school_day(self, table_id: int, day: date) -> bool:
-        """節次表沒有這個星期 = 不上課(週末;六日制學校則週六有課)。"""
+        """依校曆例外解析有效星期，再確認該節次表有一般課格位。"""
         self._load_table(table_id)
-        return day.isoweekday() <= self._num_weekdays[table_id]
+        weekday = calendar_service.effective_weekday(self.db, self._semester_id, day)
+        return weekday is not None and any(
+            p.weekday == weekday and p.type == PeriodType.regular.value
+            for p in self._periods[table_id].values()
+        )
 
     def period(self, table_id: int, weekday: int, period_no: int) -> Period | None:
         return self._load_table(table_id).get((weekday, period_no))
@@ -153,12 +156,15 @@ def expand(db: Session, leave: LeaveRequest) -> list[AffectedPeriod]:
         return []
 
     exp = _Expander(db)
+    exp._semester_id = leave.semester_id
     out: list[AffectedPeriod] = []
     seen: set[tuple[date, int, str]] = set()
 
     for day in school_dates(leave.start_date, leave.end_date):
         window = _leave_window(leave, day)
-        weekday = day.isoweekday()
+        weekday = calendar_service.effective_weekday(db, leave.semester_id, day)
+        if weekday is None:
+            continue
         for entry in entries:
             if entry.weekday != weekday:
                 continue
@@ -179,15 +185,24 @@ def expand(db: Session, leave: LeaveRequest) -> list[AffectedPeriod]:
                 if key in seen:
                     continue
                 seen.add(key)
-                out.append(AffectedPeriod(
-                    leave_request_id=leave.id, semester_id=leave.semester_id,
-                    date=day, weekday=weekday, period_no=period.period_no,
-                    period_name=period.name, start_time=period.start_time,
-                    end_time=period.end_time,
-                    subject_name=subject_name, class_names=class_names, room_name=room_name,
-                    schedule_entry_id=entry.id, course_assignment_id=a.id,
-                    status=AffectedStatus.pending.value,
-                ))
+                out.append(
+                    AffectedPeriod(
+                        leave_request_id=leave.id,
+                        semester_id=leave.semester_id,
+                        date=day,
+                        weekday=weekday,
+                        period_no=period.period_no,
+                        period_name=period.name,
+                        start_time=period.start_time,
+                        end_time=period.end_time,
+                        subject_name=subject_name,
+                        class_names=class_names,
+                        room_name=room_name,
+                        schedule_entry_id=entry.id,
+                        course_assignment_id=a.id,
+                        status=AffectedStatus.pending.value,
+                    )
+                )
 
     out.sort(key=lambda p: (p.date, p.period_no))
     return out
@@ -201,9 +216,7 @@ def validate(semester: Semester, start: date, end: date) -> None:
     if semester.start_date is None or semester.end_date is None:
         raise LeaveError("學期尚未設定起訖日期,無法登記請假")
     if start < semester.start_date or end > semester.end_date:
-        raise LeaveError(
-            f"請假日期須落在學期範圍內({semester.start_date} ~ {semester.end_date})"
-        )
+        raise LeaveError(f"請假日期須落在學期範圍內({semester.start_date} ~ {semester.end_date})")
 
 
 def create(
@@ -227,10 +240,16 @@ def create(
         raise LeaveError("結束時間不可早於開始時間")
 
     leave = LeaveRequest(
-        semester_id=semester.id, teacher_id=teacher.id, leave_type=leave_type,
-        start_date=start_date, start_time=start_time,
-        end_date=end_date, end_time=end_time,
-        reason=reason, created_by_user_id=created_by_user_id, created_by_name=created_by_name,
+        semester_id=semester.id,
+        teacher_id=teacher.id,
+        leave_type=leave_type,
+        start_date=start_date,
+        start_time=start_time,
+        end_date=end_date,
+        end_time=end_time,
+        reason=reason,
+        created_by_user_id=created_by_user_id,
+        created_by_name=created_by_name,
     )
     db.add(leave)
     db.flush()
@@ -242,9 +261,13 @@ def create(
     if notify_teacher:
         # 組長代登:當事人要知道有人替他請了假
         notifications.notify(
-            db, semester_id=semester.id, teacher_id=teacher.id,
+            db,
+            semester_id=semester.id,
+            teacher_id=teacher.id,
             type=NotificationType.leave_registered,
-            title=f"{created_by_name} 已為您登記{LEAVE_TYPE_CN[leave.leave_type]}",
+            title=f"{created_by_name} 已为您登记{localization.leave_type_label(leave.leave_type)}"
+            if localization.is_mainland()
+            else f"{created_by_name} 已為您登記{localization.leave_type_label(leave.leave_type)}",
             body=f"{range_text(leave)},共 {len(leave.affected_periods)} 節課受影響",
         )
     return leave
@@ -280,20 +303,29 @@ def cancel(db: Session, leave: LeaveRequest, *, actor_name: str) -> list[Affecte
             by_handler.setdefault(period.handler_teacher_id, []).append(period)
 
     for handler_id, periods in by_handler.items():
-        detail = "、".join(f"{p.date} {p.period_name}({p.class_names}{p.subject_name})"
-                           for p in periods)
+        detail = "、".join(
+            f"{p.date} {p.period_name}({p.class_names}{p.subject_name})" for p in periods
+        )
         notifications.notify(
-            db, semester_id=leave.semester_id, teacher_id=handler_id,
+            db,
+            semester_id=leave.semester_id,
+            teacher_id=handler_id,
             type=NotificationType.substitution_cancelled,
             title=f"原訂代課已取消({leave.teacher.name} 銷假)",
             body=f"以下 {len(periods)} 節課不需要您代課了:{detail}",
         )
 
     notifications.notify(
-        db, semester_id=leave.semester_id, teacher_id=leave.teacher_id,
+        db,
+        semester_id=leave.semester_id,
+        teacher_id=leave.teacher_id,
         type=NotificationType.leave_cancelled,
         title=f"{actor_name} 已為您銷假" if actor_name != leave.teacher.name else "銷假完成",
-        body=f"{range_text(leave)} 的{LEAVE_TYPE_CN[leave.leave_type]}已銷假",
+        body=(
+            f"{range_text(leave)} 的{localization.leave_type_label(leave.leave_type)}已销假"
+            if localization.is_mainland()
+            else f"{range_text(leave)} 的{localization.leave_type_label(leave.leave_type)}已銷假"
+        ),
     )
     db.flush()
     return revoked

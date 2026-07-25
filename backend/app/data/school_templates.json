@@ -1,5 +1,21 @@
 [
   {
+    "key": "cn_junior_high_draft",
+    "name": "天津初中（草稿）",
+    "minutes_per_period": null,
+    "editable": true,
+    "period_table": {
+      "name": "初中节次表（待编辑）",
+      "num_weekdays": 5,
+      "slots": [],
+      "blocked": []
+    },
+    "subjects": [
+      "语文", "数学", "英语", "道德与法治", "历史", "地理", "生物", "体育与健康",
+      "音乐", "美术", "信息科技", "劳动", "综合实践活动"
+    ]
+  },
+  {
     "key": "elementary",
     "name": "國小",
     "minutes_per_period": 40,

@@ -47,6 +47,7 @@ services:
     env_file: .env
     environment:
       TZ: ${TZ:-Asia/Taipei}
+      SCHOOL_PROFILE: ${SCHOOL_PROFILE:-tw_k12}
       # 讓 api 也知道站台位址:設了網域(HTTPS)時自動開啟 cookie Secure 旗標
       SITE_ADDRESS: ${SITE_ADDRESS:-}
     volumes:
@@ -74,6 +75,7 @@ services:
     env_file: .env
     environment:
       TZ: ${TZ:-Asia/Taipei}
+      SCHOOL_PROFILE: ${SCHOOL_PROFILE:-tw_k12}
     volumes:
       - backups:/backups   # 與 worker-ops 共用(還原前的 presafe 備份等)
     depends_on:
@@ -94,6 +96,7 @@ services:
     env_file: .env
     environment:
       TZ: ${TZ:-Asia/Taipei}
+      SCHOOL_PROFILE: ${SCHOOL_PROFILE:-tw_k12}
     volumes:
       - backups:/backups   # pg_dump 寫入、pg_restore 讀取
     depends_on:

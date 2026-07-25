@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.basedata import Teacher
 from app.models.leave import AffectedPeriod, AffectedStatus
 from app.models.substitution import Substitution
+from app.services import localization
 from app.services.availability import Availability
 
 
@@ -123,10 +124,16 @@ def recommend(
         month_n = month_counts.get(t.id, 0)
 
         reasons: list[str] = []
-        reasons.append("同科目教師" if same_subject else "非本科教師")
+        reasons.append(
+            localization.profile_text("同科目教師", "同科目教师")
+            if same_subject
+            else localization.profile_text("非本科教師", "非本科教师")
+        )
         if at_school:
-            reasons.append("當天已在校")
-        reasons.append(f"本月已代 {month_n} 節")
+            reasons.append(localization.profile_text("當天已在校", "当天已在校"))
+        reasons.append(
+            localization.profile_text(f"本月已代 {month_n} 節", f"本月已代 {month_n} 节")
+        )
 
         rec.candidates.append(Candidate(
             teacher_id=t.id, teacher_name=t.name,
@@ -136,7 +143,8 @@ def recommend(
 
     rec.candidates.sort(key=lambda c: c.sort_key)
     if not rec.candidates:
-        rec.no_candidate_hint = (
-            f"該時段全校 {blocked} 位教師都無法代課,建議改採「併班」或「自習」"
+        rec.no_candidate_hint = localization.profile_text(
+            f"該時段全校 {blocked} 位教師都無法代課,建議改採「併班」或「自習」",
+            f"该时段全校 {blocked} 位教师都无法代课，建议改用“合班”或“自习”",
         )
     return rec

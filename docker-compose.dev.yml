@@ -26,6 +26,7 @@ services:
     environment:
       # 開發時打開互動式 API 文件(http://localhost:8000/api/docs);正式部署預設關閉
       API_DOCS_ENABLED: "true"
+      SCHOOL_PROFILE: ${SCHOOL_PROFILE:-tw_k12}
     ports:
       - "8000:8000"
     volumes:

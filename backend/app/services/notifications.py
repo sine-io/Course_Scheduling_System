@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.models.basedata import Teacher
 from app.models.notification import Notification, NotificationType
+from app.services import localization
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,8 @@ def notify(
     link: str = "",
 ) -> Notification:
     """建立通知並經各管道送達。呼叫端負責 commit;Email 於 commit 後自動寄出。"""
+    title = localization.localize_text(title)
+    body = localization.localize_text(body)
     n = Notification(
         semester_id=semester_id, teacher_id=teacher_id, type=type.value,
         title=title[:120], body=body, link=link[:200],

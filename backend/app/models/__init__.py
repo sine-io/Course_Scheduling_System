@@ -23,6 +23,7 @@ from app.models.basedata import (
     TeacherRuleType,
     TeacherTimeRule,
 )
+from app.models.calendar import CalendarExceptionKind, SemesterCalendarException
 from app.models.constraint import ConstraintConfig
 from app.models.leave import (
     LEAVE_TYPE_CN,
@@ -34,7 +35,7 @@ from app.models.leave import (
 )
 from app.models.notification import Notification, NotificationType
 from app.models.period import Period, PeriodTable, PeriodType
-from app.models.semester import Semester, SemesterStatus
+from app.models.semester import Semester, SemesterReadiness, SemesterStatus
 from app.models.substitution import (
     SUBSTITUTION_TYPE_CN,
     Substitution,
@@ -50,6 +51,7 @@ __all__ = [
     "UserRole",
     "Semester",
     "SemesterStatus",
+    "SemesterReadiness",
     "PeriodTable",
     "Period",
     "PeriodType",
@@ -61,6 +63,8 @@ __all__ = [
     "RoomType",
     "ClassUnit",
     "ClassTrack",
+    "CalendarExceptionKind",
+    "SemesterCalendarException",
     "WizardState",
     "SchedulingUnit",
     "SchedulingUnitMember",

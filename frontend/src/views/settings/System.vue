@@ -13,6 +13,7 @@ import {
 import type { Backup, RestoreResult } from '@/api/backups'
 import { getSmtp, saveSmtp } from '@/api/notifications'
 import { resetWizard } from '@/api/wizard'
+import { useProfileText } from '@/composables/useProfileText'
 import { useAuthStore } from '@/stores/auth'
 import { useWizardStore } from '@/stores/wizard'
 
@@ -21,6 +22,7 @@ const message = useMessage()
 const dialog = useDialog()
 const wizard = useWizardStore()
 const auth = useAuthStore()
+const { isMainland, tr } = useProfileText()
 
 const isAdmin = () => auth.hasRole('admin')
 
@@ -43,10 +45,10 @@ async function onCreateBackup() {
   busy.value = true
   try {
     await createBackup()
-    message.success('已建立備份')
+    message.success(tr('已建立備份', '备份已创建'))
     await reloadBackups()
   } catch (e) {
-    message.error((e as ApiError).message || '備份失敗')
+    message.error((e as ApiError).message || tr('備份失敗', '备份失败'))
   } finally {
     busy.value = false
   }
@@ -54,7 +56,7 @@ async function onCreateBackup() {
 
 async function onDeleteBackup(name: string) {
   await deleteBackup(name)
-  message.success('已刪除備份')
+  message.success(tr('已刪除備份', '备份已删除'))
   await reloadBackups()
 }
 
@@ -68,19 +70,25 @@ async function afterRestore(r: RestoreResult) {
   // (訊息在導向登入頁後會消失,警告不能只用一閃即逝的 toast)。
   if (r.warnings.length > 0) {
     dialog.warning({
-      title: '還原完成,但有可忽略的警告',
+      title: tr('還原完成,但有可忽略的警告', '恢复完成，但存在可忽略的警告'),
       content: () => h('div', [
-        h('p', `現狀已備份為 ${r.presafe_backup}。以下警告不影響資料,通常為跨版本的設定參數:`),
+        h('p', tr(
+          `現狀已備份為 ${r.presafe_backup}。以下警告不影響資料,通常為跨版本的設定參數:`,
+          `当前状态已备份为 ${r.presafe_backup}。以下警告不影响资料，通常来自跨版本设置参数：`,
+        )),
         ...r.warnings.map((w) => h('p', { style: 'font-size:12px;color:#999;margin:4px 0' }, w)),
       ]),
-      positiveText: '知道了,重新登入',
+      positiveText: tr('知道了,重新登入', '知道了，重新登录'),
       maskClosable: false,
       onPositiveClick: redirectToLogin,
       onClose: redirectToLogin,
     })
     return
   }
-  message.success(`還原完成(現狀已備份為 ${r.presafe_backup}),請重新登入`)
+  message.success(tr(
+    `還原完成(現狀已備份為 ${r.presafe_backup}),請重新登入`,
+    `恢复完成（当前状态已备份为 ${r.presafe_backup}），请重新登录`,
+  ))
   await redirectToLogin()
 }
 
@@ -90,7 +98,7 @@ async function onRestore(name: string) {
     const r = await restoreBackup(name)
     await afterRestore(r)
   } catch (e) {
-    message.error((e as ApiError).message || '還原失敗')
+    message.error((e as ApiError).message || tr('還原失敗', '恢复失败'))
   } finally {
     busy.value = false
   }
@@ -104,7 +112,7 @@ async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestO
     await afterRestore(r)
   } catch (e) {
     onError()
-    message.error((e as Error).message || '上傳還原失敗')
+    message.error((e as Error).message || tr('上傳還原失敗', '上传恢复失败'))
   } finally {
     busy.value = false
   }
@@ -133,9 +141,9 @@ async function onSaveSmtp() {
     configured.value = s.configured
     hasPassword.value = s.has_password
     smtp.value.password = ''
-    message.success('已儲存 SMTP 設定')
+    message.success(tr('已儲存 SMTP 設定', 'SMTP 设置已保存'))
   } catch (e) {
-    message.error((e as ApiError).message || '儲存失敗')
+    message.error((e as ApiError).message || tr('儲存失敗', '保存失败'))
   } finally {
     savingSmtp.value = false
   }
@@ -144,107 +152,106 @@ async function onSaveSmtp() {
 async function onResetWizard() {
   await resetWizard()
   await wizard.fetch()
-  message.success('已重新啟動設定精靈')
+  message.success(tr('已重新啟動設定精靈', '设置向导已重新启动'))
   router.push({ name: 'wizard' })
 }
 </script>
 
 <template>
   <n-space vertical size="large">
-    <h1 style="margin: 0">系統管理</h1>
+    <h1 style="margin: 0">{{ tr('系統管理', '系统管理') }}</h1>
 
-    <n-card v-if="isAdmin()" title="通知信件(SMTP)" data-testid="smtp-card">
+    <n-card v-if="isAdmin()" :title="tr('通知信件(SMTP)', '通知邮件（SMTP）')" data-testid="smtp-card">
       <n-space vertical>
         <n-space align="center">
           <n-text depth="3">
-            設定後,調代課通知除站內外會加寄 Email;未設定時系統照常運作,僅站內通知。
+            {{ tr('設定後,調代課通知除站內外會加寄 Email;未設定時系統照常運作,僅站內通知。', '设置后，调代课通知除站内消息外还会发送邮件；未设置时系统仍正常运行，仅发送站内通知。') }}
           </n-text>
           <n-tag :type="configured ? 'success' : 'default'" data-testid="smtp-status">
-            {{ configured ? '已設定' : '未設定' }}
+            {{ configured ? tr('已設定', '已设置') : tr('未設定', '未设置') }}
           </n-tag>
         </n-space>
         <n-space align="center" :wrap="true">
-          <n-text style="width: 72px">主機</n-text>
+          <n-text style="width: 72px">{{ tr('主機', '主机') }}</n-text>
           <n-input
             v-model:value="smtp.host" placeholder="smtp.example.com" style="width: 220px"
             data-testid="smtp-host"
           />
-          <n-text>連接埠</n-text>
+          <n-text>{{ tr('連接埠', '端口') }}</n-text>
           <n-input-number v-model:value="smtp.port" :min="1" :max="65535" style="width: 110px" />
-          <n-checkbox v-model:checked="smtp.use_tls">使用 TLS</n-checkbox>
+          <n-checkbox v-model:checked="smtp.use_tls">{{ tr('使用 TLS', '使用 TLS') }}</n-checkbox>
         </n-space>
         <n-space align="center" :wrap="true">
-          <n-text style="width: 72px">寄件人</n-text>
+          <n-text style="width: 72px">{{ tr('寄件人', '发件人') }}</n-text>
           <n-input
             v-model:value="smtp.sender" placeholder="noreply@school.edu.tw"
             style="width: 220px" data-testid="smtp-sender"
           />
-          <n-text>帳號</n-text>
-          <n-input v-model:value="smtp.user" placeholder="(選填)" style="width: 160px" />
-          <n-text>密碼</n-text>
+          <n-text>{{ tr('帳號', '账号') }}</n-text>
+          <n-input v-model:value="smtp.user" :placeholder="tr('(選填)', '（可选）')" style="width: 160px" />
+          <n-text>{{ tr('密碼', '密码') }}</n-text>
           <n-input
             v-model:value="smtp.password" type="password"
-            :placeholder="hasPassword ? '(已設定,留空不變更)' : '(選填)'" style="width: 160px"
+            :placeholder="hasPassword ? tr('(已設定,留空不變更)', '（已设置，留空不变更）') : tr('(選填)', '（可选）')" style="width: 160px"
           />
         </n-space>
         <div>
           <n-button
             type="primary" :loading="savingSmtp" data-testid="smtp-save" @click="onSaveSmtp"
           >
-            儲存 SMTP 設定
+            {{ tr('儲存 SMTP 設定', '保存 SMTP 设置') }}
           </n-button>
         </div>
       </n-space>
     </n-card>
 
-    <n-card v-if="isAdmin()" title="資料備份與還原" data-testid="backup-card">
+    <n-card v-if="isAdmin()" :title="tr('資料備份與還原', '资料备份与恢复')" data-testid="backup-card">
       <n-space vertical>
         <n-space align="center">
           <n-text depth="3">
-            每日凌晨自動備份(保留 30 份);也可立即備份、下載保存,或上傳備份檔還原。
-            還原前系統會自動先備份現狀,還原後所有人需重新登入。
+            {{ tr('每日凌晨自動備份(保留 30 份);也可立即備份、下載保存,或上傳備份檔還原。還原前系統會自動先備份現狀,還原後所有人需重新登入。', '系统每天凌晨自动备份（保留 30 份）；也可立即备份、下载保存，或上传备份文件恢复。恢复前系统会先自动备份当前状态，恢复后所有人都需重新登录。') }}
           </n-text>
         </n-space>
         <n-space align="center">
           <n-button
             type="primary" :loading="busy" data-testid="backup-now" @click="onCreateBackup"
           >
-            立即備份
+            {{ tr('立即備份', '立即备份') }}
           </n-button>
           <n-upload
             :custom-request="onUploadRestore" :show-file-list="false" accept=".dump"
             :disabled="busy"
           >
-            <n-button :disabled="busy" data-testid="backup-upload">上傳備份檔並還原</n-button>
+            <n-button :disabled="busy" data-testid="backup-upload">{{ tr('上傳備份檔並還原', '上传备份文件并恢复') }}</n-button>
           </n-upload>
         </n-space>
 
-        <n-text v-if="!backups.length" depth="3">尚無備份。</n-text>
+        <n-text v-if="!backups.length" depth="3">{{ tr('尚無備份。', '暂无备份。') }}</n-text>
         <table v-else class="data-table" data-testid="backup-table">
           <thead>
-            <tr><th>時間</th><th>來源</th><th>大小</th><th>操作</th></tr>
+            <tr><th>{{ tr('時間', '时间') }}</th><th>{{ tr('來源', '来源') }}</th><th>{{ tr('大小', '大小') }}</th><th>{{ tr('操作', '操作') }}</th></tr>
           </thead>
           <tbody>
             <tr v-for="b in backups" :key="b.name" data-testid="backup-row">
-              <td>{{ new Date(b.created_at).toLocaleString('zh-TW', { hour12: false }) }}</td>
+              <td>{{ new Date(b.created_at).toLocaleString(isMainland ? 'zh-CN' : 'zh-TW', { hour12: false }) }}</td>
               <td><n-tag size="small">{{ b.reason_label }}</n-tag></td>
               <td>{{ humanSize(b.size_bytes) }}</td>
               <td>
                 <n-space size="small">
-                  <n-button size="tiny" @click="downloadBackup(b.name)">下載</n-button>
+                  <n-button size="tiny" @click="downloadBackup(b.name)">{{ tr('下載', '下载') }}</n-button>
                   <n-popconfirm @positive-click="() => onRestore(b.name)">
                     <template #trigger>
                       <n-button size="tiny" type="warning" data-testid="backup-restore">
-                        還原
+                        {{ tr('還原', '恢复') }}
                       </n-button>
                     </template>
-                    還原將覆蓋目前所有資料(現狀會先自動備份),確定?
+                    {{ tr('還原將覆蓋目前所有資料(現狀會先自動備份),確定?', '恢复将覆盖当前所有资料（系统会先自动备份当前状态），确定吗？') }}
                   </n-popconfirm>
                   <n-popconfirm @positive-click="() => onDeleteBackup(b.name)">
                     <template #trigger>
-                      <n-button size="tiny" tertiary>刪除</n-button>
+                      <n-button size="tiny" tertiary>{{ tr('刪除', '删除') }}</n-button>
                     </template>
-                    確定刪除此備份?
+                    {{ tr('確定刪除此備份?', '确定删除此备份吗？') }}
                   </n-popconfirm>
                 </n-space>
               </td>
@@ -254,14 +261,14 @@ async function onResetWizard() {
       </n-space>
     </n-card>
 
-    <n-card title="設定精靈">
+    <n-card :title="tr('設定精靈', '设置向导')">
       <n-space vertical>
-        <n-text depth="3">重新執行首次設定的引導流程(不會刪除既有資料)。</n-text>
+        <n-text depth="3">{{ tr('重新執行首次設定的引導流程(不會刪除既有資料)。', '重新执行首次设置向导（不会删除现有资料）。') }}</n-text>
         <n-popconfirm @positive-click="onResetWizard">
           <template #trigger>
-            <n-button>重新啟動設定精靈</n-button>
+            <n-button>{{ tr('重新啟動設定精靈', '重新启动设置向导') }}</n-button>
           </template>
-          確定重新啟動設定精靈?
+          {{ tr('確定重新啟動設定精靈?', '确定重新启动设置向导吗？') }}
         </n-popconfirm>
       </n-space>
     </n-card>

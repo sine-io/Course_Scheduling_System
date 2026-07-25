@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.models.audit import AuditLog
-from app.models.leave import LEAVE_TYPE_CN, AffectedStatus, LeaveRequest, LeaveType
+from app.models.leave import AffectedStatus, LeaveRequest, LeaveType
 from app.models.semester import Semester
 from app.models.user import Role, User
 from app.schemas.leave import (
@@ -21,6 +21,7 @@ from app.schemas.leave import (
     LeaveRequestOut,
 )
 from app.services import leaves as leave_service
+from app.services import localization
 from app.services.teachers import current_teacher
 
 router = APIRouter(tags=["leaves"])
@@ -46,23 +47,40 @@ def _get_semester(db: Session, semester_id: int) -> Semester:
 def _serialize(leave: LeaveRequest) -> LeaveRequestOut:
     periods = sorted(leave.affected_periods, key=lambda p: (p.date, p.period_no))
     return LeaveRequestOut(
-        id=leave.id, semester_id=leave.semester_id,
-        teacher_id=leave.teacher_id, teacher_name=leave.teacher.name,
+        id=leave.id,
+        semester_id=leave.semester_id,
+        teacher_id=leave.teacher_id,
+        teacher_name=leave.teacher.name,
         leave_type=leave.leave_type,
-        leave_type_label=LEAVE_TYPE_CN.get(leave.leave_type, leave.leave_type),
-        start_date=leave.start_date, start_time=leave.start_time,
-        end_date=leave.end_date, end_time=leave.end_time,
-        reason=leave.reason, status=leave.status,
-        created_by_name=leave.created_by_name, created_at=leave.created_at,
+        leave_type_label=localization.leave_type_label(leave.leave_type),
+        start_date=leave.start_date,
+        start_time=leave.start_time,
+        end_date=leave.end_date,
+        end_time=leave.end_time,
+        reason=leave.reason,
+        status=leave.status,
+        created_by_name=leave.created_by_name,
+        created_at=leave.created_at,
         affected_count=len(periods),
         pending_count=sum(1 for p in periods if p.status == AffectedStatus.pending.value),
         affected_periods=[
             AffectedPeriodOut(
-                **{k: getattr(p, k) for k in (
-                    "id", "date", "weekday", "period_no", "period_name", "start_time",
-                    "end_time", "subject_name", "class_names", "room_name",
-                    "handler_teacher_id",
-                )},
+                **{
+                    k: getattr(p, k)
+                    for k in (
+                        "id",
+                        "date",
+                        "weekday",
+                        "period_no",
+                        "period_name",
+                        "start_time",
+                        "end_time",
+                        "subject_name",
+                        "class_names",
+                        "room_name",
+                        "handler_teacher_id",
+                    )
+                },
                 status=leave_service.effective_status(p.status, p.date, p.end_time),
                 handler_name=p.handler.name if p.handler else None,
             )
@@ -107,26 +125,36 @@ def create_leave(
 
     try:
         leave = leave_service.create(
-            db, sem, teacher,
+            db,
+            sem,
+            teacher,
             leave_type=body.leave_type,
-            start_date=body.start_date, start_time=body.start_time,
-            end_date=body.end_date, end_time=body.end_time,
+            start_date=body.start_date,
+            start_time=body.start_time,
+            end_date=body.end_date,
+            end_time=body.end_time,
             reason=body.reason,
-            created_by_user_id=user.id, created_by_name=user.username,
+            created_by_user_id=user.id,
+            created_by_name=user.username,
             notify_teacher=on_behalf,
         )
     except leave_service.LeaveError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
-    db.add(AuditLog(
-        user_id=user.id, username=user.username, action="create_leave",
-        target_type="leave_request", target_id=leave.id,
-        detail=(
-            f"{teacher.name} {leave_service.range_text(leave)}"
-            f" {LEAVE_TYPE_CN.get(leave.leave_type, '')},"
-            f"受影響 {len(leave.affected_periods)} 節"
-        )[:500],
-    ))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            username=user.username,
+            action="create_leave",
+            target_type="leave_request",
+            target_id=leave.id,
+            detail=(
+                f"{teacher.name} {leave_service.range_text(leave)}"
+                f" {localization.leave_type_label(leave.leave_type)},"
+                f"受影響 {len(leave.affected_periods)} 節"
+            )[:500],
+        )
+    )
     db.commit()
     db.refresh(leave)
     return _serialize(leave)
@@ -154,8 +182,7 @@ def list_leaves(
     # 保護性上限(M6-5):整學期的假單會越積越多,不設限就會一次全部拉進記憶體。
     # 取最新的 MAX_LEAVE_ROWS 筆;完整分頁 UI 留 v1.2。
     rows = db.scalars(
-        stmt.order_by(LeaveRequest.start_date.desc(), LeaveRequest.id.desc())
-        .limit(MAX_LEAVE_ROWS)
+        stmt.order_by(LeaveRequest.start_date.desc(), LeaveRequest.id.desc()).limit(MAX_LEAVE_ROWS)
     ).unique()
     return [_serialize(leave) for leave in rows]
 
@@ -191,11 +218,16 @@ def cancel_leave(
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
     notified = sorted({p.handler.name for p in revoked if p.handler})
-    db.add(AuditLog(
-        user_id=user.id, username=user.username, action="cancel_leave",
-        target_type="leave_request", target_id=leave.id,
-        detail=f"{leave.teacher.name} 銷假,取消 {len(revoked)} 節已指派代課"[:500],
-    ))
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            username=user.username,
+            action="cancel_leave",
+            target_type="leave_request",
+            target_id=leave.id,
+            detail=f"{leave.teacher.name} 銷假,取消 {len(revoked)} 節已指派代課"[:500],
+        )
+    )
     db.commit()
     return LeaveCancelled(
         id=leave.id, status=leave.status, revoked_count=len(revoked), notified_teachers=notified
@@ -211,4 +243,4 @@ def list_affected(
 
 @router.get("/leave-types", response_model=dict[str, str])
 def leave_types(_: object = Depends(get_active_user)):
-    return {t.value: LEAVE_TYPE_CN[t] for t in LeaveType}
+    return {t.value: localization.leave_type_label(t.value) for t in LeaveType}

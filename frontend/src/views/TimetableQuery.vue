@@ -13,6 +13,7 @@ import {
 } from '@/api/exports'
 import type { ExportFmt } from '@/api/exports'
 import { useAuthStore } from '@/stores/auth'
+import { useAppConfigStore } from '@/stores/appConfig'
 
 const semesters = ref<PublicSemester[]>([])
 const sid = ref<number | null>(null)
@@ -22,6 +23,9 @@ const loading = ref(true)
 
 const message = useMessage()
 const auth = useAuthStore()
+const appConfig = useAppConfigStore()
+const mainland = computed(() => appConfig.isMainland)
+const tr = (tw: string, cn: string) => mainland.value ? cn : tw
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
 
@@ -41,7 +45,7 @@ async function onExport(fmt: ExportFmt) {
   try {
     await exportTimetable(sid.value, view.value, targetId.value, fmt)
   } catch (e) {
-    message.error((e as Error).message || '匯出失敗')
+    message.error((e as Error).message || tr('匯出失敗', '导出失败'))
   } finally {
     exporting.value = false
   }
@@ -53,7 +57,7 @@ async function onExportAll(kind: 'school' | 'batch') {
   try {
     await (kind === 'school' ? exportSchoolWorkbook(sid.value) : exportBatchZip(sid.value))
   } catch (e) {
-    message.error((e as Error).message || '匯出失敗')
+    message.error((e as Error).message || tr('匯出失敗', '导出失败'))
   } finally {
     exporting.value = false
   }
@@ -127,26 +131,26 @@ const entries = computed<GridEntry[]>(() => {
 <template>
   <n-space vertical size="large">
     <n-space align="center" :wrap="true">
-      <h1 style="margin: 0">課表查詢</h1>
+      <h1 style="margin: 0">{{ tr('課表查詢', '课表查询') }}</h1>
       <n-select
         v-if="semesters.length > 1" :value="sid" :options="semesterOptions"
         style="width: 200px" @update:value="load"
       />
       <n-tag v-if="data" size="small" type="success">
-        {{ data.semester_label }} · {{ data.name }}(已發布)
+        {{ data.semester_label }} · {{ data.name }}{{ tr('(已發布)', '（已发布）') }}
       </n-tag>
     </n-space>
 
     <n-card v-if="!loading && !data" size="small">
-      <n-empty description="目前尚無已發布的課表" data-testid="tq-none" />
+      <n-empty :description="tr('目前尚無已發布的課表', '当前暂无已发布的课表')" data-testid="tq-none" />
     </n-card>
 
     <template v-else-if="data">
       <n-space align="center" :wrap="true">
         <n-radio-group v-model:value="view">
-          <n-radio-button value="class" data-testid="tq-view-class">班級</n-radio-button>
-          <n-radio-button value="teacher" data-testid="tq-view-teacher">教師</n-radio-button>
-          <n-radio-button value="room" data-testid="tq-view-room">場地</n-radio-button>
+          <n-radio-button value="class" data-testid="tq-view-class">{{ tr('班級', '班级') }}</n-radio-button>
+          <n-radio-button value="teacher" data-testid="tq-view-teacher">{{ tr('教師', '教师') }}</n-radio-button>
+          <n-radio-button value="room" data-testid="tq-view-room">{{ tr('場地', '场地') }}</n-radio-button>
         </n-radio-group>
         <n-select
           v-if="view === 'class'" v-model:value="classId" data-testid="tq-class"
@@ -161,12 +165,12 @@ const entries = computed<GridEntry[]>(() => {
           :options="roomOptions" style="width: 160px" filterable
         />
         <n-tag v-if="me && view === 'teacher' && teacherId === me.id" size="small" type="info">
-          本人課表
+          {{ tr('本人課表', '本人课表') }}
         </n-tag>
       </n-space>
 
       <n-space align="center" :wrap="true">
-        <n-text depth="3" style="font-size: 13px">匯出目前課表:</n-text>
+        <n-text depth="3" style="font-size: 13px">{{ tr('匯出目前課表', '导出当前课表') }}：</n-text>
         <n-button-group>
           <n-button
             size="small" :disabled="targetId === null || exporting"
@@ -188,30 +192,30 @@ const entries = computed<GridEntry[]>(() => {
           </n-button>
         </n-button-group>
         <template v-if="canManage">
-          <n-text depth="3" style="font-size: 13px">全校:</n-text>
+          <n-text depth="3" style="font-size: 13px">{{ tr('全校', '全校') }}：</n-text>
           <n-button
             size="small" :disabled="exporting" data-testid="export-school"
             @click="onExportAll('school')"
           >
-            總表 Excel
+            {{ tr('總表', '总表') }} Excel
           </n-button>
           <n-button
             size="small" :disabled="exporting" data-testid="export-batch"
             @click="onExportAll('batch')"
           >
-            批次 zip
+            {{ tr('批次', '批量') }} zip
           </n-button>
         </template>
       </n-space>
 
       <n-card size="small" data-testid="tq-grid">
-        <n-empty v-if="periods.length === 0" description="此學期尚無節次表" />
+        <n-empty v-if="periods.length === 0" :description="tr('此學期尚無節次表', '本学期暂无节次表')" />
         <TimetableGrid
           v-else
           :periods="periods" :num-weekdays="numWeekdays" :entries="entries" readonly
         />
       </n-card>
-      <n-text depth="3" style="font-size: 12px">課表為唯讀檢視;如有異動請洽教學組。</n-text>
+      <n-text depth="3" style="font-size: 12px">{{ tr('課表為唯讀檢視;如有異動請洽教學組。', '课表为只读查看；如有变动请联系教务员。') }}</n-text>
     </template>
   </n-space>
 </template>

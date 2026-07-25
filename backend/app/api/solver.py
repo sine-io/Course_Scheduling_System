@@ -1,5 +1,6 @@
 """排課引擎 API:pre-flight 檢查、軟約束設定、自動排課任務與進度。"""
 
+import copy
 import time
 import uuid
 
@@ -20,6 +21,12 @@ from app.schemas.solver import (
     PreflightOut,
     RelaxableOption,
     SolveJobOut,
+)
+from app.services import localization
+from app.services.deployment_profile import (
+    ProfileMismatchError,
+    SemesterNotReadyError,
+    assert_semester_ready,
 )
 from app.services.solver_data import load_config, load_problem, save_config
 from app.solver import preflight
@@ -65,7 +72,7 @@ def solver_preflight(
         warning_count=len(report.warnings),
         issues=[
             PreflightIssue(
-                level=i.level, code=i.code, message=i.message,
+                level=i.level, code=i.code, message=localization.localize_text(i.message),
                 subject_type=i.subject_type, subject_id=i.subject_id, detail=i.detail,
             )
             for i in report.issues
@@ -84,7 +91,7 @@ def _config_out(semester_id: int, config: SolverConfig) -> ConstraintConfigOut:
         teacher_daily_max=config.teacher_daily_max,
         teacher_consecutive_max=config.teacher_consecutive_max,
         weights={code: config.weight(code) for code in DEFAULT_WEIGHTS},
-        weight_names=dict(SOFT_NAMES),
+        weight_names={code: localization.localize_text(name) for code, name in SOFT_NAMES.items()},
     )
 
 
@@ -137,7 +144,22 @@ def put_constraint_config(
 
 # ── 自動排課任務(M3-4)────────────────
 def _job_out(state: JobState) -> SolveJobOut:
-    return SolveJobOut(**{k: v for k, v in state.__dict__.items()})
+    payload = copy.deepcopy(state.__dict__)
+    if payload.get("error"):
+        payload["error"] = localization.localize_text(payload["error"])
+    report = payload.get("report") or {}
+    for item in report.get("items", []):
+        item["name"] = localization.localize_text(item.get("name", ""))
+        item["details"] = [localization.localize_text(text) for text in item.get("details", [])]
+    conflict = payload.get("conflict") or {}
+    if conflict.get("headline"):
+        conflict["headline"] = localization.localize_text(conflict["headline"])
+    for cause in conflict.get("causes", []):
+        cause["message"] = localization.localize_text(cause.get("message", ""))
+        cause["suggestion"] = localization.localize_text(cause.get("suggestion", ""))
+    for item in payload.get("unscheduled") or []:
+        item["reason"] = localization.localize_text(item.get("reason", ""))
+    return SolveJobOut(**payload)
 
 
 def _get_job(store: ProgressStore, job_id: str) -> JobState:
@@ -171,6 +193,27 @@ def start_auto_schedule(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "只能以草稿為來源自動排課;請先複製為新草稿"
         )
+    semester = db.get(Semester, tt.semester_id)
+    if semester is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
+    try:
+        assert_semester_ready(db, semester)
+    except SemesterNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "semester_not_ready",
+                "message": str(exc),
+                "semester_id": exc.semester_id,
+                "issues": exc.issues,
+            },
+        ) from exc
+    except ProfileMismatchError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "school_profile_locked", "message": str(exc)},
+        ) from exc
+    db.commit()
 
     unknown = set(body.relax) - set(RELAXABLE_CODES)
     if unknown:
@@ -215,7 +258,10 @@ def start_auto_schedule(
 @router.get("/solver/relaxable", response_model=list[RelaxableOption])
 def list_relaxable(_: object = Depends(viewer)):
     """部分排課可勾選放寬的硬約束。H1/H2/H3 不在此列:那是物理,不是政策。"""
-    return [RelaxableOption(code=c, name=RELAXABLE_NAMES[c]) for c in RELAXABLE_CODES]
+    return [
+        RelaxableOption(code=code, name=localization.localize_text(RELAXABLE_NAMES[code]))
+        for code in RELAXABLE_CODES
+    ]
 
 
 @router.get("/solver/jobs/{job_id}", response_model=SolveJobOut)

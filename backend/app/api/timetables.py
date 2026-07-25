@@ -34,7 +34,13 @@ from app.schemas.timetable import (
     TimetableRename,
 )
 from app.services import conflict_checker as cc
+from app.services import localization
 from app.services import timetable_publish as pub
+from app.services.deployment_profile import (
+    ProfileMismatchError,
+    SemesterNotReadyError,
+    assert_semester_ready,
+)
 from app.services.teachers import current_teacher
 
 router = APIRouter(tags=["timetables"])
@@ -94,6 +100,16 @@ def _conflict_409(conflicts: list[cc.Conflict]) -> HTTPException:
             "conflicts": [{"code": c.code, "message": c.message} for c in conflicts],
         },
     )
+
+
+def _localized_completeness(report: dict) -> dict:
+    return {
+        **report,
+        "unplaced": [
+            {**item, "reason": localization.localize_text(item.get("reason", ""))}
+            for item in report.get("unplaced", [])
+        ],
+    }
 
 
 def _slot_siblings(
@@ -221,7 +237,7 @@ def timetable_completeness(
 ):
     """發布前完整性檢查:列出尚未排完的課務。"""
     tt = _get_timetable(db, timetable_id)
-    return pub.completeness(db, tt)
+    return _localized_completeness(pub.completeness(db, tt))
 
 
 @router.post("/timetables/{timetable_id}/publish", response_model=TimetableOut)
@@ -233,7 +249,28 @@ def publish_timetable(
 ):
     """draft → published;同學期原 published 轉 archived。未排完時需 force=true 才可發布。"""
     tt = _require_draft(_get_timetable(db, timetable_id))
-    report = pub.completeness(db, tt)
+    semester = db.get(Semester, tt.semester_id)
+    if semester is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到學期")
+    try:
+        assert_semester_ready(db, semester)
+    except SemesterNotReadyError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "semester_not_ready",
+                "message": str(exc),
+                "semester_id": exc.semester_id,
+                "issues": exc.issues,
+            },
+        ) from exc
+    except ProfileMismatchError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={"code": "school_profile_locked", "message": str(exc)},
+        ) from exc
+    db.commit()
+    report = _localized_completeness(pub.completeness(db, tt))
     if not report["complete"] and not force:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -355,7 +392,10 @@ def check_conflict(
     )
     return CheckResponse(
         ok=not conflicts,
-        conflicts=[{"code": c.code, "message": c.message} for c in conflicts],
+        conflicts=[
+            {"code": conflict.code, "message": localization.localize_text(conflict.message)}
+            for conflict in conflicts
+        ],
     )
 
 

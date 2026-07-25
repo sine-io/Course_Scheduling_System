@@ -4,15 +4,25 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import (
+    app_config,
     assignments,
     audit,
     auth,
     backups,
     basedata,
+    calendar,
     exports,
     health,
     imports,
@@ -30,6 +40,9 @@ from app.api import (
     settings as settings_api,
 )
 from app.core.config import settings
+from app.core.db import SessionLocal
+from app.services.deployment_profile import ProfileMismatchError, ensure_locked_profile
+from app.services.localization import localize_payload
 from app.services.users import ensure_admin
 
 logger = logging.getLogger(__name__)
@@ -65,6 +78,14 @@ async def _warn_if_no_ops_worker() -> None:
 async def lifespan(_app: FastAPI):
     # 啟動時:若系統尚無任何使用者,依 .env 建立初始管理員
     ensure_admin()
+    # 首次啟動鎖定部署檔；已有舊學期的資料庫會被視為台灣舊部署。
+    try:
+        with SessionLocal() as db:
+            ensure_locked_profile(db)
+            db.commit()
+    except ProfileMismatchError as exc:
+        logger.error("%s", exc)
+        # 服務仍可啟動，公開配置端點會以 409 明確阻止跨地區混用。
     check = asyncio.create_task(_warn_if_no_ops_worker())
     yield
     check.cancel()
@@ -80,6 +101,50 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+@app.exception_handler(StarletteHTTPException)
+async def localized_http_exception(request: Request, exc: StarletteHTTPException):
+    if settings.school_profile != "cn_mainland":
+        return await http_exception_handler(request, exc)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": jsonable_encoder(localize_payload(exc.detail))},
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def localized_validation_exception(request: Request, exc: RequestValidationError):
+    if settings.school_profile != "cn_mainland":
+        return await request_validation_exception_handler(request, exc)
+    return JSONResponse(
+        status_code=422,
+        content={"detail": jsonable_encoder(localize_payload(exc.errors()))},
+    )
+
+
+@app.middleware("http")
+async def enforce_deployment_profile(request: Request, call_next):
+    """Reject every data API when the environment conflicts with the DB lock."""
+    if request.url.path.startswith("/api") and request.url.path != "/api/health":
+        try:
+            with SessionLocal() as db:
+                ensure_locked_profile(db)
+                db.commit()
+        except ProfileMismatchError as exc:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": {
+                        "code": "school_profile_locked",
+                        "message": str(exc),
+                        "locked_profile": exc.locked,
+                        "requested_profile": exc.requested,
+                    }
+                },
+            )
+    return await call_next(request)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -90,6 +155,8 @@ app.add_middleware(
 
 # 所有 API 掛在 /api 前綴之下(Caddy 依此前綴分流)
 app.include_router(health.router, prefix="/api")
+app.include_router(app_config.router, prefix="/api")
+app.include_router(calendar.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(semesters.router, prefix="/api")
 app.include_router(basedata.router, prefix="/api")

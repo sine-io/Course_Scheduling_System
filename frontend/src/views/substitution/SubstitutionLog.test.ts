@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import SubstitutionLog from './SubstitutionLog.vue'
 
@@ -26,7 +27,7 @@ function stubFetch(rows: number) {
 
 async function mountLog(rows: number) {
   stubFetch(rows)
-  const wrapper = mount(SubstitutionLog)
+  const wrapper = mount(SubstitutionLog, { global: { plugins: [createPinia()] } })
   await flushPromises()
   return wrapper
 }

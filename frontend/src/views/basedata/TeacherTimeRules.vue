@@ -6,10 +6,12 @@ import { RULE_TYPE_LABELS, getTimeRules, replaceTimeRules } from '@/api/basedata
 import type { TeacherRuleType } from '@/api/basedata'
 import { getAvailableSlots, getSemester } from '@/api/semesters'
 import type { AvailableSlot } from '@/api/semesters'
+import { useProfileText } from '@/composables/useProfileText'
 
 const props = defineProps<{ teacherId: number; semesterId: number }>()
 const emit = defineEmits<{ saved: [] }>()
 const message = useMessage()
+const { isMainland, tr } = useProfileText()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -25,6 +27,12 @@ const COLORS: Record<TeacherRuleType, string> = {
   unavailable: '#ffcdd2',
   avoid: '#ffe0b2',
   prefer: '#c8e6c9',
+}
+const mainlandRuleLabels: Record<TeacherRuleType, string> = {
+  unavailable: '不可排', avoid: '尽量避开', prefer: '偏好',
+}
+function ruleLabel(type: TeacherRuleType) {
+  return isMainland.value ? mainlandRuleLabels[type] : RULE_TYPE_LABELS[type]
 }
 
 const weekdays = computed(() => [...new Set(slots.value.map((s) => s.weekday))].sort((a, b) => a - b))
@@ -75,10 +83,10 @@ async function save() {
       return { weekday, period_no, rule_type }
     })
     await replaceTimeRules(props.teacherId, rules)
-    message.success('時段規則已儲存')
+    message.success(tr('時段規則已儲存', '时段规则已保存'))
     emit('saved')
   } catch (e) {
-    message.error((e as ApiError).detail || '儲存失敗')
+    message.error((e as ApiError).detail || tr('儲存失敗', '保存失败'))
   } finally {
     saving.value = false
   }
@@ -89,21 +97,21 @@ async function save() {
   <n-spin :show="loading">
     <n-space vertical>
       <n-text v-if="noTable" depth="3">
-        此學期尚未建立節次表,請先於「學期與節次表」建立預設節次表後再設定時段規則。
+        {{ tr('此學期尚未建立節次表,請先於「學期與節次表」建立預設節次表後再設定時段規則。', '此学期尚未建立节次表，请先在“学期与节次表”中建立默认节次表，再设置时段规则。') }}
       </n-text>
       <template v-else>
         <n-space size="small" align="center">
-          <n-text depth="3">點格循環:</n-text>
-          <span class="legend" :style="{ background: COLORS.unavailable }">不可排</span>
-          <span class="legend" :style="{ background: COLORS.avoid }">盡量避開</span>
-          <span class="legend" :style="{ background: COLORS.prefer }">偏好</span>
+          <n-text depth="3">{{ tr('點格循環:', '点击单元格依次切换：') }}</n-text>
+          <span class="legend" :style="{ background: COLORS.unavailable }">{{ ruleLabel('unavailable') }}</span>
+          <span class="legend" :style="{ background: COLORS.avoid }">{{ ruleLabel('avoid') }}</span>
+          <span class="legend" :style="{ background: COLORS.prefer }">{{ ruleLabel('prefer') }}</span>
         </n-space>
         <div style="overflow-x: auto">
           <table class="rule-grid">
             <thead>
               <tr>
-                <th>節次</th>
-                <th v-for="wd in weekdays" :key="wd">週{{ WEEKDAY_NAMES[wd - 1] }}</th>
+                <th>{{ tr('節次', '节次') }}</th>
+                <th v-for="wd in weekdays" :key="wd">{{ tr('週', '周') }}{{ WEEKDAY_NAMES[wd - 1] }}</th>
               </tr>
             </thead>
             <tbody>
@@ -117,14 +125,14 @@ async function save() {
                   :style="{ background: ruleMap[`${wd}_${row.period_no}`] ? COLORS[ruleMap[`${wd}_${row.period_no}`]] : '' }"
                   @click="cycle(wd, row.period_no)"
                 >
-                  {{ ruleMap[`${wd}_${row.period_no}`] ? RULE_TYPE_LABELS[ruleMap[`${wd}_${row.period_no}`]] : '' }}
+                  {{ ruleMap[`${wd}_${row.period_no}`] ? ruleLabel(ruleMap[`${wd}_${row.period_no}`]) : '' }}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
         <n-space justify="end">
-          <n-button type="primary" :loading="saving" @click="save">儲存規則</n-button>
+          <n-button type="primary" :loading="saving" @click="save">{{ tr('儲存規則', '保存规则') }}</n-button>
         </n-space>
       </template>
     </n-space>

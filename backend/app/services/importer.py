@@ -33,15 +33,25 @@ HEADER_ROWS = 3  # 欄名 + 說明 + 範例
 ROOM_TYPE_BY_LABEL = {
     "普通教室": RoomType.normal,
     "專科教室": RoomType.special,
+    "专科教室": RoomType.special,
+    "专用教室": RoomType.special,
     "實習工場": RoomType.workshop,
+    "实习工场": RoomType.workshop,
     "戶外": RoomType.outdoor,
+    "户外": RoomType.outdoor,
 }
 TRACK_BY_LABEL = {
     "國小": ClassTrack.elementary,
+    "小学": ClassTrack.elementary,
     "國中": ClassTrack.junior_high,
+    "初中": ClassTrack.junior_high,
     "普通型高中": ClassTrack.senior_high,
+    "普通高中": ClassTrack.senior_high,
     "綜合型高中": ClassTrack.comprehensive,
+    "综合型高中": ClassTrack.comprehensive,
     "技術型高中": ClassTrack.vocational,
+    "职业高中": ClassTrack.vocational,
+    "职高": ClassTrack.vocational,
 }
 
 # 每個實體的範本欄位:(欄名, 說明, 範例)
@@ -97,6 +107,60 @@ TEMPLATE_DEFS: dict[str, dict] = {
     },
 }
 
+# Import remains positional, so the parser accepts both profiles. The workbook
+# shown to a mainland administrator should nevertheless use mainland terminology.
+CN_TEMPLATE_DEFS: dict[str, dict] = {
+    "subjects": {
+        "sheet": "科目",
+        "columns": [
+            ("名称", "必填", "数学"),
+            ("领域/类别", "选填", "数学"),
+            ("所需场地类型", "选填：普通教室/专用教室/实习工场/户外", "普通教室"),
+            ("默认连堂", "选填，数字 1-8，默认 1", "1"),
+        ],
+    },
+    "teachers": {
+        "sheet": "教师",
+        "columns": [
+            ("姓名", "必填", "王小明"),
+            ("身份后四位", "选填，4 位，用于辨识同名教师", "1234"),
+            ("任教科目", "选填，多科以、分隔；需为已建立的科目", "数学、物理"),
+            ("基本课时", "选填，数字", "20"),
+            ("行政职务", "选填", "教务员"),
+            ("行政减课", "选填，数字", "4"),
+            ("外聘", "选填：是/否，默认否", "否"),
+            ("登录账号", "选填，勾选建立账号时使用", "wang001"),
+            ("邮箱", "选填，用于调代课通知", "wang@example.edu.cn"),
+            ("手机号", "选填，用于联系", "13800138000"),
+            ("其他联系方式", "选填", ""),
+        ],
+    },
+    "classes": {
+        "sheet": "班级",
+        "columns": [
+            ("年级", "必填，数字 1-12", "7"),
+            ("班名", "必填", "1班"),
+            ("学制", "必填：初中/小学/普通型高中/综合型高中/职业高中", "初中"),
+            ("专业/班级类别", "选填", ""),
+            ("班主任", "选填，需为已建立的教师姓名", "王小明"),
+            ("人数", "选填，数字", "45"),
+            ("节次表", "选填，空白则使用学期默认节次表", "初中节次表（待编辑）"),
+        ],
+    },
+    "assignments": {
+        "sheet": "配课",
+        "columns": [
+            ("班级", "必填，需为已建立的班名", "1班"),
+            ("科目", "必填，需为已建立的科目", "数学"),
+            ("教师", "必填，多位以、分隔，第一位为主教", "王小明、李老师"),
+            ("每周课时", "必填，数字", "5"),
+            ("连堂长度", "选填，2-4；与连堂次数成对填写", "2"),
+            ("连堂次数", "选填，数字", "1"),
+            ("场地类型", "选填：普通教室/专用教室/实习工场/户外", "专用教室"),
+        ],
+    },
+}
+
 
 @dataclass
 class ImportResult:
@@ -105,7 +169,11 @@ class ImportResult:
 
 
 def build_template(entity: str) -> bytes:
-    cfg = TEMPLATE_DEFS[entity]
+    cfg = (
+        CN_TEMPLATE_DEFS[entity]
+        if settings.school_profile == "cn_mainland"
+        else TEMPLATE_DEFS[entity]
+    )
     wb = Workbook()
     ws = wb.active
     ws.title = cfg["sheet"]

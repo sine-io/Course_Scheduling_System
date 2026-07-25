@@ -28,6 +28,7 @@ export interface SemesterListItem {
   term: number
   label: string
   status: 'preparing' | 'active' | 'archived'
+  readiness: 'draft' | 'ready'
   start_date: string | null
   end_date: string | null
 }
@@ -39,8 +40,9 @@ export interface Semester extends SemesterListItem {
 export interface Template {
   key: string
   name: string
-  minutes_per_period: number
+  minutes_per_period: number | null
   subject_count: number
+  editable: boolean
 }
 
 export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {
@@ -69,7 +71,7 @@ export const createSemester = (body: {
 }) => apiPost<Semester>('/semesters', body)
 export const updateSemester = (
   id: number,
-  body: { status?: string; start_date?: string | null; end_date?: string | null },
+  body: { status?: string; readiness?: string; start_date?: string | null; end_date?: string | null },
 ) => request<Semester>('PATCH', `/semesters/${id}`, body)
 export const deleteSemester = (id: number) => request<void>('DELETE', `/semesters/${id}`)
 

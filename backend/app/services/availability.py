@@ -23,6 +23,8 @@ from app.models.leave import AffectedPeriod, AffectedStatus, LeaveRequest, Leave
 from app.models.period import Period
 from app.models.substitution import Substitution
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
+from app.services import calendar as calendar_service
+from app.services import localization
 from app.services import period_tables as pt_service
 
 
@@ -206,12 +208,28 @@ class Availability:
 
     def conflict_for(self, teacher_id: int, when: date, slot: Interval) -> Conflict | None:
         """該教師在 when 這一天的 slot 時段,有沒有不能來的理由(回第一個)。"""
+        effective = calendar_service.effective_weekday(self.db, self.semester_id, when)
+        if effective is None:
+            return Conflict(
+                "no_instruction",
+                localization.profile_text("該日期依校曆停課", "该日期按校历停课"),
+            )
+        if effective != slot.weekday:
+            return Conflict(
+                "calendar",
+                localization.profile_text("該日期使用其他星期的課表", "该日期使用其他星期的课表"),
+            )
         if self.teaching_at(teacher_id, slot) is not None:
-            return Conflict("teaching", "該時段有自己的課")
+            return Conflict(
+                "teaching", localization.profile_text("該時段有自己的課", "该时段有自己的课")
+            )
         if self._on_leave(teacher_id, when, slot):
-            return Conflict("on_leave", "當天也請假")
+            return Conflict("on_leave", localization.profile_text("當天也請假", "当天也请假"))
         if self._already_covering(teacher_id, when, slot) is not None:
-            return Conflict("already_covering", "已被安排代其他課")
+            return Conflict(
+                "already_covering",
+                localization.profile_text("已被安排代其他課", "已被安排代其他课"),
+            )
         return None
 
     def is_free(self, teacher_id: int, when: date, slot: Interval) -> bool:

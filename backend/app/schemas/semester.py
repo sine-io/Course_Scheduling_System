@@ -5,14 +5,15 @@ from datetime import date, time
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.period import PeriodType
-from app.models.semester import SemesterStatus
+from app.models.semester import SemesterReadiness, SemesterStatus
 
 
 class TemplateOut(BaseModel):
     key: str
     name: str
-    minutes_per_period: int
+    minutes_per_period: int | None
     subject_count: int
+    editable: bool = False
 
 
 # ── 節次 ──────────────────────────────
@@ -65,7 +66,7 @@ class PeriodTableUpdate(BaseModel):
 
 # ── 學期 ──────────────────────────────
 class SemesterCreate(BaseModel):
-    academic_year: int = Field(ge=100, le=200)  # 民國學年度
+    academic_year: int = Field(ge=100, le=2100)  # 依部署檔驗證起始年
     term: int = Field(ge=1, le=2)
     start_date: date | None = None
     end_date: date | None = None
@@ -77,10 +78,11 @@ class SemesterUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     status: SemesterStatus | None = None
+    readiness: SemesterReadiness | None = None
 
 
 class SemesterCopyRequest(BaseModel):
-    academic_year: int = Field(ge=100, le=200)
+    academic_year: int = Field(ge=100, le=2100)
     term: int = Field(ge=1, le=2)
     # 新學期的起訖日:不能沿用來源學期(那是上學期的日期)。少了它,請假展開、今日看板、
     # 代課的「已上過」判定全部失準,而且畫面上看不出哪裡不對(M6-4)。
@@ -108,6 +110,7 @@ class SemesterListItem(BaseModel):
     term: int
     label: str
     status: SemesterStatus
+    readiness: SemesterReadiness
     start_date: date | None = None
     end_date: date | None = None
 

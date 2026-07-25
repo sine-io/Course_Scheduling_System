@@ -40,6 +40,11 @@ const routes = [
         component: () => import('@/views/settings/Semesters.vue'),
       },
       {
+        path: 'settings/calendar',
+        name: 'calendar',
+        component: () => import('@/views/settings/Calendar.vue'),
+      },
+      {
         path: 'basedata',
         name: 'basedata',
         component: () => import('@/views/basedata/BaseData.vue'),

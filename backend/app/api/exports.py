@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.models.user import Role, User
+from app.services import localization
 from app.services import timetable_export as tex
 from app.workers import queue as job_queue
 
@@ -32,7 +33,8 @@ def _download(data: bytes, filename: str, ext: str) -> Response:
     quoted = quote(filename)
     disposition = f"attachment; filename=\"export.{ext}\"; filename*=UTF-8''{quoted}.{ext}"
     return Response(
-        content=data, media_type=_MIME[ext],
+        content=data,
+        media_type=_MIME[ext],
         headers={"Content-Disposition": disposition},
     )
 
@@ -75,7 +77,7 @@ def export_school(
         data = tex.school_workbook(db, semester_id)
     except tex.ExportError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
-    return _download(data, f"全校課表總表_{semester_id}", "xlsx")
+    return _download(data, f"{localization.export_label('school_timetable')}_{semester_id}", "xlsx")
 
 
 @router.get("/export/batch.zip")
@@ -89,4 +91,4 @@ def export_batch(
         data = tex.class_batch_zip(db, semester_id)
     except tex.ExportError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e)) from e
-    return _download(data, f"全校班級課表_{semester_id}", "zip")
+    return _download(data, f"{localization.export_label('class_timetables')}_{semester_id}", "zip")

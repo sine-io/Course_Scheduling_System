@@ -8,15 +8,21 @@ import { publishedSemesters } from '@/api/timetables'
 import { getMyStats, getStats, statsExportUrl } from '@/api/substitutionStats'
 import type { MonthlyReport } from '@/api/substitutionStats'
 import { useAuthStore } from '@/stores/auth'
+import { useAppConfigStore } from '@/stores/appConfig'
 
 const auth = useAuthStore()
+const appConfig = useAppConfigStore()
+const mainland = computed(() => appConfig.isMainland)
+const tr = (tw: string, cn: string) => mainland.value ? cn : tw
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
 
-const WEEKDAYS = ['週日', '週一', '週二', '週三', '週四', '週五', '週六']
+const WEEKDAYS = computed(() => mainland.value
+  ? ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  : ['週日', '週一', '週二', '週三', '週四', '週五', '週六'])
 function withWeekday(iso: string): string {
   const [y, m, d] = iso.split('-').map(Number)
-  return `${iso}(${WEEKDAYS[new Date(y, m - 1, d).getDay()]})`
+  return `${iso}(${WEEKDAYS.value[new Date(y, m - 1, d).getDay()]})`
 }
 
 function monthTs(): number {
@@ -49,7 +55,7 @@ function ym(): { year: number; month: number } {
 }
 const periodLabel = computed(() => {
   const { year, month } = ym()
-  return `${year} 年 ${month} 月`
+  return `${year} ${tr('年', '年')} ${month} ${tr('月', '月')}`
 })
 const totalBillable = computed(() =>
   (report.value?.summaries ?? []).reduce((n, s) => n + s.billable_count, 0))
@@ -93,12 +99,12 @@ onMounted(async () => {
 
 <template>
   <n-space vertical size="large">
-    <h2 style="margin: 0">{{ canManage ? '代課鐘點統計' : '我的代課鐘點' }}</h2>
+    <h2 style="margin: 0">{{ canManage ? tr('代課鐘點統計', '代课课时统计') : tr('我的代課鐘點', '我的代课课时') }}</h2>
 
     <n-space align="center" :wrap="true">
       <n-select
         :value="sid" :options="semesterOptions" style="width: 200px"
-        placeholder="選擇學期" @update:value="onSemesterChange"
+        :placeholder="tr('選擇學期', '选择学期')" @update:value="onSemesterChange"
       />
       <n-date-picker
         v-model:value="monthValue" type="month" style="width: 160px"
@@ -106,34 +112,34 @@ onMounted(async () => {
       />
       <n-select
         v-if="canManage" v-model:value="teacherId" :options="teacherOptions" clearable filterable
-        placeholder="全部教師" style="width: 180px"
+        :placeholder="tr('全部教師', '全部教师')" style="width: 180px"
         data-testid="stats-teacher" @update:value="reload"
       />
       <n-button
         v-if="canManage && report?.details.length" type="primary"
         data-testid="stats-export" @click="onExport"
       >
-        匯出 Excel
+        {{ tr('匯出', '导出') }} Excel
       </n-button>
     </n-space>
 
     <n-space align="center">
       <n-text depth="3">{{ periodLabel }}</n-text>
       <n-tag v-if="report" type="info" data-testid="stats-total">
-        計費合計 {{ totalBillable }} 節
+        {{ tr('計費合計', '计费合计') }} {{ totalBillable }} {{ tr('節', '节') }}
       </n-tag>
     </n-space>
 
     <n-empty
       v-if="report && !report.details.length && !loading"
-      description="本月無代課紀錄" data-testid="stats-empty"
+      :description="tr('本月無代課紀錄', '本月无代课记录')" data-testid="stats-empty"
     />
 
     <template v-else-if="report?.details.length">
       <!-- 彙總:每位教師 -->
       <table v-if="canManage" class="data-table" data-testid="stats-summary">
         <thead>
-          <tr><th>教師</th><th>代課節數</th><th>計費節數</th></tr>
+          <tr><th>{{ tr('教師', '教师') }}</th><th>{{ tr('代課節數', '代课节数') }}</th><th>{{ tr('計費節數', '计费节数') }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="s in report.summaries" :key="s.teacher_id" data-testid="stats-summary-row">
@@ -148,9 +154,9 @@ onMounted(async () => {
       <table class="data-table" data-testid="stats-detail">
         <thead>
           <tr>
-            <th v-if="canManage">教師</th>
-            <th>日期</th><th>節次</th><th>班級</th><th>科目</th>
-            <th>原任教師</th><th>假別</th><th>處置</th><th>計費</th>
+            <th v-if="canManage">{{ tr('教師', '教师') }}</th>
+            <th>{{ tr('日期', '日期') }}</th><th>{{ tr('節次', '节次') }}</th><th>{{ tr('班級', '班级') }}</th><th>{{ tr('科目', '科目') }}</th>
+            <th>{{ tr('原任教師', '原任教师') }}</th><th>{{ tr('假別', '假别') }}</th><th>{{ tr('處置', '处置') }}</th><th>{{ tr('計費', '计费') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -165,7 +171,7 @@ onMounted(async () => {
             <td>{{ d.sub_type_label }}</td>
             <td>
               <n-tag size="tiny" :type="d.counts_toward_hours ? 'success' : 'default'">
-                {{ d.counts_toward_hours ? '計費' : '不計' }}
+                {{ d.counts_toward_hours ? tr('計費', '计费') : tr('不計', '不计') }}
               </n-tag>
             </td>
           </tr>
