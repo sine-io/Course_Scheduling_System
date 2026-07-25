@@ -32,6 +32,7 @@ class RegexRule:
 
 
 LITERAL_RULES = (
+    LiteralRule("旧上游仓库标识", joined("begin", "0808")),
     LiteralRule("已删除的部署模板标识", joined("tw", "_k12")),
     LiteralRule("已删除的部署模板标识", joined("cn", "_mainland")),
     LiteralRule("已删除的语言标识", joined("zh", "-TW")),

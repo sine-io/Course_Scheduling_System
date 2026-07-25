@@ -43,14 +43,14 @@ sudo usermod -aG docker $USER   # 让目前用户免 sudo 用 docker(需重新�
 ```bash
 mkdir scheduling && cd scheduling
 # 下载 docker-compose.yml 与 .env.example(从项目 Releases 页或源代码获取)
-curl -fLO https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
-curl -fL  https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/.env.example -o .env
+curl -fLO https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
+curl -fL  https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/.env.example -o .env
 ```
 
 ### 方式 B:从源代码构建
 
 ```bash
-git clone https://github.com/begin0808/Course_Scheduling_System.git
+git clone https://github.com/sine-io/Course_Scheduling_System.git
 cd Course_Scheduling_System
 cp .env.example .env
 ```

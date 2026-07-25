@@ -68,7 +68,7 @@ Email 为**选配**;未在「系统管理」设置 SMTP 时,只有站内通知(�
 获取最新的 Compose 文件再重启即可,数据不受影响:
 
 ```bash
-curl -fLO https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
+curl -fLO https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
 sudo docker compose up -d
 sudo docker compose ps          # 应看到六个容器，包括 worker 和 worker-ops
 ```

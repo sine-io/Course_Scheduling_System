@@ -107,7 +107,7 @@ jobs:
           context: ./backend
           target: base
           load: true
-          tags: ghcr.io/begin0808/course_scheduling_system-api:ci
+          tags: ghcr.io/sine-io/course_scheduling_system-api:ci
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
       - name: 构建 worker 镜像
@@ -116,7 +116,7 @@ jobs:
           context: ./backend
           target: worker
           load: true
-          tags: ghcr.io/begin0808/course_scheduling_system-worker:ci
+          tags: ghcr.io/sine-io/course_scheduling_system-worker:ci
           cache-from: type=gha,scope=worker
           cache-to: type=gha,scope=worker,mode=max
       - name: 构建 web 镜像
@@ -125,7 +125,7 @@ jobs:
           context: .
           file: Dockerfile.web
           load: true
-          tags: ghcr.io/begin0808/course_scheduling_system-web:ci
+          tags: ghcr.io/sine-io/course_scheduling_system-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
       - name: 准备 .env 并启动全栈

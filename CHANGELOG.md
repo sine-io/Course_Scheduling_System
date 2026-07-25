@@ -21,7 +21,7 @@
 **加固版。** 针对 v1.0.0 发行后的体检结果,补上单校长期使用最会咬到人的几处:排课不再堵住导出、部分排课不再整锅失败、排不下的原因不再消失、班名不再重复。无数据库破坏性变更(迁移自动执行),但 ⚠️ **升级时必须连 `docker-compose.yml` 一起更新**(新增 `worker-ops` 容器)。
 
 官方镜像(amd64 + arm64 双架构)已发布于 GHCR:
-`ghcr.io/begin0808/course_scheduling_system-{api,worker,web}:v1.1.0`
+`ghcr.io/sine-io/course_scheduling_system-{api,worker,web}:v1.1.0`
 
 ### 新增
 - **后台任务分两条队列,排课不再堵住导出**(⚠️ 新增 `worker-ops` 容器):自动排课走 `default` 队列、导出/备份/恢复/发送邮件与定时任务走 `ops` 队列,各由一个 worker 进程监听。**在等自动排课的那几分钟里,按「导出课表」「立即备份」仍然是立即响应的**(先前会排在排课后面直到超时失败)。
@@ -55,7 +55,7 @@
 **首次公开发行。** 完整涵盖一所学校从基础数据构建、教学任务、手动与自动排课、发布,到学期中调课与代课、导出与备份的全流程。
 
 官方镜像(amd64 + arm64 双架构)已发布于 GHCR:
-`ghcr.io/begin0808/course_scheduling_system-{api,worker,web}:v1.0.0`
+`ghcr.io/sine-io/course_scheduling_system-{api,worker,web}:v1.0.0`
 
 ### 安全与发行前强化
 - **SECRET_KEY 防呆**:未设置(仍为默认/示例值)时自动改用随机密钥并警告,避免以公开密钥签署 session cookie。
@@ -64,7 +64,7 @@
 - **后台任务韧性**:排课进行中禁止恢复(避免数据库被无预警覆盖);阻塞式任务超时即取消;每日备份链具自我续期与心跳自愈。
 - **恢复容错收紧**:`pg_restore` 仅容忍跨版本设置参数噪音,其余错误统一视为失败(避免数据缺漏被误报为成功);可忽略警告显示于界面。
 - 新增 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)(第三方组件授权说明,均与 MIT 兼容)。
-- 新增[排课管理员操作手册](https://begin0808.github.io/Course_Scheduling_System/)(11 章网页)。
+- 新增[排课管理员操作手册](https://sine-io.github.io/Course_Scheduling_System/)(11 章网页)。
 
 ### 部署与发行(M5-3)
 - `docker-compose.yml` 同时支持两种部署：从源代码执行 `sudo docker compose up -d` 构建，或执行 `sudo docker compose pull` 拉取官方预建镜像；镜像版本由 `.env` 中的 `IMAGE_TAG` 控制，正式部署建议固定版本。
@@ -103,7 +103,7 @@
 - Docker Compose 五容器骨架与开发热重载设置;账号、bcrypt 登录、session cookie 与 RBAC(admin/director/scheduler/teacher);首次登录强制改密。
 - CI:ruff + mypy + pytest / eslint + vue-tsc + build + vitest / PostgreSQL 迁移验证 / 双架构镜像构建发布。
 
-[Unreleased]: https://github.com/begin0808/Course_Scheduling_System/compare/v1.1.1...HEAD
-[1.1.1]: https://github.com/begin0808/Course_Scheduling_System/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/begin0808/Course_Scheduling_System/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/begin0808/Course_Scheduling_System/releases/tag/v1.0.0
+[Unreleased]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/sine-io/Course_Scheduling_System/releases/tag/v1.0.0

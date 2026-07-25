@@ -22,7 +22,7 @@
 # 1)(建议)先在系统内按「立即备份」
 
 # 2) 更新 docker-compose.yml 到新版(容器组成可能有变动)
-#    https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
+#    https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
 
 # 3) 选择版本:编辑 .env
 #    固定版本(可控):IMAGE_TAG=v1.1.1

@@ -16,7 +16,7 @@ name: scheduling
 
 services:
   web:
-    image: ghcr.io/begin0808/course_scheduling_system-web:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-web:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile.web
@@ -39,7 +39,7 @@ services:
       start_period: 20s
 
   api:
-    image: ghcr.io/begin0808/course_scheduling_system-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-api:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: base
@@ -64,7 +64,7 @@ services:
 
   # 排课 worker:守 default 队列。一次自动排课可占住它好几分钟,这是预期行为。
   worker:
-    image: ghcr.io/begin0808/course_scheduling_system-worker:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-worker:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: worker
@@ -82,7 +82,7 @@ services:
   # 运维 worker:守 ops 队列(导出/备份/恢复/发送邮件),并兼任定时任务调度器。
   # 存在的理由:排课那几分钟,正是排课管理员最常按「导出课表」的时候——不该排在排课后面等。
   worker-ops:
-    image: ghcr.io/begin0808/course_scheduling_system-worker:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-worker:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: worker

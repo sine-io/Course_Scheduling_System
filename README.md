@@ -1,6 +1,6 @@
 # 学校排课、调课与代课管理系统 · Course Scheduling System
 
-[![CI](https://github.com/begin0808/Course_Scheduling_System/actions/workflows/ci.yml/badge.svg)](https://github.com/begin0808/Course_Scheduling_System/actions/workflows/ci.yml)
+[![CI](https://github.com/sine-io/Course_Scheduling_System/actions/workflows/ci.yml/badge.svg)](https://github.com/sine-io/Course_Scheduling_System/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 **开源免费、单校自建、纯 Web 的中小学排课、调课与代课管理系统。** 适用于小学、初中、普通高中、综合高中和中职，以**排课管理员**的日常工作流程为中心设计。
@@ -32,8 +32,8 @@
 
 ```bash
 mkdir scheduling && cd scheduling
-curl -fLO https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/docker-compose.yml
-curl -fL  https://raw.githubusercontent.com/begin0808/Course_Scheduling_System/main/.env.example -o .env
+curl -fLO https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
+curl -fL  https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/.env.example -o .env
 # 编辑 .env:改 ADMIN_PASSWORD、SCHOOL_NAME、SECRET_KEY
 sudo docker compose pull
 sudo docker compose up -d
@@ -42,7 +42,7 @@ sudo docker compose up -d
 ### 从源代码构建
 
 ```bash
-git clone https://github.com/begin0808/Course_Scheduling_System.git
+git clone https://github.com/sine-io/Course_Scheduling_System.git
 cd Course_Scheduling_System
 cp .env.example .env      # 改 ADMIN_PASSWORD、SCHOOL_NAME、SECRET_KEY
 sudo docker compose up -d # 首次会构建镜像，需数分钟
@@ -69,7 +69,7 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 |---|---|
 | ![今日调课与代课](docs/manual-img/08-daily-board.png) | ![课表查询](docs/manual-img/09-timetable-query.png) |
 
-完整逐章图解见[排课管理员操作手册](https://begin0808.github.io/Course_Scheduling_System/)。
+完整逐章图解见[排课管理员操作手册](https://sine-io.github.io/Course_Scheduling_System/)。
 
 ---
 
@@ -77,7 +77,7 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 
 | 文件 | 内容 |
 |---|---|
-| [**排课管理员操作手册**](https://begin0808.github.io/Course_Scheduling_System/)（[源文件](docs/index.html)） | 面向用户：设置向导、教学任务、排课、调课与代课、导出、备份和常见问题 |
+| [**排课管理员操作手册**](https://sine-io.github.io/Course_Scheduling_System/)（[源文件](docs/index.html)） | 面向用户：设置向导、教学任务、排课、调课与代课、导出、备份和常见问题 |
 | [部署手册](docs/deploy/README.md) | 给安装者:安装、升级、备份、域名 HTTPS、FAQ |
 | [架构设计](docs/architecture.md) | 需求、数据模型、排课引擎和技术栈（架构规范来源） |
 | [开发任务卡](docs/tasks.md) | Milestone 与逐卡实现记录 |
@@ -106,7 +106,7 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 
 **请直接从最新版开始安装**(见上方快速开始);`v1.1.1` 是目前建议使用的版本。各版变更见 [CHANGELOG](CHANGELOG.md),开发历程见 [docs/tasks.md](docs/tasks.md)。
 
-系统仍在实际校园环境试用中。如果你是第一批用户，欢迎通过 [Issues](https://github.com/begin0808/Course_Scheduling_System/issues) 报告问题。
+系统仍在实际校园环境试用中。如果你是第一批用户，欢迎通过 [Issues](https://github.com/sine-io/Course_Scheduling_System/issues) 报告问题。
 
 ---
 
@@ -114,8 +114,7 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 
 发现错误、有功能建议,或想分享贵校的使用经验,都非常欢迎:
 
-- **反馈问题 / 提出建议**：在本项目创建 [GitHub Issue](https://github.com/begin0808/Course_Scheduling_System/issues)；附上操作步骤和 `sudo docker compose logs` 片段有助于更快定位问题。
-- **来信联系**:项目开发者 **国立南大附中 李佳恩老师** — [begin0808@gmail.com](mailto:begin0808@gmail.com)
+- **反馈问题 / 提出建议**：在本项目创建 [GitHub Issue](https://github.com/sine-io/Course_Scheduling_System/issues)；附上操作步骤和 `sudo docker compose logs` 片段有助于更快定位问题。
 
 这套系统是为第一线排课管理员而写的,你的实际使用反馈对它的改进最有帮助。
 

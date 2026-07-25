@@ -97,9 +97,9 @@ CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建�
    ```
 
 4. `v*` 标签触发 CI 的 `images` job,构建并推送**双架构(amd64 + arm64)**镜像到 GHCR:
-   - `ghcr.io/begin0808/course_scheduling_system-api`
-   - `ghcr.io/begin0808/course_scheduling_system-worker`
-   - `ghcr.io/begin0808/course_scheduling_system-web`
+   - `ghcr.io/sine-io/course_scheduling_system-api`
+   - `ghcr.io/sine-io/course_scheduling_system-worker`
+   - `ghcr.io/sine-io/course_scheduling_system-web`
 
    每个镜像会推 `:latest`、`:<版本标签>`(如 `v1.0.0`,即 `github.ref_name`)与 `:<commit sha>` 三个 tag。`main` push 仅建 amd64;**版本标签才建双架构**。
 5. 在 GitHub 创建 Release,关联该标签,粘贴该版 CHANGELOG 内容。
