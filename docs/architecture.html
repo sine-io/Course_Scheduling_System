@@ -1,0 +1,1239 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="学校排课、调课与代课管理系统 — 架构规划文件 — 学校排课系统开发文档">
+<title>学校排课、调课与代课管理系统 — 架构规划文件 · 学校排课系统</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>D</text></svg>">
+<!-- 本文件由 scripts/build_docs.py 从 docs/architecture.md 自动生成,请勿直接编辑。 -->
+<style>
+  :root{
+    --bg:#f5f7f7; --surface:#ffffff; --surface-2:#eef2f2; --surface-3:#e3e9e8;
+    --text:#172221; --text-soft:#465654; --text-faint:#6d7c7a;
+    --border:#d9e1e0; --border-strong:#bac8c6;
+    --accent:#0f766e; --accent-2:#0b5f59; --accent-soft:#e4f3f1; --accent-line:#9dcfc9;
+    --good:#397a32; --warn:#9a6700; --warn-soft:#fff3cd; --danger:#b42318; --danger-soft:#fee9e7;
+    --info:#2563a6; --info-soft:#e8f1fb;
+    --font-sans:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",Georgia,serif;
+    --font-mono:"SF Mono","Cascadia Code","Consolas","Courier New",monospace;
+    --maxw:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#111716; --surface:#18201f; --surface-2:#222c2b; --surface-3:#2c3837;
+      --text:#edf4f3; --text-soft:#b1c0be; --text-faint:#879795;
+      --border:#344240; --border-strong:#465856;
+      --accent:#53c7ba; --accent-2:#82ddd3; --accent-soft:#173532; --accent-line:#28615b;
+      --good:#8bcf78; --warn:#e2b34d; --warn-soft:#352a10; --danger:#ff8c82; --danger-soft:#3a1f1d;
+      --info:#8cbcf0; --info-soft:#1b2b3c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#111716; --surface:#18201f; --surface-2:#222c2b; --surface-3:#2c3837;
+    --text:#edf4f3; --text-soft:#b1c0be; --text-faint:#879795;
+    --border:#344240; --border-strong:#465856;
+    --accent:#53c7ba; --accent-2:#82ddd3; --accent-soft:#173532; --accent-line:#28615b;
+    --good:#8bcf78; --warn:#e2b34d; --warn-soft:#352a10; --danger:#ff8c82; --danger-soft:#3a1f1d;
+    --info:#8cbcf0; --info-soft:#1b2b3c;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);
+    line-height:1.78;font-size:16px;-webkit-font-smoothing:antialiased;letter-spacing:0}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+  .shell{display:grid;grid-template-columns:292px minmax(0,1fr);max-width:1240px;margin:0 auto}
+
+  /* ── sidebar ── */
+  .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:26px 18px 40px;
+    border-right:1px solid var(--border)}
+  .brand{display:block;margin-bottom:4px}
+  .brand .mark{font-family:var(--font-serif);font-weight:700;font-size:1.1rem;color:var(--accent);
+    display:block}
+  .brand .sub{font-size:.7rem;color:var(--text-faint);letter-spacing:0}
+  .side .grp{margin-top:20px;font-size:.7rem;letter-spacing:0;color:var(--text-faint);
+    text-transform:uppercase;font-family:var(--font-mono);padding:0 8px 6px}
+  .side nav{display:flex;flex-direction:column;gap:1px}
+  .side nav a{display:block;padding:6px 10px;border-radius:7px;color:var(--text-soft);
+    font-size:.88rem;transition:background .15s,color .15s}
+  .side nav a:hover{background:var(--surface-2);text-decoration:none;color:var(--text)}
+  .side nav a.here{background:var(--accent-soft);color:var(--accent-2);font-weight:600}
+  .side nav a .dev{font-size:.66rem;color:var(--text-faint);font-family:var(--font-mono);
+    margin-left:6px;letter-spacing:0}
+
+  /* 本页目录 */
+  .side .toc{margin-top:6px;display:flex;flex-direction:column;gap:0;
+    border-left:1px solid var(--border);padding-left:2px}
+  .side .toc a{font-size:.82rem;padding:4px 10px;color:var(--text-soft);border-radius:0 6px 6px 0}
+  .side .toc a.lv3{padding-left:24px;font-size:.78rem;color:var(--text-faint)}
+  .side .toc a:hover{background:var(--surface-2);color:var(--text);text-decoration:none}
+  .side .toc a.on{color:var(--accent-2);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+
+  .theme-btn{margin-top:22px;width:100%;padding:8px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text-soft);border-radius:8px;cursor:pointer;
+    font-size:.8rem;font-family:var(--font-sans)}
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ── main ── */
+  main{padding:0 clamp(20px,5vw,60px) 110px;min-width:0}
+  .wrap{max-width:var(--maxw);margin:0 auto}
+
+  .head{padding:52px 0 22px;border-bottom:1px solid var(--border);margin-bottom:8px}
+  .eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:0;text-transform:uppercase;
+    color:var(--accent);margin-bottom:14px}
+  h1{font-family:var(--font-serif);font-weight:700;font-size:2.25rem;line-height:1.22;
+    margin:0;text-wrap:balance;letter-spacing:0}
+  .src{margin-top:16px;font-size:.78rem;color:var(--text-faint)}
+  .src code{font-size:.9em}
+
+  h2{font-family:var(--font-serif);font-size:1.55rem;font-weight:700;margin:52px 0 12px;line-height:1.3;
+    padding-bottom:8px;border-bottom:1px solid var(--border);text-wrap:balance;scroll-margin-top:16px}
+  h3{font-size:1.12rem;font-weight:700;margin:34px 0 10px;letter-spacing:0;
+    padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:16px}
+  h4{font-size:1rem;font-weight:700;margin:24px 0 8px;color:var(--text);scroll-margin-top:16px}
+  p{margin:14px 0}
+  strong{font-weight:700;color:var(--text)}
+  ul,ol{margin:14px 0;padding-left:1.4em}
+  li{margin:6px 0}
+  li > ul,li > ol{margin:6px 0}
+  hr{border:none;border-top:1px solid var(--border);margin:34px 0}
+
+  code{font-family:var(--font-mono);font-size:.86em;background:var(--surface-2);
+    padding:2px 6px;border-radius:5px;color:var(--accent-2);word-break:break-word}
+  pre{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;overflow-x:auto;margin:18px 0;line-height:1.6}
+  pre code{background:none;padding:0;color:var(--text);font-size:.85rem;white-space:pre}
+
+  blockquote{margin:20px 0;padding:12px 18px;border:1px solid var(--border);border-left:4px solid var(--accent);
+    border-radius:6px;background:var(--accent-soft);color:var(--text-soft);font-size:.95rem}
+  blockquote p{margin:6px 0}
+  blockquote strong{color:var(--accent-2)}
+
+  .tw{overflow-x:auto;margin:20px 0;border:1px solid var(--border);border-radius:8px}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  thead th{background:var(--surface-2);font-weight:700;font-size:.8rem;letter-spacing:0;
+    color:var(--text-soft);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+
+  /* tasks.md 的任务卡复选框 */
+  .tick{display:inline-block;width:1.15em;margin-right:.35em;font-family:var(--font-mono);font-weight:700}
+  .tick.done{color:var(--good)}
+  .tick.wip{color:var(--warn)}
+  .tick.todo{color:var(--text-faint)}
+
+  .foot{margin-top:70px;padding-top:24px;border-top:1px solid var(--border);color:var(--text-faint);
+    font-size:.83rem}
+  .foot a{color:var(--text-soft)}
+
+  .navtoggle{display:none}
+  @media (max-width:960px){
+    .shell{grid-template-columns:1fr}
+    .side{position:fixed;z-index:40;top:0;left:0;width:284px;transform:translateX(-100%);
+      transition:transform .22s ease;background:var(--surface);height:100vh}
+    .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.34)}
+    .navtoggle{display:flex;position:fixed;z-index:50;top:14px;left:14px;gap:8px;align-items:center;
+      background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 13px;
+      cursor:pointer;font-family:var(--font-sans);color:var(--text);font-size:.85rem;font-weight:600}
+    .scrim{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.45)}
+    .scrim.on{display:block}
+    .head{padding-top:56px}
+    h1{font-size:1.8rem}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+  @media print{.side,.navtoggle,.scrim{display:none}.shell{grid-template-columns:1fr}
+    main{padding:0}pre,blockquote,.tw{break-inside:avoid}}
+  html{scroll-behavior:smooth}
+</style>
+</head>
+<body>
+<button class="navtoggle" id="navToggle" aria-label="开启目录">☰ 目录</button>
+<div class="scrim" id="scrim"></div>
+<div class="shell">
+  <aside class="side" id="side">
+<a class="brand" href="index.html"><span class="mark">学校排课系统</span><span class="sub">文档</span></a>
+<div class="grp">用户文档</div><nav>
+<a href="index.html">排课管理员操作手册</a>
+</nav>
+<div class="grp">部署与运维手册</div><nav>
+<a class="doc" href="deploy/README.html">总览:从哪开始</a>
+<a class="doc" href="deploy/install.html">安装指南</a>
+<a class="doc" href="deploy/upgrade.html">升级指南</a>
+<a class="doc" href="deploy/backup.html">备份与恢复</a>
+<a class="doc" href="deploy/https.html">域名与 HTTPS</a>
+<a class="doc" href="deploy/faq.html">常见问题 FAQ</a>
+</nav>
+<div class="grp">项目技术文档</div><nav>
+<a class="doc here" href="architecture.html">架构设计<span class="dev">开发用</span></a>
+<a class="doc" href="roadmap.html">路线图<span class="dev">开发用</span></a>
+<a class="doc" href="tasks.html">开发任务卡<span class="dev">开发用</span></a>
+</nav>
+<div class="grp">本页目录</div><div class="toc"><a class="lv2" href="#0-项目定位">0. 项目定位</a><a class="lv2" href="#1-需求规格书">1. 需求规格书</a><a class="lv3" href="#11-用户角色与权限矩阵">1.1 用户角色与权限矩阵</a><a class="lv3" href="#12-user-story-列表">1.2 User Story 列表</a><a class="lv3" href="#13-各学制差异对照表">1.3 各学制差异对照表</a><a class="lv3" href="#14-out-of-scope明确不做">1.4 Out of Scope(明确不做)</a><a class="lv2" href="#2-领域模型与数据库设计">2. 领域模型与数据库设计</a><a class="lv3" href="#21-er-图">2.1 ER 图</a><a class="lv3" href="#22-核心实体定义">2.2 核心实体定义</a><a class="lv3" href="#23-关键设计决策">2.3 关键设计决策</a><a class="lv2" href="#3-排课引擎设计">3. 排课引擎设计</a><a class="lv3" href="#31-问题建模">3.1 问题建模</a><a class="lv3" href="#32-约束条件分类">3.2 约束条件分类</a><a class="lv3" href="#33-选型理由与性能预估">3.3 选型理由与性能预估</a><a class="lv3" href="#34-无解与降级策略">3.4 无解与降级策略</a><a class="lv2" href="#4-技术架构">4. 技术架构</a><a class="lv3" href="#41-技术选型">4.1 技术选型</a><a class="lv3" href="#42-系统架构图">4.2 系统架构图</a><a class="lv3" href="#43-部署方案">4.3 部署方案</a><a class="lv3" href="#44-数据导入导出与整合">4.4 数据导入/导出与整合</a><a class="lv3" href="#45-账号与安全">4.5 账号与安全</a><a class="lv2" href="#5-uiux-规划">5. UI/UX 规划</a><a class="lv3" href="#51-信息架构与关键页面">5.1 信息架构与关键页面</a><a class="lv3" href="#52-设置向导30-分钟上手的关键">5.2 设置向导(30 分钟上手的关键)</a><a class="lv3" href="#53-调课与代课状态机">5.3 调课与代课状态机</a><a class="lv2" href="#6-开发交棒计画">6. 开发交棒计画</a></div>
+    <button class="theme-btn" id="themeBtn">◐ 切换深色 / 浅色</button>
+  </aside>
+  <main>
+    <div class="wrap">
+      <header class="head">
+        <div class="eyebrow">DEVELOPER DOCS</div>
+        <h1>学校排课、调课与代课管理系统 — 架构规划文件</h1>
+        <div class="src">源文件 <code>docs/architecture.md</code> · <a href="https://github.com/sine-io/Course_Scheduling_System/blob/main/docs/architecture.md">在 GitHub 上查看</a></div>
+      </header>
+      <blockquote>
+      <p>版本:v1.0(2026-07-07)
+      状态:规划定稿,交棒开发依据 <a href="tasks.html">tasks.md</a>
+      授权:MIT
+      已定技术栈:<strong>Python 3.12 + FastAPI + OR-Tools CP-SAT + Vue 3 + PostgreSQL 16 + Docker Compose</strong></p>
+      </blockquote>
+      <hr />
+      <h2 id="0-项目定位">0. 项目定位</h2>
+      <p>一套<strong>开源免费、单校自建、纯 Web</strong> 的学校排课、调课与代课管理系统,服务对象为全国小学、初中、普通高中、综合高中、中职的<strong>排课管理员</strong>(主要操作者)、教务主任(审核/查看)与一般教师(查课表、请假、接代课通知)。</p>
+      <p>三大设计原则(所有后续决策的最高准则):</p>
+      <ol>
+      <li><strong>不写死学制</strong>：不同学校的差异统一表达为可配置数据（作息时间表、排课单位和约束），不在业务代码中增加地区或学制分支。公开模板仅保留“初中（空白模板）”，复杂示例由测试夹具构建。</li>
+      <li><strong>一键部署</strong>：执行 <code>sudo docker compose up -d</code> 即可完成安装；备份、恢复和升级均提供界面按钮或单行命令。</li>
+      <li><strong>30 分钟上手</strong>：首次登录进入“设置向导”，逐步完成初始化；所有页面使用全国中小学通用教务用语。</li>
+      </ol>
+      <hr />
+      <h2 id="1-需求规格书">1. 需求规格书</h2>
+      <h3 id="11-用户角色与权限矩阵">1.1 用户角色与权限矩阵</h3>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>功能</th>
+      <th>系统管理员</th>
+      <th>排课管理员</th>
+      <th>教务主任</th>
+      <th>教师</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>系统设置、账号管理、备份恢复</td>
+      <td>✅</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      </tr>
+      <tr>
+      <td>基础数据维护（作息时间表/教师/班级/科目/教室/场地）</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>查看</td>
+      <td>—</td>
+      </tr>
+      <tr>
+      <td>教学任务与排课（手动+自动）</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>查看</td>
+      <td>—</td>
+      </tr>
+      <tr>
+      <td>课表发布</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>查看</td>
+      <td>—</td>
+      </tr>
+      <tr>
+      <td>调课与代课安排</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>查看</td>
+      <td>确认收到代课通知</td>
+      </tr>
+      <tr>
+      <td>请假登记</td>
+      <td>✅</td>
+      <td>✅(可代登)</td>
+      <td>查看</td>
+      <td>✅(登记本人)</td>
+      </tr>
+      <tr>
+      <td>查询课表(按班级、教师或教室/场地)</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅(全校可见或仅本人,可设置)</td>
+      </tr>
+      <tr>
+      <td>课时统计报表</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>✅</td>
+      <td>仅本人</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <ul>
+      <li>角色采 RBAC,一人可兼多角色(例:排课管理员同时是教师)。</li>
+      <li>本版本不增加调课、代课或课表发布审批流，由排课管理员完成业务操作，教务主任查看相关数据。</li>
+      </ul>
+      <h3 id="12-user-story-列表">1.2 User Story 列表</h3>
+      <p>优先级:<strong>MVP</strong>(M0–M5 必做)/ <strong>v2</strong> / <strong>v3</strong>。</p>
+      <h4 id="a-系统构建与基础数据">A. 系统构建与基础数据</h4>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>#</th>
+      <th>User Story</th>
+      <th>优先级</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>A1</td>
+      <td>身为信息排课管理员,我能用一行 Docker 指令架好系统,并用默认管理员账号登录</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A2</td>
+      <td>身为排课管理员，首次登录后通过设置向导：选择初中空白模板 → 设置学年学期 → 填写作息时间表 → 导入教师/班级/科目 → 完成</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A3</td>
+      <td>身为排课管理员,我能自定义作息时间表(每天节数、每节起止时间、午休、早自习、周三下午不排课等)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A4</td>
+      <td>身为排课管理员,我能用 Excel 模板批量导入教师(姓名、任教科目、基本课时、行政职减课)与班级</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A5</td>
+      <td>身为排课管理员,我能维护教室/场地(普通教室、专用教室、实训场地,含容量与适用科目)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A6</td>
+      <td>身为管理员,我能批量创建教师账号并发送启用通知</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A7</td>
+      <td>身为排课管理员,我能开新学期并复制上学期的基础数据(教师/班级/科目/作息时间表)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>A8</td>
+      <td>身为管理员,我能整合教育云端账号(OpenID Connect)登录</td>
+      <td>v2</td>
+      </tr>
+      <tr>
+      <td>A9</td>
+      <td>身为评估系统的用户,我能在全新系统中一键加载虚构的国内初中示例数据(18 个班、49 位教师、252 条教学任务),无需先手工录入大量数据即可体验自动排课；已有学期时禁止加载</td>
+      <td>v1.2</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h4 id="b-教学任务">B. 教学任务</h4>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>#</th>
+      <th>User Story</th>
+      <th>优先级</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>B1</td>
+      <td>身为排课管理员,我能创建教学任务:排课单位 × 科目 × 教师(可多位协同)× 每周节数 × 连堂规则 × 教室/场地需求</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>B2</td>
+      <td>排课管理员可以创建走班分组（多班联排，如高中选修课程），并让分组内课程在同一时段开课</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>B3</td>
+      <td>身为排课管理员,我能看到每位教师的教学任务节数统计,实时对照基本课时(超课时/不足以颜色标示)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>B3-1</td>
+      <td>身为管理员,我能设置允许的超课时上限；教师教学任务总量超过“基本课时减行政减课数再加上限”时，创建、修改与 Excel 导入均被阻止并说明教师姓名。未维护基本课时(<code>base_periods=0</code>)的教师不执行此限制</td>
+      <td>v1.2</td>
+      </tr>
+      <tr>
+      <td>B4</td>
+      <td>身为排课管理员,我能用 Excel 批量导入教学任务数据</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>B5</td>
+      <td>身为排课管理员,我能设置教师「不可排课时段」(兼行政、公假、培训)与「偏好时段」</td>
+      <td>MVP</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h4 id="c-排课">C. 排课</h4>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>#</th>
+      <th>User Story</th>
+      <th>优先级</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>C1</td>
+      <td>身为排课管理员,我能在周课表格子上以拖拽方式手动排课,冲突单元格会实时以红色提示并说明原因</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C2</td>
+      <td>身为排课管理员,我能切换班级、教师、教室/场地三种课表视角</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C3</td>
+      <td>身为排课管理员,我能一键自动排课,看到进度,并在完成后看到软约束达成度报告</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C4</td>
+      <td>身为排课管理员,我能「锁定」部分单元格(如已敲定的任课教师时段),自动排课不得移动</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C5</td>
+      <td>身为排课管理员,自动排课无解时,系统告诉我最可能冲突的约束(如「王老师教学任务 22 节但可排时段仅 20 格」)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C6</td>
+      <td>身为排课管理员,我能保留多个课表草稿版本,比较后选一个发布</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C7</td>
+      <td>身为排课管理员,发布后全校师生可查询课表</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C8</td>
+      <td>身为排课管理员,我能对已发布课表做局部调整并重新发布(保留历次版本)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>C9</td>
+      <td>身为排课管理员,我能设置高级软约束权重(科目分布均匀、教师空堂集中等)</td>
+      <td>v2</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h4 id="d-调课与代课">D. 调课与代课</h4>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>#</th>
+      <th>User Story</th>
+      <th>优先级</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>D1</td>
+      <td>身为教师,我能登记请假(日期范围、请假类型),系统自动列出受影响节次</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D2</td>
+      <td>身为排课管理员,我能替教师代登请假</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D3</td>
+      <td>身为排课管理员,对每一受影响节次,我能选择处理方式:代课/调课(对调)/合班/自习/公假不处理</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D4</td>
+      <td>身为排课管理员,系统推荐可代课教师(该时段空堂 → 同科目优先 → 当日已在校 → 代课课时平衡),一键指派</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D5</td>
+      <td>身为被指派教师,我会收到站内通知与 Email,可一键「确认收到」(实际工作中,排课管理员指派前已口头征得同意,因此<strong>不设置拒绝流程</strong>,2026-07-09 用户确定)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D6</td>
+      <td>身为排课管理员,我能看到每条代课通知的确认状态,对未确认者一键再次提醒</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D7</td>
+      <td>身为排课管理员,我能查看任一日期的「今日调课与代课看板」,打印当日调课与代课通知单</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D8</td>
+      <td>身为排课管理员,我能设置调课(甲乙教师对调两节课),系统验证双方均无冲突</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D9</td>
+      <td>身为排课管理员,月底我能导出代课课时统计表(依教师、依请假类型、依经费来源)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D10</td>
+      <td>身为教师,我能在手机浏览器顺利完成「查课表、请假、确认代课」</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>D11</td>
+      <td>系统可对接校内差勤系统自动带入假单</td>
+      <td>v3</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h4 id="e-报表与整合">E. 报表与整合</h4>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>#</th>
+      <th>User Story</th>
+      <th>优先级</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>E1</td>
+      <td>我能将班级、教师或教室/场地课表导出为 Excel、PDF、PNG(A4 纵向,适合公告栏张贴)</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>E2</td>
+      <td>我能导出全校总课表(大表)Excel</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>E3</td>
+      <td>系统每日自动备份数据库,管理员可一键下载备份文件、一键恢复</td>
+      <td>MVP</td>
+      </tr>
+      <tr>
+      <td>E4</td>
+      <td>系统提供 OpenAPI 文件,供校务系统对接(只读课表 API)</td>
+      <td>v2</td>
+      </tr>
+      <tr>
+      <td>E5</td>
+      <td>通知支持 webhook（供学校自行对接企业微信、钉钉、Teams 等平台）</td>
+      <td>v2</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h3 id="13-各学制差异对照表">1.3 各学制差异对照表</h3>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>差异点</th>
+      <th>小学</th>
+      <th>初中</th>
+      <th>普高</th>
+      <th>综合高中</th>
+      <th>中职</th>
+      <th>系统对应机制</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>节次结构</td>
+      <td>40 分/节,周三下午空</td>
+      <td>45 分/节</td>
+      <td>50 分/节</td>
+      <td>50 分/节</td>
+      <td>50 分/节</td>
+      <td><strong>自定义作息时间表</strong> + 全校性「不排课时段」</td>
+      </tr>
+      <tr>
+      <td>授课型态</td>
+      <td>班主任包班+任课教师</td>
+      <td>学科专任</td>
+      <td>专任+走班选修</td>
+      <td>课程走班</td>
+      <td>专业类别+实习</td>
+      <td><strong>教学任务</strong>均为「排课单位×科目×教师」,包班=同一教师大量教学任务</td>
+      </tr>
+      <tr>
+      <td>走班</td>
+      <td>无</td>
+      <td>少量校本课程</td>
+      <td>选修课程、分层教学</td>
+      <td>选修课程、分层教学</td>
+      <td>部分专业课程</td>
+      <td><strong>走班分组</strong>（多班联排且保持同一时段）</td>
+      </tr>
+      <tr>
+      <td>连堂</td>
+      <td>少</td>
+      <td>少</td>
+      <td>实验课 2 连堂</td>
+      <td>专业课程实习</td>
+      <td>实习课 2–4 连堂</td>
+      <td>教学任务的<strong>连堂规则</strong>(N 连堂 × 每周 M 次)</td>
+      </tr>
+      <tr>
+      <td>教室/场地限制</td>
+      <td>专用教室</td>
+      <td>专用教室</td>
+      <td>实验室</td>
+      <td>实习场所</td>
+      <td><strong>实训场地容量是硬限制</strong></td>
+      <td>教室/场地类型+容量,排入硬约束</td>
+      </tr>
+      <tr>
+      <td>特殊时段</td>
+      <td>班主任时间、晨会</td>
+      <td>周会、社团</td>
+      <td>综合实践活动、校本课程</td>
+      <td>同普通高中</td>
+      <td>同普通高中</td>
+      <td>作息时间表可标记“固定用途时段”，不参与排课</td>
+      </tr>
+      <tr>
+      <td>教师特例</td>
+      <td>任课教师跨多班</td>
+      <td>跨年级</td>
+      <td>兼行政减课</td>
+      <td>跨课程类别</td>
+      <td>企业兼职教师仅特定时段到校</td>
+      <td>教师「<strong>可排课时段</strong>」白名单</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <blockquote>
+      <p>结论：学校差异收敛为四类可配置机制——<strong>自定义作息时间表、弹性排课单位（班级/走班群组）、连堂规则和可排时段限制</strong>。公开模板只提供初中科目参考项和空白作息时间表，不默认设置铃声、周课时或校历。</p>
+      </blockquote>
+      <p><strong>混合学制学校(M0 后补充,2026-07-09)</strong>:学制标签挂在<strong>班级</strong>(<code>class_units.track</code>)而非学校,因此完全中学(初中部+高中部)、普高+综合高中并存(如南大附中)、中职附设普通科、K-12 实验学校等混合型学校天然支持——同一学期内各班级各挂各的学制标签、各用各的作息时间表。配套要求:
+      1. <code>class_units.period_table_id</code>(nullable,空=学期默认作息时间表)——<strong>每个班级必须可指定所属作息时间表</strong>,排课引擎与冲突检查据此获取该班合法时段(任务卡 M1-6);
+      2. 晚间教学班以「另一套作息时间表」处理,不引入新学制标签;
+      3. 创建学期时可选“初中（空白模板）”；其他作息时间表由用户按学校实际情况新增，科目可通过 Excel 导入补充。</p>
+      <h3 id="14-out-of-scope明确不做">1.4 Out of Scope(明确不做)</h3>
+      <ul>
+      <li>❌ 成绩管理、学籍管理、差勤签核(仅接收请假事实,不做假单签核流程)</li>
+      <li>❌ 多校共用 SaaS、跨校数据交换</li>
+      <li>❌ 学生选课系统(选课结果以 Excel 导入走班群组名单;选课过程不在本系统)</li>
+      <li>❌ 原生 App(以响应式 Web 支持手机/平板)</li>
+      <li>❌ 大学/幼儿园学制</li>
+      <li>❌ 薪资计算(只产出代课课时统计表,计薪由人事/会计系统处理)</li>
+      </ul>
+      <hr />
+      <h2 id="2-领域模型与数据库设计">2. 领域模型与数据库设计</h2>
+      <h3 id="21-er-图">2.1 ER 图</h3>
+      <pre><code class="language-mermaid">erDiagram
+          SCHOOL ||--o{ SEMESTER : &quot;有&quot;
+          SEMESTER ||--o{ PERIOD_TABLE : &quot;使用&quot;
+          PERIOD_TABLE ||--o{ PERIOD : &quot;定义节次&quot;
+          SEMESTER ||--o{ TEACHER : &quot;聘任(快照)&quot;
+          SEMESTER ||--o{ CLASS_UNIT : &quot;编制&quot;
+          SEMESTER ||--o{ SUBJECT : &quot;开设&quot;
+          SEMESTER ||--o{ ROOM : &quot;可用教室/场地&quot;
+          SEMESTER ||--o{ SCHEDULING_UNIT : &quot;排课单位&quot;
+          CLASS_UNIT ||--o{ SCHEDULING_UNIT_MEMBER : &quot;参与&quot;
+          SCHEDULING_UNIT ||--o{ SCHEDULING_UNIT_MEMBER : &quot;包含班级&quot;
+          SCHEDULING_UNIT ||--o{ COURSE_ASSIGNMENT : &quot;教学任务&quot;
+          SUBJECT ||--o{ COURSE_ASSIGNMENT : &quot;科目&quot;
+          COURSE_ASSIGNMENT ||--o{ ASSIGNMENT_TEACHER : &quot;授课教师(可协同)&quot;
+          TEACHER ||--o{ ASSIGNMENT_TEACHER : &quot;任教&quot;
+          COURSE_ASSIGNMENT ||--o{ BLOCK_RULE : &quot;连堂规则&quot;
+          TEACHER ||--o{ TEACHER_TIME_RULE : &quot;可排/偏好时段&quot;
+          SEMESTER ||--o{ TIMETABLE : &quot;课表版本&quot;
+          TIMETABLE ||--o{ SCHEDULE_ENTRY : &quot;单元格&quot;
+          COURSE_ASSIGNMENT ||--o{ SCHEDULE_ENTRY : &quot;被排入&quot;
+          ROOM ||--o{ SCHEDULE_ENTRY : &quot;使用教室/场地&quot;
+          TEACHER ||--o{ LEAVE_REQUEST : &quot;请假&quot;
+          LEAVE_REQUEST ||--o{ AFFECTED_PERIOD : &quot;受影响节次&quot;
+          AFFECTED_PERIOD ||--o| SUBSTITUTION : &quot;处理&quot;
+          TEACHER ||--o{ SUBSTITUTION : &quot;代课教师&quot;
+          SUBSTITUTION ||--o{ NOTIFICATION : &quot;通知&quot;
+          USER ||--o{ USER_ROLE : &quot;角色&quot;
+          USER ||--o| TEACHER : &quot;绑定&quot;
+      </code></pre>
+      <h3 id="22-核心实体定义">2.2 核心实体定义</h3>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>实体</th>
+      <th>说明</th>
+      <th>关键字段</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td><code>app_setting</code></td>
+      <td>单校全局设置</td>
+      <td>不隶属学期，以 key/value 存放 SMTP、学校名称和超课时上限；增加普通设置无需新增数据库迁移</td>
+      </tr>
+      <tr>
+      <td><code>semester</code></td>
+      <td>学年学期</td>
+      <td>学年起始年（如 2026）、学期（1/2）、起止日期、状态（准备中/进行中/已归档）</td>
+      </tr>
+      <tr>
+      <td><code>period_table</code></td>
+      <td>作息时间表</td>
+      <td>名称;一学期可有多套(如高中部/初中部各一套)</td>
+      </tr>
+      <tr>
+      <td><code>period</code></td>
+      <td>节次定义</td>
+      <td>星期(1–5,可扩至 6)、第几节、起止时间、类型(一般课/早自习/午休/班主任时间/固定用途)</td>
+      </tr>
+      <tr>
+      <td><code>teacher</code></td>
+      <td>教师</td>
+      <td>姓名、任教科目（多选）、基本课时、行政职务与减课数、是否外聘/企业兼职教师、在职状态、联系信息（电子邮箱、手机号、即时通讯账号，均选填）、绑定账号（<code>user_id</code>，可空外键 → users）</td>
+      </tr>
+      <tr>
+      <td><code>class_unit</code></td>
+      <td>班级</td>
+      <td>年级、班名、学制标签(普/综/技/初中/小学)、专业类别(中职)、班主任、人数；班名在同一学期内唯一(<code>uq(semester_id, name)</code>)</td>
+      </tr>
+      <tr>
+      <td><code>subject</code></td>
+      <td>科目</td>
+      <td>名称、领域/群别、需要教室/场地类型、默认连堂规则</td>
+      </tr>
+      <tr>
+      <td><code>room</code></td>
+      <td>教室/场地</td>
+      <td>名称、类型(普通/专科/实训场地/户外)、容量、适用科目</td>
+      </tr>
+      <tr>
+      <td><code>scheduling_unit</code></td>
+      <td><strong>排课单位</strong>（关键抽象）</td>
+      <td>类型：<code>single</code>（单一班级）/<code>group</code>（走班群组）；走班群组通过 <code>scheduling_unit_member</code> 关联多个班级</td>
+      </tr>
+      <tr>
+      <td><code>course_assignment</code></td>
+      <td><strong>教学任务</strong></td>
+      <td>排课单位、科目、每周节数、教室/场地需求(类型或指定教室/场地)、是否锁定教室/场地</td>
+      </tr>
+      <tr>
+      <td><code>assignment_teacher</code></td>
+      <td>教学任务教师</td>
+      <td>支持协同教学(多教师);主讲/协同标记</td>
+      </tr>
+      <tr>
+      <td><code>block_rule</code></td>
+      <td>连堂规则</td>
+      <td>连堂长度(2–4)、每周次数(如「每周 6 节,其中 3 连堂×2 次」)</td>
+      </tr>
+      <tr>
+      <td><code>teacher_time_rule</code></td>
+      <td>教师时段规则</td>
+      <td>类型:<code>unavailable</code>(硬:不可排)/<code>avoid</code>(软:尽量避开)/<code>prefer</code>(软:偏好);对应星期×节次</td>
+      </tr>
+      <tr>
+      <td><code>timetable</code></td>
+      <td>课表版本</td>
+      <td>状态:<code>draft</code> / <code>published</code> / <code>archived</code>;同学期可多份草稿,仅一份 published；<code>unscheduled</code> JSONB 保存部分排课时未排入原因，未排数量仍从实际课表重新计算</td>
+      </tr>
+      <tr>
+      <td><code>schedule_entry</code></td>
+      <td>课表单元格</td>
+      <td>课表版本、教学任务、星期、节次、<code>span</code>(连堂)、<code>room_id</code>(空=沿用教学任务教室/场地)、<code>locked</code> 标记;<strong>唯一性约束在应用层+求解器验证</strong>(教师/班级/教室/场地同时段不重复)</td>
+      </tr>
+      <tr>
+      <td><code>leave_request</code></td>
+      <td>请假</td>
+      <td>教师、请假类型(公/事/病/婚/丧/产/培训)、起止日期时间、事由、登记人</td>
+      </tr>
+      <tr>
+      <td><code>affected_period</code></td>
+      <td>受影响节次</td>
+      <td>请假展开后的每一节课;状态机见 §5.3</td>
+      </tr>
+      <tr>
+      <td><code>substitution</code></td>
+      <td>调课与代课处理方式</td>
+      <td>类型:<code>substitute</code>(代课)/<code>swap</code>(调课)/<code>merge</code>(合班)/<code>self_study</code>(自习)/<code>cancel</code>(不处理);代课教师、是否计课时、经费来源标记</td>
+      </tr>
+      <tr>
+      <td><code>notification</code></td>
+      <td>通知</td>
+      <td>站内通知和电子邮件（v2 可通过渠道适配器增加 webhook）；类型、收件人、已读状态</td>
+      </tr>
+      <tr>
+      <td><code>user</code> / <code>user_role</code></td>
+      <td>账号与角色</td>
+      <td>本地账号和密码(bcrypt);角色:admin / director(教务主任)/ scheduler(排课管理员)/ teacher</td>
+      </tr>
+      <tr>
+      <td><code>audit_log</code></td>
+      <td>操作轨迹</td>
+      <td>谁在何时改了什么(排课变更、调课与代课指派必记)</td>
+      </tr>
+      <tr>
+      <td><code>constraint_config</code></td>
+      <td>软约束权重</td>
+      <td>每学期一组 key/value；保存 S1–S8 权重和 H10 上限等参数，复制新学期时可选择一并复制</td>
+      </tr>
+      <tr>
+      <td><code>wizard_state</code></td>
+      <td>设置向导进度</td>
+      <td>单条记录：当前步骤、完成状态和正在设置的学期；未完成时路由守卫会引导管理人员返回向导</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h3 id="23-关键设计决策">2.3 关键设计决策</h3>
+      <p><strong>D1|“排课单位”抽象用于支持不同学校的教学组织方式。</strong>
+      排课的最小单位不是「班级」而是 <code>scheduling_unit</code>。单一班级的课 → <code>single</code>;走班选修(3 个班同时段拆成 5 组上不同课)→ 建一个 <code>group</code> 含 3 个班,群组内的多项教学任务由求解器强制排在同一时段。小学包班 = 班主任在自己班的大量 <code>single</code> 教学任务,无需特殊逻辑。</p>
+      <p><strong>D2|作息时间表数据化,绝不写死。</strong>
+      「周三下午不排课」「第 8 节只有高三上」这类规则,全部以 <code>period.type</code> 与教师/班级的时段规则表达。完全中学(初中部+高中部节次时间不同)以多套 <code>period_table</code> 支持——这是市售系统常见痛点,必须在 schema 层解决。</p>
+      <p><strong>D3|学期快照,不做跨学期外键。</strong>
+      教师、班级、教学任务均隶属于 <code>semester</code>。开新学期用「复制向导」拷贝数据,而非共用基础信息——避免「教师去年任教科目变动污染历史课表」的经典错误。跨学年报表用姓名+身份证后四位(可选填)做辅助对应。</p>
+      <p><strong>D4|课表版本化。</strong>
+      <code>timetable</code> 支持多草稿并存与发布快照。学期中调整 = 复制 published 为新 draft → 修改 → 重新发布,旧版自动 archived。调课与代课记录挂在 published 版本上,不受草稿影响。</p>
+      <p><strong>D5|单校 schema,不做 multi-tenant。</strong>
+      无 <code>tenant_id</code>。但所有查询统一以 <code>semester_id</code> 为范围,天然支持多学期并存与历史保存。</p>
+      <p><strong>D6|时区与日期时间政策(M0 检查新增)。</strong>
+      三类时间严格区分,不得混用:
+      1. <strong>系统时间戳</strong>(created_at、locked_until、通知时间)→ <code>DateTime(timezone=True)</code>,统一 UTC aware;
+      2. <strong>领域日期</strong>(学期起止、请假日期、调课与代课日期)→ <code>Date</code>,无时区概念;
+      3. <strong>领域时间</strong>(节次起止时间)→ <code>Time</code>,即学校墙钟时间,无时区概念。
+      “今日/本周”等判定固定按 <code>Asia/Shanghai</code> 换算，不直接使用 UTC 日期。SQLite 测试环境返回 naive datetime 时，统一在读取层规范化为 UTC。</p>
+      <p><strong>D7|跨作息时间表的资源冲突以「墙钟时间重叠」判定(M1 检查新增,2026-07-09)。</strong>
+      教师(H2)与教室/场地(H3)是跨班级共用的资源;当两堂课所属班级使用<strong>不同作息时间表</strong>时,节次号相同不代表时间相同、节次号不同也可能时间重叠(例:小学部 40 分/节的第 4 节 10:30–11:10,与高中部 50 分/节的第 3 节 10:10–11:00 重叠)。因此:
+      1. 冲突检查与 CP-SAT 建模中,教师和教室/场地的「同时段」定义 = <strong>同星期且两节次的起止时间区间重叠</strong>;两班同作息时间表时退化为 <code>period_no</code> 相等(常见情形,零额外成本);
+      2. 实现上预先计算「作息时间表两两之间的节次重叠矩阵」(每学期作息时间表数 ≤ 个位数,矩阵极小),冲突检查仍可达 &lt;100ms;
+      3. 班级不冲堂(H1)只涉及单一班级自身的作息时间表,保持 <code>period_no</code> 判定;
+      4. <strong>走班群组的成员班级必须使用同一作息时间表</strong>(否则 H7「同时段开课」无意义),教学任务创建时验证并拒绝。</p>
+      <p><strong>D8|教室/场地互斥,容量仅作事前警告(M2 检查新增,2026-07-10)。</strong>
+      v1 中同一教室/场地同时段至多一门课——H3 统一以互斥判定,手动冲突检查(M2-3 已如此实现)与 CP-SAT 建模(M3-2)语义一致。<code>room.capacity</code> 不参与求解,仅于 pre-flight 对「班级人数 &gt; 教室/场地容量」提出警告;M3-2 验收的「实训场地容量限制」即以「互斥 + pre-flight 警告」解读。若日后需要让多组学生共用同一教室/场地(大型实训室、体育馆分区),再引入容量型占用,属 schema 不变的引擎扩充。</p>
+      <hr />
+      <h2 id="3-排课引擎设计">3. 排课引擎设计</h2>
+      <h3 id="31-问题建模">3.1 问题建模</h3>
+      <p>排课 = 对每项教学任务的每一节,指派一个(星期×节次)时段与教室/场地,满足所有硬约束并最大化软约束加权分数。这是经典的 <strong>School Timetabling Problem</strong>,采 <strong>Google OR-Tools CP-SAT</strong> 求解。</p>
+      <p><strong>决策变量</strong>:<code>x[a, s] ∈ {0,1}</code> — 教学任务 a 的课排在时段 s;连堂以「起始时段变量 + 区间占用」建模。教室/场地在需求非唯一时另设 <code>r[a, s, room]</code> 变量,占多数的「固定教室/场地」(班级教室)则预先绑定以缩小搜索空间。</p>
+      <h3 id="32-约束条件分类">3.2 约束条件分类</h3>
+      <p><strong>硬约束(违反即无效解)</strong></p>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>编号</th>
+      <th>约束</th>
+      <th>说明</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>H1</td>
+      <td>班级不冲堂</td>
+      <td>同一班级(含所属走班群组)同时段至多一门课</td>
+      </tr>
+      <tr>
+      <td>H2</td>
+      <td>教师不冲堂</td>
+      <td>同一教师同时段至多一门课(含协同)</td>
+      </tr>
+      <tr>
+      <td>H3</td>
+      <td>教室/场地不冲堂</td>
+      <td>同一教室/场地同时段至多一门课;实训场地容量限制</td>
+      </tr>
+      <tr>
+      <td>H4</td>
+      <td>教师不可排时段</td>
+      <td><code>teacher_time_rule.unavailable</code>(兼行政、企业兼职教师到校日、公假)</td>
+      </tr>
+      <tr>
+      <td>H5</td>
+      <td>节次有效性</td>
+      <td>只能排在 <code>period.type = 一般课</code> 的时段</td>
+      </tr>
+      <tr>
+      <td>H6</td>
+      <td>连堂完整性</td>
+      <td>连堂课必须连续且不跨午休</td>
+      </tr>
+      <tr>
+      <td>H7</td>
+      <td>走班同步</td>
+      <td>同一走班群组的所有教学任务排在同一时段</td>
+      </tr>
+      <tr>
+      <td>H8</td>
+      <td>周节数守恒</td>
+      <td>每项教学任务排入的节数 = 设置的每周节数</td>
+      </tr>
+      <tr>
+      <td>H9</td>
+      <td>锁定单元格</td>
+      <td><code>schedule_entry.locked</code> 的单元格不得移动</td>
+      </tr>
+      <tr>
+      <td>H10</td>
+      <td>每日科目上限</td>
+      <td>同班同科目每日至多 N 节(默认 2,可设置)。<strong>只计节长 1 的单元格</strong>——连堂是一次上完的整块,不计入亦不受限;但同一门课剩下的单节仍受限。定义以 <code>app/solver/validator.py</code> 为准</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <p><strong>软约束(加权计分,权重可调)</strong></p>
+      <p>权重存于 <code>constraint_config</code>(key/value,未设置则回退默认);<strong>权重 0 = 关闭该项</strong>。
+      高=8、中=4、低=1。目标函数 = Σ(权重 × 惩罚),CP-SAT 最小化之。</p>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>编号</th>
+      <th>约束</th>
+      <th>默认权重</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>S1</td>
+      <td>教师偏好时段(prefer 加分 / avoid 扣分)</td>
+      <td>中</td>
+      </tr>
+      <tr>
+      <td>S2</td>
+      <td>同班同科目分散于不同日</td>
+      <td>高</td>
+      </tr>
+      <tr>
+      <td>S3</td>
+      <td>教师每日授课节数上限(默认 ≤6)</td>
+      <td>高</td>
+      </tr>
+      <tr>
+      <td>S4</td>
+      <td>教师空堂集中(减少零碎空堂)</td>
+      <td>低</td>
+      </tr>
+      <tr>
+      <td>S5</td>
+      <td>主科(<code>subject.is_major</code>)优先排上午</td>
+      <td>中</td>
+      </tr>
+      <tr>
+      <td>S6</td>
+      <td>教师连续授课 ≤3 节</td>
+      <td>中</td>
+      </tr>
+      <tr>
+      <td>S7</td>
+      <td>班主任的课优先排在自己班的第一节(初中小)</td>
+      <td>低</td>
+      </tr>
+      <tr>
+      <td>S8</td>
+      <td>全校教师偏好达成率的公平性(最差者优先)</td>
+      <td>低</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <p><strong>达成度报告</strong>(<code>app/solver/report.py</code>)与建模不共用代码,从课表本身重新推导,
+      输出「满分/得分/未达成明细」的易懂说明列表。其 <code>total_penalty</code> 与 CP-SAT 的 <code>objective</code>
+      刻意用不同尺度:目标函数以「超出的节数」计价(让 solver 有梯度可下降),
+      报告以「未达成的次数」计价(让排课管理员知道要修几个地方)。</p>
+      <h3 id="33-选型理由与性能预估">3.3 选型理由与性能预估</h3>
+      <ul>
+      <li><strong>CP-SAT 而非基因演算法/模拟退火</strong>:CP-SAT 对硬约束是「证明式满足」,不会生成违反硬约束的解;GA/SA 需自行调参且无法证明无解。CP-SAT 为 anytime solver,随时可中断取当前最佳解,天然支持「进度条+提前结束」。</li>
+      <li><strong>规模预估</strong>:60 班 × 35 节 ≈ 2,100 节课,变量量 10⁵ 级,CP-SAT 在 4 核心机器约 1–5 分钟可得高质量解(业界同类系统实测区间)。默认 timeout 10 分钟,可设置。</li>
+      <li><strong>执行架构</strong>:求解跑在独立 worker 容器(RQ + Redis 队列),不阻塞 Web;进度以 polling API 报告(前端每 2 秒),避免 WebSocket 增加部署复杂度。</li>
+      <li><strong>进度与心跳</strong>:进度存于独立的 Redis hash(<code>solve:{job_id}</code>),不放 RQ job meta——RQ 只知道「执行中/失败」,无法说明「已找到 12 个解、目前目标值 148」。worker 每 2 秒发送一次心跳;API 读到 <code>running</code> 但心跳超过 30 秒未更新时,即判定 worker 已中断,报告明确错误而非让前端永远转圈。</li>
+      <li><strong>提前结束 vs 取消</strong>:<code>stop</code> 停止搜索但<strong>保留当下最佳解</strong>并写出结果草稿;<code>cancel</code> 停止并丢弃。两者都经由 <code>CpSolver.stop_search()</code>,由背景线程触发。</li>
+      </ul>
+      <h3 id="34-无解与降级策略">3.4 无解与降级策略</h3>
+      <pre><code class="language-mermaid">flowchart TD
+          A[启动自动排课] --&gt; B{CP-SAT 求解}
+          B --&gt;|最佳/可行解| C[产出草稿 + 软约束达成报告]
+          B --&gt;|timeout 有部分解| D[返回当前最佳解 + 标示未达标软约束]
+          B --&gt;|无解 或 timeout 且零解| E[冲突定位]
+          E --&gt; P{pre-flight 必要条件}
+          P --&gt;|不成立| G
+          P --&gt;|全数通过| F[&quot;逐项试解:把每个『转得动的旋钮』&lt;br/&gt;关掉重解,看谁是瓶颈&quot;]
+          F --&gt;|纯硬约束有解| J[&quot;其实排得出来,只是软约束最佳化太慢&lt;br/&gt;→ 建议延长时间&quot;]
+          F --&gt;|仍然无解| G[&quot;易懂的说明：&lt;br/&gt;『音乐教室需要安排 30 节课，扣除相关教师的&lt;br/&gt;不可排时段后只剩 28 节可用』&lt;br/&gt;『放宽其中任一条件后即可继续排课』&quot;]
+          G --&gt; H[排课管理员修正数据后重跑&lt;br/&gt;或改用部分排课]
+          H --&gt; I[&quot;部分排课模式:&lt;br/&gt;放宽选定约束为软约束、允许少数教学任务未排入,&lt;br/&gt;排入 95%+ 并列出未排列表&quot;]
+      </code></pre>
+      <ul>
+      <li><strong>冲突定位是本系统的差异化重点</strong>:市售系统只回「排不出来」,本系统要说出<strong>是哪几件事凑在一起、松开哪一个就好了</strong>,并附上具体数字。</li>
+      <li><strong>事前检查(pre-flight check)</strong>:排课前先跑廉价的必要条件检查(每位教师教学任务数 ≤ 可排时段数、每个教室/场地的需求 ≤ 供给、每班周节数 ≤ 可用节次),拦截 80% 的数据错误,不浪费求解时间。必要条件不成立本身就是无解的证明,数字现成,不必启动 solver。</li>
+      </ul>
+      <h4 id="定位方法逐项试解deletion-filter而非-assumption-unsat-core">定位方法:逐项试解(deletion filter),而非 assumption / unsat core</h4>
+      <p>原设计是「每类硬约束挂 assumption literal,无解时取 unsat core」。<strong>实测后放弃</strong>:</p>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>同一份数据(6 班共用一间音乐教室)</th>
+      <th>证明无解耗时</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>纯硬约束模型</td>
+      <td><strong>0.8 秒</strong></td>
+      </tr>
+      <tr>
+      <td>挂上 assumption literal 的模型</td>
+      <td><strong>60 秒仍证不完</strong></td>
+      </tr>
+      </tbody>
+      </table></div>
+      <p>原因是 enforcement literal 让 presolve 认不出「30 节课塞进 28 格」的鸽笼结构;换过三种编码(单条大线性、逐格二元子句、只挂部分约束)都一样。</p>
+      <p>改用<strong>删除法</strong>:把每个旋钮整组关掉、重新建一个干净的模型求解——每次求解都完整 presolve,上例整套定位约 2~3 秒。附带的好处是<strong>每一条结论都被一次真实的求解验证过</strong>:报告说「放宽音乐师1 的不可排时段就排得出来」,是因为真的排出来了。</p>
+      <ul>
+      <li>旋钮 = 排课管理员改得动的东西:<code>H4</code> 某位教师的不可排时段、<code>H3</code> 某个教室/场地的互斥、<code>H10</code> 全校的每日科目上限、<code>H9</code> 锁定的单元格。</li>
+      <li><code>H1</code>(班级同时段一门课)与 <code>H2</code>(教师同时段一门课)<strong>不是旋钮</strong>——没有东西可转,而且真正的成因(某位教师教学任务超过可排格数)pre-flight 已经算得出来。</li>
+      <li><strong>报告的诚实边界</strong>:<code>each</code> 模式的每一项都被一次真实求解验证过(关掉它就排出来了),
+        这个结论恒为真;但<strong>列表是否完整</strong>、以及 <code>joint</code> 的组合是否最小,取决于时间是否用完、
+        以及每次试解是否在时限内判定得出来。任何一次试解回 <code>unknown</code>(没能证明可行、也没能证明无解)
+        都会把 <code>complete</code> 降为 <code>False</code>,<code>structural</code> 的措辞也随之收敛——
+        <strong>绝不宣称一件从未被证明的事</strong>。</li>
+      <li>报告分三种:</li>
+      <li><code>each</code>:每一项各自都是瓶颈,<strong>放宽任何一项即可</strong>(最常见)。</li>
+      <li><code>joint</code>:必须同时处理多项(先累加到可行,再逐一剔除不必要的)。</li>
+      <li><code>structural</code>:旋钮全转到底仍然无解,问题出在教学任务总量,列出最吃紧的班级与教师。</li>
+      <li><strong>超时且零解时也要跑定位</strong>:带着软约束目标函数的 CP-SAT 常常证不出 INFEASIBLE(见上表)。定位以纯硬约束求解,能分辨「不可能」与「只是慢」——这两件事的处理方式完全不同。</li>
+      </ul>
+      <h4 id="部分排课partial-scheduling">部分排课(partial scheduling)</h4>
+      <ul>
+      <li>每个 lesson 多一个「未排入」变量,<code>H8 周节数守恒</code> 因此降级为高权重软约束;模型永远有解(最差是整张表空着)。</li>
+      <li>某项教学任务因硬约束完全没有候选时段时，部分排课会直接将其列入未排列表并保存原因，其余教学任务继续求解；一般模式仍会报告输入错误。</li>
+      <li>未排节数按排课单位统计。走班分组中的多门课程在同一时段开设，少一个时段只计少一课时，不能按组内教学任务重复累加。</li>
+      <li>用户可另外勾选放宽 <code>H4</code> / <code>H9</code> / <code>H10</code>。<strong><code>H1</code> / <code>H2</code> / <code>H3</code> 永远不可放宽</strong>——一位教师不能同时出现在两间教室、一间教室不能同时容纳两班,那是物理,不是政策;放宽只会生成一张没有人能照着上课的课表。</li>
+      <li>惩罚量级刻意拉开:<strong>未排入(10000) ≫ 违反被放宽的约束(1000) ≫ 软约束(1~8)</strong>。
+        这个顺序是<strong>正确性前提</strong>,不是调参偏好:软约束权重因此硬性上限 <code>MAX_WEIGHT = 100</code>
+        (一节课最多参与约 8 个惩罚项 → 软约束总代价 &lt; 800 &lt; 1000)。若允许把某项软约束设到
+        20000,solver 会理性地「丢掉一节课」去换取分散度——那是灾难。勾了「可放宽教师不可排时段」,意思就是「宁可让老师委屈一节,也不要让这门课排不进去」。</li>
+      <li>因此部分排课的 <code>objective</code> 与一般模式<strong>尺度不同</strong>(被未排入的惩罚灌爆),UI 显示「未排 N 节」而不是目标值。</li>
+      <li>pre-flight 的把关也随之放宽:部分排课只挡<strong>结构性</strong>错误(连堂比整段连续节次还长、走班群组节数不一致、没有该类型的教室/场地)——那些连模型都建不起来;「教师教学任务超量」「教室/场地不够」正是部分排课要处理的事。</li>
+      <li>结果统一再交给 <code>validator</code> 检查:除了被明确放宽的那类约束以外,其余硬约束必须一格都没违反。<strong>「少排几节」不可以偷偷变成「排错几节」。</strong></li>
+      </ul>
+      <hr />
+      <h2 id="4-技术架构">4. 技术架构</h2>
+      <h3 id="41-技术选型">4.1 技术选型</h3>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>层</th>
+      <th>选型</th>
+      <th>理由</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>前端</td>
+      <td><strong>Vue 3 + TypeScript + Vite + Pinia + Naive UI</strong></td>
+      <td>生态成熟、学习曲线平缓，Naive UI 组件完整且原生支持 TypeScript</td>
+      </tr>
+      <tr>
+      <td>课表互动</td>
+      <td>自制 CSS Grid 课表 + HTML5 Drag &amp; Drop(封装为 <code>TimetableGrid</code> 组件)</td>
+      <td>课表拖拽逻辑高度领域化,通用组件反而绑手脚</td>
+      </tr>
+      <tr>
+      <td>后端</td>
+      <td><strong>Python 3.12 + FastAPI + SQLAlchemy 2.0 + Alembic + Pydantic v2</strong></td>
+      <td>与 OR-Tools 同语言；FastAPI 自带 OpenAPI 文件(正式部署默认关闭，可通过 <code>API_DOCS_ENABLED</code> 开启)；类型完整</td>
+      </tr>
+      <tr>
+      <td>排课引擎</td>
+      <td><strong>OR-Tools CP-SAT</strong>(独立 <code>solver/</code> 模块,与 Web 解耦)</td>
+      <td>见 §3.3</td>
+      </tr>
+      <tr>
+      <td>任务队列</td>
+      <td><strong>RQ + Redis</strong></td>
+      <td>极简、纯 Python;排课与 Email 发送均走队列</td>
+      </tr>
+      <tr>
+      <td>数据库</td>
+      <td><strong>PostgreSQL 16</strong></td>
+      <td>主流、可靠;pg_dump 备份简单</td>
+      </tr>
+      <tr>
+      <td>反向代理</td>
+      <td><strong>Caddy</strong></td>
+      <td>配置文件 3 行、自动 HTTPS(有域名时)、自动 HTTP 降级(内网 IP 时)——对学校信息组最友善</td>
+      </tr>
+      <tr>
+      <td>导入导出</td>
+      <td>openpyxl(Excel)、WeasyPrint(PDF)、Pillow(PNG)</td>
+      <td>纯 Python、无外部二进位依赖</td>
+      </tr>
+      <tr>
+      <td>测试</td>
+      <td>pytest + Vitest + Playwright</td>
+      <td>各层主流</td>
+      </tr>
+      <tr>
+      <td>CI</td>
+      <td>GitHub Actions</td>
+      <td>开源标配</td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h3 id="42-系统架构图">4.2 系统架构图</h3>
+      <pre><code class="language-mermaid">flowchart LR
+          subgraph 用户
+              U1[排课管理员/教师&lt;br/&gt;浏览器]
+          end
+          subgraph Docker Compose
+              C[Caddy&lt;br/&gt;反向代理+静态文件] --&gt; API[FastAPI&lt;br/&gt;REST API]
+              API --&gt; PG[(PostgreSQL 16)]
+              API --&gt; RD[(Redis)]
+              W[worker&lt;br/&gt;队列 default&lt;br/&gt;OR-Tools 排课] --&gt; RD
+              W --&gt; PG
+              WO[worker-ops&lt;br/&gt;队列 ops&lt;br/&gt;导出·备份·恢复·发送邮件&lt;br/&gt;+ 定时任务调度器] --&gt; RD
+              WO --&gt; PG
+              WO --&gt; V[/备份 Volume/]
+          end
+          U1 --&gt; C
+          WO -.SMTP.-&gt; M[学校/免费 SMTP]
+      </code></pre>
+      <p>前端构建为静态文件由 Caddy 直接服务(不需 Node 容器),共 <strong>6 个容器</strong>:caddy(web)、api、worker、worker-ops、postgres、redis。</p>
+      <p><strong>D9 后台任务分两条队列(M6-2)</strong>:<code>default</code> 只跑自动排课,<code>ops</code> 跑导出/备份/恢复/发送邮件与定时任务,各由一个 worker 进程监听(同一个镜像)。理由是快慢任务不该互相堵住——一次 60 班排课会占住 worker 好几分钟,而那正是排课管理员最常按「导出课表」的时候;单一队列下导出会排在排课后面直到超时失败。排课永远只走 <code>default</code>,故 <code>worker-ops</code> 不加载求解引擎,内存预算低得多(1536MB vs 512MB)。</p>
+      <p>定时任务(每日备份、调度器心跳)统一排进 <code>ops</code>,并由 <code>worker-ops</code> 以 <code>with_scheduler=True</code> 取出执行:排课 worker 一次求解可能持续数分钟,不适合负责需要准时执行的任务。</p>
+      <p><strong>恢复仍须在排课进行中拒绝(409)</strong>——这条在分队列后依然成立,但理由是<strong>数据安全而非排队</strong>:pg_restore 会覆盖整个数据库,而排课 worker 正要把结果写回同一个库。</p>
+      <h3 id="43-部署方案">4.3 部署方案</h3>
+      <p><strong>主线:Docker Compose 自架</strong></p>
+      <pre><code>安装三步骤(deploy/README 首页):
+      1. 安装 Docker(附各操作系统说明)
+      2. 运行 Windows 或 Linux/macOS/NAS 一键安装脚本；也可手工下载 docker-compose.yml 与 .env 示例
+      3. 在浏览器打开 `http://&lt;主机IP&gt;`，进入设置向导或加载虚构示例数据
+      </code></pre>
+      <ul>
+      <li><strong>硬件最低需求</strong>:2 核 4GB RAM、10GB 磁盘(自动排课建议 4 核 8GB;求解期间 CPU 满载属正常,文件需注明)。兼容 x86-64 与 ARM64(NAS/树莓派),CI 产出双架构 image。</li>
+      <li><strong>升级</strong>：执行 <code>sudo docker compose pull &amp;&amp; sudo docker compose up -d</code>，Alembic 会在 API 启动时自动迁移。</li>
+      <li><strong>副线:低成本 VPS</strong>:文件提供「VPS + 域名 + Caddy 自动 HTTPS」指引,适合无校内主机的小校;强调数据在自己 VPS、非 SaaS。</li>
+      </ul>
+      <h3 id="44-数据导入导出与整合">4.4 数据导入/导出与整合</h3>
+      <ul>
+      <li><strong>导入</strong>:系统内置可下载的 Excel 模板(教师、班级、科目、教学任务、走班名单),上传后逐行验证,错误以「第 N 行:原因」列表报告,全对才入库(事务性)。</li>
+      <li><strong>导出</strong>:班级、教师、教室/场地课表 → Excel / PDF(A4 纵向)/ PNG;全校总表 → Excel;代课课时统计 → Excel。</li>
+      <li><strong>校务系统衔接</strong>:v2 提供只读 REST API(API key 授权)+ OpenAPI 文件;不主动做特定厂商对接(各县市校务系统版本混乱,由社群依 API 自行开发)。</li>
+      </ul>
+      <h3 id="45-账号与安全">4.5 账号与安全</h3>
+      <ul>
+      <li><strong>MVP:本地账号</strong>。管理员批量创建教师账号(导入 Excel 时一并生成),首次登录强制改密码;bcrypt 哈希;session cookie(HttpOnly + SameSite,签名式无状态 token)。</li>
+      <li><strong>Session 撤销</strong>:token 内嵌密码指纹(password_hash 尾段),修改密码会使所有现有 session 失效;账号停用(<code>is_active=false</code>)在下一次请求检查时立即生效。</li>
+      <li><strong>登录防暴力</strong>:连续失败 5 次锁定 15 分钟(M0-2 已实现,参数可设置)。</li>
+      <li><strong>教育云端账号(OpenID Connect)评估</strong>:技术上为标准 OIDC,可行;但各县市申请流程不一且需学校行政程序,故列 <strong>v2 选配</strong>,MVP 不阻塞。程序面预留:<code>user.auth_provider</code> 字段 + 登录流程策略界面。</li>
+      <li><strong>个人信息</strong>:教师个人信息最小化搜集(不收身份证全码);<code>audit_log</code> 记录排课与调课与代课变更;HTTPS 由 Caddy 处理。</li>
+      <li><strong>备份恢复</strong>:每日 02:00 自动 pg_dump 至 volume(保留 30 份);管理 UI 提供「立即备份、下载、上传恢复」;文件教学 NAS 调度二次备份。</li>
+      </ul>
+      <hr />
+      <h2 id="5-uiux-规划">5. UI/UX 规划</h2>
+      <h3 id="51-信息架构与关键页面">5.1 信息架构与关键页面</h3>
+      <pre><code>侧边栏(排课管理员/系统管理员视角；教师只显示与本人相关的页面):
+      ├── 仪表盘(今日调课与代课摘要、待办)
+      ├── 课表查询(按班级、教师或教室/场地，含导出)
+      ├── 基础数据
+      │   ├── 学期与作息时间表
+      │   └── 教师/班级/科目/教室/场地(含 Excel 导入)
+      ├── 排课作业
+      │   ├── 教学任务管理
+      │   ├── 排课工作台(拖拽界面)
+      │   ├── 自动排课
+      │   ├── 版本与发布
+      │   └── 课表组件示例
+      ├── 调课与代课(请假登记、处理工作台、今日看板、记录、课时统计、通知确认)
+      └── 系统管理(学校信息、示例数据、超课时上限、备份恢复、SMTP、重新启动向导；限系统管理员)
+
+      独立页面:登录、首次登录强制修改密码、设置向导和 A4 公告打印。
+      </code></pre>
+      <p><strong>排课工作台(核心页面)线框</strong>:</p>
+      <pre><code>┌─────────────────────────────────────────────────────────┐
+      │ 视角:[班级▼ 301班] [教师] [教室/场地]   版本:草稿A ▼  [自动排课] │
+      ├───────────────┬─────────────────────────────────────────┤
+      │ 未排教学任务        │        一   二   三   四   五              │
+      │ ┌───────────┐ │  第1节 ┌──┐┌──┐┌──┐┌──┐┌──┐             │
+      │ │语文 王老师  │ │       │语文││  ││数学││  ││英语│             │
+      │ │剩 2 节     │ │  第2节 │🔒 ││  ││    ││  ││    │             │
+      │ ├───────────┤ │  ...   └──┘└──┘└──┘└──┘└──┘             │
+      │ │数学 李老师  │ │  拖入时:可放=绿框、冲突=红框+浮窗原因         │
+      │ │剩 4 节     │ │  已排格:点击→锁定/移除/查看;🔒=锁定          │
+      │ └───────────┘ │  周三下午单元格反灰(不排课时段)                │
+      └───────────────┴─────────────────────────────────────────┘
+      </code></pre>
+      <ul>
+      <li>拖拽时前端实时调用 <code>POST /check-conflict</code>(&lt;100ms)渲染可放/冲突状态;放下后立即保存(草稿自动存储)。</li>
+      <li>教师视角同一 grid 组件换数据源;冲突检测共用同一后端服务,避免双套逻辑。</li>
+      </ul>
+      <h3 id="52-设置向导30-分钟上手的关键">5.2 设置向导(30 分钟上手的关键)</h3>
+      <p>五个步骤均可返回修改：<strong>① 选择“初中（空白模板）”</strong>（带入科目参考项和空白作息时间表）→ <strong>② 设置学年学期</strong> → <strong>③ 填写作息时间表</strong> → <strong>④ 下载 Excel 模板并导入教师/班级</strong> → <strong>⑤ 完成并进入教学任务管理</strong>。</p>
+      <h3 id="53-调课与代课状态机">5.3 调课与代课状态机</h3>
+      <pre><code class="language-mermaid">stateDiagram-v2
+          [*] --&gt; 已登记: 教师请假/排课管理员代登
+          已登记 --&gt; 待处理: 系统展开受影响节次
+          待处理 --&gt; 已处理: 指派(代课/调课/合班/自习/不处理)
+          已处理 --&gt; 已完成: 上课日结束自动转换
+          已完成 --&gt; [*]: 计入月课时统计
+          待处理 --&gt; 已取消: 销假
+          已处理 --&gt; 已取消: 销假(通知代课教师)
+      </code></pre>
+      <blockquote>
+      <p><strong>2026-07-09 决策：不设置“邀请/婉拒”流程。</strong> 排课管理员在线下确认代课安排后在系统中登记，系统通知用于正式告知。指派立即生效；被指派教师可点击“确认收到”，该状态仅表示已读，不改变课程安排。排课管理员可以在看板查看确认情况并再次提醒。</p>
+      </blockquote>
+      <ul>
+      <li><strong>代课推荐排序</strong>:该时段空堂(硬性)→ 同科目 → 当日已有课(已在校)→ 本月代课课时少者优先(公平)。每位候选人显示排序理由。</li>
+      <li><strong>调课(swap)</strong>:选甲教师受影响节次 ↔ 乙教师某节次,系统验证交换后双方及两班均无冲突才允许。</li>
+      <li><strong>通知渠道（2026-07-09 评估更新）</strong>：以 <code>NotificationChannel</code> 接口分层，MVP 实现<strong>站内通知</strong>（始终可用）与<strong>电子邮件</strong>（配置 SMTP 后启用）；v2 可按需增加企业微信、钉钉或其他平台的 webhook 适配器。手机号和即时通讯账号仅供人工联系，不发送付费短信。收件人解析规则为：<code>teacher.user_id</code> → 站内通知，<code>teacher.email</code> → 电子邮件；教师没有系统账号但填写了电子邮箱时仍可收信。教师端的课表查询、请假和代课确认均需支持手机浏览器。</li>
+      </ul>
+      <hr />
+      <h2 id="6-开发交棒计画">6. 开发交棒计画</h2>
+      <blockquote>
+      <p>完整 Milestone 切分、任务卡(含验收标准)、项目目录结构与测试策略,见 <strong><a href="tasks.html">tasks.md</a></strong>。开发者(Claude Opus 4.8 / Sonnet 5)每次取一张任务卡实现,完成后依卡上验收标准自我验证。</p>
+      </blockquote>
+      <div class="foot">
+        本页由 <code>docs/architecture.md</code> 自动生成(<code>scripts/build_docs.py</code>)。
+        要修改内容请编辑 Markdown 源文件,不要直接编辑这份 HTML。<br>
+        学校排课系统 · MIT 授权 · <a href="https://github.com/sine-io/Course_Scheduling_System">GitHub</a>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn');
+    // 跨页记住深/浅色:读者在部署手册里是会一页一页翻的
+    try{var s=localStorage.getItem('csDocsTheme'); if(s)root.setAttribute('data-theme',s);}catch(e){}
+    function cur(){var d=root.getAttribute('data-theme');if(d)return d;
+      return matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';}
+    btn.addEventListener('click',function(){
+      var next=cur()==='dark'?'light':'dark';
+      root.setAttribute('data-theme',next);
+      try{localStorage.setItem('csDocsTheme',next);}catch(e){}
+    });
+
+    var side=document.getElementById('side'), scrim=document.getElementById('scrim'),
+        tog=document.getElementById('navToggle');
+    function close(){side.classList.remove('open');scrim.classList.remove('on');}
+    tog.addEventListener('click',function(){side.classList.toggle('open');scrim.classList.toggle('on');});
+    scrim.addEventListener('click',close);
+
+    var links=Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    links.forEach(function(a){a.addEventListener('click',function(){
+      if(window.innerWidth<=960)close();});});
+    var secs=links.map(function(a){return document.getElementById(
+      decodeURIComponent(a.getAttribute('href').slice(1)));});
+    function spy(){
+      var best=-1;
+      for(var i=0;i<secs.length;i++){
+        if(secs[i]&&secs[i].getBoundingClientRect().top<=120)best=i;
+      }
+      links.forEach(function(a,i){a.classList.toggle('on',i===best);});
+    }
+    addEventListener('scroll',spy,{passive:true});spy();
+  })();
+</script>
+</body>
+</html>

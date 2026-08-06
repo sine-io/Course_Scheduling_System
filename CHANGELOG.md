@@ -4,7 +4,27 @@
 
 破坏性变更(需人工介入才能升级)以 ⚠️ 标注。
 
-> **新用户请直接安装 v1.1.1**(见 [README](README.md) 快速开始)。v1.0.0 与 v1.1.0 是开发过程中的里程碑版本,尚未对外推广;以下条目保留作为变更记录。
+> **新用户请直接安装 v1.2.0**(见 [README](README.md) 快速开始)。v1.0.0 与 v1.1.0 是开发过程中的里程碑版本,以下条目保留作为变更记录。
+
+## [1.2.0] — 2026-08-02
+
+本版本继续保持单校自建和简体中文定位，没有数据库破坏性变更。升级时请同步更新 `docker-compose.yml` 与 `.env.example`。
+
+### 新增
+- **学校信息可配置**：系统管理员可以在“系统管理 → 学校信息”修改学校名称，课表、导出文件和通知会统一使用新名称。
+- **国内初中示例数据**：向导和系统管理可加载一套虚构的初中示例，包含 18 个班、49 位教师、252 条教学任务和 16 个科目，用于快速体验排课、调课与代课、导出和备份流程。示例数据仅用于演示，不代表政策或真实学校。
+- **教学任务超课时上限**：可按教师设置允许的超课时数量；创建或修改教学任务时会立即提示超出上限的情况，导入数据也会执行同样检查。
+- **Linux/macOS/NAS 与 Windows 一键安装脚本**：支持自定义安装目录、端口、Compose 项目名称、镜像版本和只生成配置文件。检测到同名项目位于其他目录时会先要求确认，避免误接管已有数据库卷。
+- **离线 HTML 文档**：部署和开发 Markdown 文档可由 `scripts/build_docs.py` 生成带目录、主题切换和响应式布局的离线页面；CI 会检查 HTML 是否与 Markdown 同步。
+
+### 修正
+- 修复 Web 镜像跨架构构建时的原生依赖问题，使用锁文件执行 `npm ci`，确保构建可复现。
+- 补充迁移与架构文档同步检查、安装文档和 Windows/Linux 部署说明。
+
+## [1.1.2] — 2026-07-16
+
+### 修正
+- 修复首次登录修改密码页面的重复提交问题，并补充 Playwright 回归测试，避免一次操作发送两次请求。
 
 ## [1.1.1] — 2026-07-14
 
@@ -103,7 +123,9 @@
 - Docker Compose 五容器骨架与开发热重载设置;账号、bcrypt 登录、session cookie 与 RBAC(admin/director/scheduler/teacher);首次登录强制改密。
 - CI:ruff + mypy + pytest / eslint + vue-tsc + build + vitest / PostgreSQL 迁移验证 / 双架构镜像构建发布。
 
-[Unreleased]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.1.2...v1.2.0
+[1.1.2]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/sine-io/Course_Scheduling_System/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sine-io/Course_Scheduling_System/releases/tag/v1.0.0

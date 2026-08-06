@@ -105,6 +105,8 @@ class TeacherLoad(BaseModel):
     target: int          # 应授节数 = base_periods - admin_reduction(不小于 0)
     assigned: int        # 已教学任务节数
     delta: int           # assigned - target(正=超课时,负=不足)
+    max_overtime: int    # 超课时上限；0 表示学校未设限
+    over_limit: bool     # delta 已超过上限
 
 
 class ClassLoad(BaseModel):

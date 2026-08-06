@@ -50,17 +50,12 @@
 
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);
-    line-height:1.75;font-size:16px;-webkit-font-smoothing:antialiased;letter-spacing:.01em}
+    line-height:1.75;font-size:16px;-webkit-font-smoothing:antialiased;letter-spacing:0}
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
   :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 
-  /* faint timetable-grid backdrop */
-  .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5;
-    background-image:linear-gradient(var(--border) 1px,transparent 1px),
-      linear-gradient(90deg,var(--border) 1px,transparent 1px);
-    background-size:44px 44px;-webkit-mask-image:radial-gradient(circle at 30% 0%,#000,transparent 70%);
-    mask-image:radial-gradient(circle at 30% 0%,#000,transparent 70%)}
+  .grid-bg{display:none}
 
   .shell{position:relative;z-index:1;display:grid;grid-template-columns:288px minmax(0,1fr);
     max-width:1200px;margin:0 auto;gap:0}
@@ -70,8 +65,11 @@
     border-right:1px solid var(--border)}
   .brand{display:flex;gap:10px;align-items:baseline;margin-bottom:6px}
   .brand .mark{font-family:var(--font-serif);font-weight:700;font-size:1.15rem;color:var(--accent)}
-  .brand .sub{font-size:.72rem;color:var(--text-faint);letter-spacing:.14em}
+  .brand .sub{font-size:.72rem;color:var(--text-faint);letter-spacing:0}
+  .side .grp{margin-top:22px;font-size:.7rem;letter-spacing:0;color:var(--text-faint);
+    text-transform:uppercase;font-family:var(--font-mono);padding:0 10px 5px}
   .side nav{margin-top:22px;display:flex;flex-direction:column;gap:2px}
+  .side .grp + nav{margin-top:0}
   .side nav a{display:flex;gap:10px;align-items:baseline;padding:7px 10px;border-radius:7px;
     color:var(--text-soft);font-size:.9rem;transition:background .15s,color .15s}
   .side nav a .n{font-family:var(--font-mono);font-size:.72rem;color:var(--text-faint);min-width:1.4em}
@@ -88,10 +86,10 @@
   .wrap{max-width:var(--maxw);margin:0 auto}
 
   .hero{padding:72px 0 40px;border-bottom:1px solid var(--border)}
-  .eyebrow{font-family:var(--font-mono);font-size:.74rem;letter-spacing:.22em;text-transform:uppercase;
+  .eyebrow{font-family:var(--font-mono);font-size:.74rem;letter-spacing:0;text-transform:uppercase;
     color:var(--accent);margin-bottom:18px}
-  h1{font-family:var(--font-serif);font-weight:700;font-size:clamp(2rem,5vw,2.9rem);line-height:1.2;
-    margin:0 0 18px;text-wrap:balance;letter-spacing:.01em}
+  h1{font-family:var(--font-serif);font-weight:700;font-size:2.6rem;line-height:1.2;
+    margin:0 0 18px;text-wrap:balance;letter-spacing:0}
   .lede{font-size:1.12rem;color:var(--text-soft);max-width:60ch;text-wrap:pretty}
   .hero-meta{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
   .chip{font-size:.78rem;padding:5px 11px;border-radius:999px;background:var(--surface-2);
@@ -104,7 +102,7 @@
     line-height:1;font-variant-numeric:tabular-nums}
   :root[data-theme="dark"] .ch-num{color:var(--accent-line)}
   h2{font-family:var(--font-serif);font-size:1.7rem;font-weight:700;margin:0;line-height:1.25;text-wrap:balance}
-  h3{font-size:1.15rem;font-weight:700;margin:38px 0 12px;letter-spacing:.01em;
+  h3{font-size:1.15rem;font-weight:700;margin:38px 0 12px;letter-spacing:0;
     padding-left:12px;border-left:3px solid var(--accent)}
   h4{font-size:1rem;font-weight:700;margin:26px 0 8px;color:var(--text)}
   p{margin:14px 0}
@@ -136,9 +134,9 @@
   ol.steps > li .st-t{font-weight:700}
 
   /* callouts */
-  .cal{border:1px solid var(--border);border-left-width:4px;border-radius:10px;padding:14px 18px;
+  .cal{border:1px solid var(--border);border-left-width:4px;border-radius:8px;padding:14px 18px;
     margin:22px 0;background:var(--surface);font-size:.95rem}
-  .cal .lab{font-weight:700;font-size:.82rem;letter-spacing:.06em;display:flex;gap:8px;align-items:center;
+  .cal .lab{font-weight:700;font-size:.82rem;letter-spacing:0;display:flex;gap:8px;align-items:center;
     margin-bottom:4px}
   .cal p{margin:6px 0}
   .cal.tip{border-left-color:var(--accent);background:var(--accent-soft)}
@@ -155,15 +153,15 @@
   /* screenshot placeholder */
   figure.shot{margin:26px 0}
   figure.shot img{width:100%;height:auto;display:block;border:1px solid var(--border-strong);
-    border-radius:10px;background:var(--surface)}
+    border-radius:8px;background:var(--surface)}
   figure.shot figcaption{margin-top:10px;font-size:.85rem;color:var(--text-soft);text-align:center}
   figure.shot b{color:var(--accent-2)}
 
   /* tables */
-  .tw{overflow-x:auto;margin:20px 0;border:1px solid var(--border);border-radius:10px}
+  .tw{overflow-x:auto;margin:20px 0;border:1px solid var(--border);border-radius:8px}
   table{border-collapse:collapse;width:100%;font-size:.92rem;min-width:440px}
   th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
-  thead th{background:var(--surface-2);font-weight:700;font-size:.82rem;letter-spacing:.03em;
+  thead th{background:var(--surface-2);font-weight:700;font-size:.82rem;letter-spacing:0;
     color:var(--text-soft);white-space:nowrap}
   tbody tr:last-child td{border-bottom:none}
   td b{color:var(--text)}
@@ -181,7 +179,7 @@
     font-weight:600}
   .lifecycle .ar{color:var(--accent);font-weight:700}
 
-  .callbox{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:4px 20px;margin:22px 0}
+  .callbox{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px 20px;margin:22px 0}
 
   hr{border:none;border-top:1px solid var(--border);margin:14px 0}
   .foot{margin-top:80px;padding-top:28px;border-top:1px solid var(--border);color:var(--text-faint);
@@ -195,11 +193,12 @@
       transition:transform .22s ease;background:var(--surface);height:100vh}
     .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.3)}
     .navtoggle{display:flex;position:fixed;z-index:50;top:14px;left:14px;gap:8px;align-items:center;
-      background:var(--surface);border:1px solid var(--border-strong);border-radius:9px;padding:8px 13px;
+      background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 13px;
       cursor:pointer;font-family:var(--font-sans);color:var(--text);font-size:.86rem;font-weight:600}
     .scrim{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.4)}
     .scrim.on{display:block}
     .hero{padding-top:58px}
+    h1{font-size:2rem}
   }
   @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
   html{scroll-behavior:smooth}
@@ -215,7 +214,8 @@
     <div class="brand">
       <span class="mark">学校排课、调课与代课管理系统</span>
     </div>
-    <div class="brand"><span class="sub">排课管理员操作手册 · v1.1</span></div>
+    <div class="brand"><span class="sub">排课管理员操作手册 · v1.2</span></div>
+    <div class="grp">本手册章节</div>
     <nav id="toc">
       <a href="#intro"><span class="n">00</span>如何使用本手册</a>
       <a href="#value"><span class="n">01</span>这套系统能帮你做什么</a>
@@ -229,6 +229,15 @@
       <a href="#export"><span class="n">09</span>导出课表</a>
       <a href="#admin"><span class="n">10</span>系统管理</a>
       <a href="#faq"><span class="n">11</span>常见场景 FAQ</a>
+    </nav>
+    <div class="grp">部署与运维手册</div>
+    <nav>
+      <a href="deploy/README.html">总览:从哪开始</a>
+      <a href="deploy/install.html">安装指南</a>
+      <a href="deploy/upgrade.html">升级指南</a>
+      <a href="deploy/backup.html">备份与恢复</a>
+      <a href="deploy/https.html">域名与 HTTPS</a>
+      <a href="deploy/faq.html">常见问题 FAQ</a>
     </nav>
     <button class="theme-btn" id="themeBtn">◐ 切换深色 / 浅色</button>
   </aside>
@@ -253,6 +262,7 @@
       <section class="ch" id="intro-body">
         <div class="ch-head"><span class="ch-num">00</span><h2>如何使用本手册</h2></div>
         <p>这本手册照着「一个学期的实际流程」编排:先把学校的基础数据建好,再排课、发布,学期中再处理请假与调课与代课,最后导出与备份。<strong>第一次使用建议从第 3 章「设置向导」开始照做</strong>;之后遇到特定工作,再从左侧目录跳到对应章节。</p>
+        <p><strong>只想先体验系统时</strong>，可在设置向导第一步加载虚构的国内初中示例数据。系统会创建 18 个班、49 位教师、16 个科目和 252 条教学任务，加载后可直接运行自动排课并继续体验调课与代课、导出和备份。示例数据不代表任何学校或政策，正式使用前请改用本校真实数据。</p>
 
         <h3>系统里的四种角色</h3>
         <p>登录后右上角会显示你的角色。不同角色看得到的功能不同——本手册主要写给<span class="rb sch">排课管理员</span>。</p>
@@ -274,12 +284,12 @@
             <tr><td><b>基础数据</b></td><td>学期与作息时间表 · 教师/班级/科目/教室/场地</td></tr>
             <tr><td><b>排课作业</b></td><td>教学任务管理 · 排课工作台 · 自动排课 · 版本与发布 · 课表组件(示范)</td></tr>
             <tr><td><b>调课与代课</b></td><td>请假登记 · 调课与代课处理 · 今日调课与代课 · 调课与代课记录 · 代课课时统计 · 通知确认看板</td></tr>
-            <tr><td><b>系统管理</b></td><td>备份恢复 · SMTP · 重新启动向导(限系统管理员)</td></tr>
+            <tr><td><b>系统管理</b></td><td>学校信息 · 示例数据 · 排课设置 · 备份恢复 · SMTP · 重新启动向导(限系统管理员)</td></tr>
           </tbody>
         </table></div>
 
         <div class="cal note"><div class="lab">📖 图示说明</div>
-          <p><strong>提示</strong>=让你更省力的小技巧;<strong>注意</strong>=容易忽略但重要;<strong>小心</strong>=做错会有后果的操作;<strong>场景</strong>=模拟一个真实情况带你操作。书中截图均取自实际运行的系统(示范学校:初中 3 班、8 位教师),你的页面会因学校数据而异。</p>
+          <p><strong>提示</strong>=让你更省力的小技巧;<strong>注意</strong>=容易忽略但重要;<strong>小心</strong>=做错会有后果的操作;<strong>场景</strong>=模拟一个真实情况带你操作。书中截图取自一个 3 班、8 位教师的小型测试学期；加载内置示例数据后内容会更多，但操作方式相同。</p>
         </div>
       </section>
 
@@ -306,7 +316,7 @@
             <tr><td>排课引擎</td><td>内置自动排课(可处理连堂、走班、协同教学、教师不可排时段等)</td></tr>
           </tbody>
         </table></div>
-        <div class="cal tip"><div class="lab">💡 提示</div><p>不确定是否适用？可以先用“初中（空白模板）”和少量测试数据，跑完“排课 → 发布 → 请假 → 代课 → 月结”流程后再正式录入数据。</p></div>
+        <div class="cal tip"><div class="lab">💡 提示</div><p>不确定是否适用？可在全新系统中加载虚构示例数据，跑完“排课 → 发布 → 请假 → 代课 → 月结”流程后，再使用本校真实数据正式构建。</p></div>
       </section>
 
       <!-- 02 -->
@@ -389,6 +399,7 @@
         </table></div>
 
         <div class="cal tip"><div class="lab">💡 提示:实时课时统计</div><p>页面右侧会实时显示每位教师的「教学任务节数 vs 基本课时」。超课时会显示为红色(如安排 22 节、基本课时 20 节 → 显示 +2),便于及时发现工作量不均。</p></div>
+        <div class="cal note"><div class="lab">📌 超课时上限</div><p>系统管理员可在 <span class="path"><b>系统管理</b><i>›</i><b>排课设置</b></span> 设置允许的超课时数。教学任务超过教师“基本课时减行政减课数再加上限”时会被阻止；未填写基本课时的教师不参与此项校验。</p></div>
         <div class="cal warn"><div class="lab">⚠️ 注意</div><p>若某班每周教学任务总节数<strong>超过可排的节次数</strong>,系统会警告(该班无法完成排课)。走班群组的成员班级若<strong>作息时间表不一致</strong>,系统会拒绝创建。</p></div>
         <div class="cal tip"><div class="lab">💡 大量教学任务</div><p>整学期教学任务很多时,用 Excel <strong>批量导入教学任务</strong>,比逐项点快得多。</p></div>
       </section>
@@ -541,6 +552,16 @@
         <div class="ch-head"><span class="ch-num">10</span><h2>系统管理</h2></div>
         <p><span class="path"><b>系统管理</b></span>(限<span class="rb admin">系统管理员</span>)</p>
 
+        <h3>学校信息</h3>
+        <p>学校名称会显示在系统界面、导出的课表、代课通知邮件和 A4 公告中，保存后立即生效。安装时 `.env` 的 <code>SCHOOL_NAME</code> 只提供首次启动值，之后以系统管理中保存的名称为准。</p>
+
+        <h3>示例数据(仅全新系统显示)</h3>
+        <p>系统没有任何学期时，可加载虚构的“海州市启明实验初级中学”：18 个班、49 位教师、16 个科目、252 条教学任务和每周 594 课时。加载后会完成设置向导，可直接运行自动排课。</p>
+        <div class="cal warn"><div class="lab">⚠️ 注意</div><p>示例数据仅用于功能演示，不代表政策标准或真实学校。系统已有任何学期后入口会自动隐藏，接口也会拒绝加载，避免与正式数据混用。</p></div>
+
+        <h3>排课设置</h3>
+        <p><strong>超课时上限</strong>表示教师教学任务最多可超过其应授课时多少课时，默认 8，设置为 0 表示不限制。上限按“基本课时减行政减课数再加允许超课时”计算；基本课时为 0 表示尚未维护，不执行此项限制。</p>
+
         <h3>数据备份与恢复</h3>
         <ul>
           <li><strong>每日自动备份</strong>——系统每天凌晨自动备份,默认保留最新 30 份、自动轮替。</li>
@@ -591,8 +612,8 @@
         </div>
 
         <div class="foot">
-          <p>学校排课、调课与代课管理系统 · 排课管理员操作手册 · v1.1 ·  开源免费(MIT)· 单校自建</p>
-          <p>本手册随系统版本更新;截图对应系统 v1.1.1。</p>
+          <p>学校排课、调课与代课管理系统 · 排课管理员操作手册 · v1.2 ·  开源免费(MIT)· 单校自建</p>
+          <p>本手册文字内容已更新至 v1.2.0；截图取自小型测试学期，数据规模可能与示例数据不同。</p>
         </div>
       </section>
 
@@ -602,12 +623,15 @@
 
 <script>
   (function(){
-    // theme toggle
+    // 与离线部署手册共用主题设置，翻页后保持一致。
     var root=document.documentElement, btn=document.getElementById('themeBtn');
+    try{var s=localStorage.getItem('csDocsTheme'); if(s)root.setAttribute('data-theme',s);}catch(e){}
     function cur(){var d=root.getAttribute('data-theme');if(d)return d;
       return matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';}
     btn.addEventListener('click',function(){
-      root.setAttribute('data-theme', cur()==='dark'?'light':'dark');});
+      var next=cur()==='dark'?'light':'dark';
+      root.setAttribute('data-theme',next);
+      try{localStorage.setItem('csDocsTheme',next);}catch(e){}});
 
     // mobile nav
     var side=document.getElementById('side'), scrim=document.getElementById('scrim'),

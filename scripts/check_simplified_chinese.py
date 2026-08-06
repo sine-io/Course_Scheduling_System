@@ -284,7 +284,13 @@ def read_text(path: Path) -> str | None:
         return None
 
 
-def check_line(relative: Path, line_number: int, line: str) -> list[str]:
+def check_line(
+    relative: Path,
+    line_number: int,
+    line: str,
+    *,
+    skip_windows_docker: bool = False,
+) -> list[str]:
     findings: list[str] = []
     for rule in LITERAL_RULES:
         start = 0
@@ -294,6 +300,10 @@ def check_line(relative: Path, line_number: int, line: str) -> list[str]:
             )
             start = column + max(1, len(rule.value))
     for rule in REGEX_RULES:
+        # Windows Docker Desktop 没有 sudo；PowerShell 安装脚本使用原生 docker
+        # 命令，仍然会检查其余简体中文和术语规则。
+        if skip_windows_docker and rule.name == "Docker 命令缺少 sudo":
+            continue
         for match in rule.pattern.finditer(line):
             findings.append(
                 f"{relative}:{line_number}:{match.start() + 1}: "
@@ -314,8 +324,16 @@ def main() -> int:
         if text is None:
             continue
         relative = path.relative_to(ROOT)
+        skip_windows_docker = relative.suffix.lower() == ".ps1"
         for line_number, line in enumerate(text.splitlines(), 1):
-            findings.extend(check_line(relative, line_number, line))
+            findings.extend(
+                check_line(
+                    relative,
+                    line_number,
+                    line,
+                    skip_windows_docker=skip_windows_docker,
+                )
+            )
 
     if findings:
         print("仓库中文规范检查失败：", file=sys.stderr)

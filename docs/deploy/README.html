@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="部署与运维手册 — 学校排课系统部署与运维文档">
+<title>部署与运维手册 · 学校排课系统</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>M</text></svg>">
+<!-- 本文件由 scripts/build_docs.py 从 docs/deploy/README.md 自动生成,请勿直接编辑。 -->
+<style>
+  :root{
+    --bg:#f5f7f7; --surface:#ffffff; --surface-2:#eef2f2; --surface-3:#e3e9e8;
+    --text:#172221; --text-soft:#465654; --text-faint:#6d7c7a;
+    --border:#d9e1e0; --border-strong:#bac8c6;
+    --accent:#0f766e; --accent-2:#0b5f59; --accent-soft:#e4f3f1; --accent-line:#9dcfc9;
+    --good:#397a32; --warn:#9a6700; --warn-soft:#fff3cd; --danger:#b42318; --danger-soft:#fee9e7;
+    --info:#2563a6; --info-soft:#e8f1fb;
+    --font-sans:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",Georgia,serif;
+    --font-mono:"SF Mono","Cascadia Code","Consolas","Courier New",monospace;
+    --maxw:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#111716; --surface:#18201f; --surface-2:#222c2b; --surface-3:#2c3837;
+      --text:#edf4f3; --text-soft:#b1c0be; --text-faint:#879795;
+      --border:#344240; --border-strong:#465856;
+      --accent:#53c7ba; --accent-2:#82ddd3; --accent-soft:#173532; --accent-line:#28615b;
+      --good:#8bcf78; --warn:#e2b34d; --warn-soft:#352a10; --danger:#ff8c82; --danger-soft:#3a1f1d;
+      --info:#8cbcf0; --info-soft:#1b2b3c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#111716; --surface:#18201f; --surface-2:#222c2b; --surface-3:#2c3837;
+    --text:#edf4f3; --text-soft:#b1c0be; --text-faint:#879795;
+    --border:#344240; --border-strong:#465856;
+    --accent:#53c7ba; --accent-2:#82ddd3; --accent-soft:#173532; --accent-line:#28615b;
+    --good:#8bcf78; --warn:#e2b34d; --warn-soft:#352a10; --danger:#ff8c82; --danger-soft:#3a1f1d;
+    --info:#8cbcf0; --info-soft:#1b2b3c;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);
+    line-height:1.78;font-size:16px;-webkit-font-smoothing:antialiased;letter-spacing:0}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+  .shell{display:grid;grid-template-columns:292px minmax(0,1fr);max-width:1240px;margin:0 auto}
+
+  /* ── sidebar ── */
+  .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:26px 18px 40px;
+    border-right:1px solid var(--border)}
+  .brand{display:block;margin-bottom:4px}
+  .brand .mark{font-family:var(--font-serif);font-weight:700;font-size:1.1rem;color:var(--accent);
+    display:block}
+  .brand .sub{font-size:.7rem;color:var(--text-faint);letter-spacing:0}
+  .side .grp{margin-top:20px;font-size:.7rem;letter-spacing:0;color:var(--text-faint);
+    text-transform:uppercase;font-family:var(--font-mono);padding:0 8px 6px}
+  .side nav{display:flex;flex-direction:column;gap:1px}
+  .side nav a{display:block;padding:6px 10px;border-radius:7px;color:var(--text-soft);
+    font-size:.88rem;transition:background .15s,color .15s}
+  .side nav a:hover{background:var(--surface-2);text-decoration:none;color:var(--text)}
+  .side nav a.here{background:var(--accent-soft);color:var(--accent-2);font-weight:600}
+  .side nav a .dev{font-size:.66rem;color:var(--text-faint);font-family:var(--font-mono);
+    margin-left:6px;letter-spacing:0}
+
+  /* 本页目录 */
+  .side .toc{margin-top:6px;display:flex;flex-direction:column;gap:0;
+    border-left:1px solid var(--border);padding-left:2px}
+  .side .toc a{font-size:.82rem;padding:4px 10px;color:var(--text-soft);border-radius:0 6px 6px 0}
+  .side .toc a.lv3{padding-left:24px;font-size:.78rem;color:var(--text-faint)}
+  .side .toc a:hover{background:var(--surface-2);color:var(--text);text-decoration:none}
+  .side .toc a.on{color:var(--accent-2);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+
+  .theme-btn{margin-top:22px;width:100%;padding:8px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text-soft);border-radius:8px;cursor:pointer;
+    font-size:.8rem;font-family:var(--font-sans)}
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ── main ── */
+  main{padding:0 clamp(20px,5vw,60px) 110px;min-width:0}
+  .wrap{max-width:var(--maxw);margin:0 auto}
+
+  .head{padding:52px 0 22px;border-bottom:1px solid var(--border);margin-bottom:8px}
+  .eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:0;text-transform:uppercase;
+    color:var(--accent);margin-bottom:14px}
+  h1{font-family:var(--font-serif);font-weight:700;font-size:2.25rem;line-height:1.22;
+    margin:0;text-wrap:balance;letter-spacing:0}
+  .src{margin-top:16px;font-size:.78rem;color:var(--text-faint)}
+  .src code{font-size:.9em}
+
+  h2{font-family:var(--font-serif);font-size:1.55rem;font-weight:700;margin:52px 0 12px;line-height:1.3;
+    padding-bottom:8px;border-bottom:1px solid var(--border);text-wrap:balance;scroll-margin-top:16px}
+  h3{font-size:1.12rem;font-weight:700;margin:34px 0 10px;letter-spacing:0;
+    padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:16px}
+  h4{font-size:1rem;font-weight:700;margin:24px 0 8px;color:var(--text);scroll-margin-top:16px}
+  p{margin:14px 0}
+  strong{font-weight:700;color:var(--text)}
+  ul,ol{margin:14px 0;padding-left:1.4em}
+  li{margin:6px 0}
+  li > ul,li > ol{margin:6px 0}
+  hr{border:none;border-top:1px solid var(--border);margin:34px 0}
+
+  code{font-family:var(--font-mono);font-size:.86em;background:var(--surface-2);
+    padding:2px 6px;border-radius:5px;color:var(--accent-2);word-break:break-word}
+  pre{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;overflow-x:auto;margin:18px 0;line-height:1.6}
+  pre code{background:none;padding:0;color:var(--text);font-size:.85rem;white-space:pre}
+
+  blockquote{margin:20px 0;padding:12px 18px;border:1px solid var(--border);border-left:4px solid var(--accent);
+    border-radius:6px;background:var(--accent-soft);color:var(--text-soft);font-size:.95rem}
+  blockquote p{margin:6px 0}
+  blockquote strong{color:var(--accent-2)}
+
+  .tw{overflow-x:auto;margin:20px 0;border:1px solid var(--border);border-radius:8px}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  thead th{background:var(--surface-2);font-weight:700;font-size:.8rem;letter-spacing:0;
+    color:var(--text-soft);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+
+  /* tasks.md 的任务卡复选框 */
+  .tick{display:inline-block;width:1.15em;margin-right:.35em;font-family:var(--font-mono);font-weight:700}
+  .tick.done{color:var(--good)}
+  .tick.wip{color:var(--warn)}
+  .tick.todo{color:var(--text-faint)}
+
+  .foot{margin-top:70px;padding-top:24px;border-top:1px solid var(--border);color:var(--text-faint);
+    font-size:.83rem}
+  .foot a{color:var(--text-soft)}
+
+  .navtoggle{display:none}
+  @media (max-width:960px){
+    .shell{grid-template-columns:1fr}
+    .side{position:fixed;z-index:40;top:0;left:0;width:284px;transform:translateX(-100%);
+      transition:transform .22s ease;background:var(--surface);height:100vh}
+    .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.34)}
+    .navtoggle{display:flex;position:fixed;z-index:50;top:14px;left:14px;gap:8px;align-items:center;
+      background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 13px;
+      cursor:pointer;font-family:var(--font-sans);color:var(--text);font-size:.85rem;font-weight:600}
+    .scrim{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.45)}
+    .scrim.on{display:block}
+    .head{padding-top:56px}
+    h1{font-size:1.8rem}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+  @media print{.side,.navtoggle,.scrim{display:none}.shell{grid-template-columns:1fr}
+    main{padding:0}pre,blockquote,.tw{break-inside:avoid}}
+  html{scroll-behavior:smooth}
+</style>
+</head>
+<body>
+<button class="navtoggle" id="navToggle" aria-label="开启目录">☰ 目录</button>
+<div class="scrim" id="scrim"></div>
+<div class="shell">
+  <aside class="side" id="side">
+<a class="brand" href="../index.html"><span class="mark">学校排课系统</span><span class="sub">文档</span></a>
+<div class="grp">用户文档</div><nav>
+<a href="../index.html">排课管理员操作手册</a>
+</nav>
+<div class="grp">部署与运维手册</div><nav>
+<a class="doc here" href="README.html">总览:从哪开始</a>
+<a class="doc" href="install.html">安装指南</a>
+<a class="doc" href="upgrade.html">升级指南</a>
+<a class="doc" href="backup.html">备份与恢复</a>
+<a class="doc" href="https.html">域名与 HTTPS</a>
+<a class="doc" href="faq.html">常见问题 FAQ</a>
+</nav>
+<div class="grp">项目技术文档</div><nav>
+<a class="doc" href="../architecture.html">架构设计<span class="dev">开发用</span></a>
+<a class="doc" href="../roadmap.html">路线图<span class="dev">开发用</span></a>
+<a class="doc" href="../tasks.html">开发任务卡<span class="dev">开发用</span></a>
+</nav>
+<div class="grp">本页目录</div><div class="toc"><a class="lv2" href="#我该从哪里开始">我该从哪里开始?</a><a class="lv2" href="#三分钟理解这套系统怎么跑">三分钟理解这套系统怎么跑</a><a class="lv2" href="#两种部署方式">两种部署方式</a><a class="lv2" href="#名词对照">名词对照</a></div>
+    <button class="theme-btn" id="themeBtn">◐ 切换深色 / 浅色</button>
+  </aside>
+  <main>
+    <div class="wrap">
+      <header class="head">
+        <div class="eyebrow">DEPLOYMENT GUIDE</div>
+        <h1>部署与运维手册</h1>
+        <div class="src">源文件 <code>docs/deploy/README.md</code> · <a href="https://github.com/sine-io/Course_Scheduling_System/blob/main/docs/deploy/README.md">在 GitHub 上查看</a></div>
+      </header>
+      <p>给<strong>学校信息管理者/排课管理员</strong>的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。</p>
+      <blockquote>
+      <p><code>worker</code> 专跑自动排课(一次可跑好几分钟),<code>worker-ops</code> 跑导出、备份、恢复、发送邮件与定时任务。分开的用意是:<strong>排课那几分钟里,你按「导出课表」仍然是立即响应的</strong>。</p>
+      </blockquote>
+      <h2 id="我该从哪里开始">我该从哪里开始?</h2>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>你的情况</th>
+      <th>看这篇</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>第一次安装,想在校内主机/NAS 上架起来</td>
+      <td><strong><a href="install.html">安装指南</a></strong></td>
+      </tr>
+      <tr>
+      <td>已在跑,要升级到新版本</td>
+      <td><strong><a href="upgrade.html">升级指南</a></strong></td>
+      </tr>
+      <tr>
+      <td>想确认数据有备份、或要搬移/恢复数据</td>
+      <td><strong><a href="backup.html">备份与恢复</a></strong></td>
+      </tr>
+      <tr>
+      <td>要让校外也能连(域名 + HTTPS)</td>
+      <td><strong><a href="https.html">域名与 HTTPS(选配)</a></strong></td>
+      </tr>
+      <tr>
+      <td>遇到问题、启动不了、忘记密码</td>
+      <td><strong><a href="faq.html">常见问题 FAQ</a></strong></td>
+      </tr>
+      </tbody>
+      </table></div>
+      <h2 id="三分钟理解这套系统怎么跑">三分钟理解这套系统怎么跑</h2>
+      <pre><code>                 用户浏览器
+                            │  http://校内主机IP
+                    ┌───────▼────────┐
+                    │  web (Caddy)   │  静态前端 + 反向代理 /api
+                    └───────┬────────┘
+                            │
+              ┌─────────────▼──────────────┐
+              │  api (FastAPI)             │  登录、数据维护、手动排课、报表
+              └───┬──────────────────┬─────┘
+                  │                  │
+           ┌──────▼──────┐    ┌──────▼───────┐
+           │ postgres    │    │ redis        │  队列 + session 时效
+           │ (你的数据)  │    └──────┬───────┘
+           └─────────────┘           │
+                  ▲       ┌─────────▼────────┐   ┌─────────▼────────┐
+                  └───────┤ worker           │   │ worker-ops       │
+                          │ 自动排课         │   │ 导出、备份、邮件 │
+                          └──────────────────┘   └─────────┬────────┘
+                                                          │
+                                                     备份文件
+      </code></pre>
+      <ul>
+      <li><strong>你的数据只在 <code>postgres</code></strong>(存于 Docker volume <code>pgdata</code>),备份文件在 volume <code>backups</code>。只要这两者在,系统可随时重建。</li>
+      <li><strong>worker</strong> 只负责自动排课；<strong>worker-ops</strong> 负责导出、备份、恢复、邮件和定时任务。两条队列隔离，排课运行时仍可立即导出或备份。</li>
+      <li>全部跑在<strong>一台主机</strong>,不需要外网、不需要云端账号,校内网络即可使用。</li>
+      </ul>
+      <h2 id="两种部署方式">两种部署方式</h2>
+      <p>同一份 <code>docker-compose.yml</code> 支持两种做法:</p>
+      <ol>
+      <li><strong>拉取官方预建镜像</strong>（推荐，免构建、升级快）：准备 <code>docker-compose.yml</code> 和 <code>.env</code> 两个文件，然后执行 <code>sudo docker compose pull &amp;&amp; sudo docker compose up -d</code>。</li>
+      <li><strong>从源代码自行构建</strong>（需要修改程序或无法连接 GHCR 时）：克隆项目后执行 <code>sudo docker compose up -d</code>，首次会在本机构建镜像，通常需要几分钟。</li>
+      </ol>
+      <p>详见 <a href="install.html">安装指南</a>。</p>
+      <h2 id="名词对照">名词对照</h2>
+      <div class="tw"><table>
+      <thead>
+      <tr>
+      <th>文件用词</th>
+      <th>意思</th>
+      </tr>
+      </thead>
+      <tbody>
+      <tr>
+      <td>主机 / host</td>
+      <td>跑 Docker 的那台电脑(校内服务器、台式机、NAS 均可)</td>
+      </tr>
+      <tr>
+      <td>容器 container</td>
+      <td>一个服务的执行实体,如上图五个</td>
+      </tr>
+      <tr>
+      <td>volume</td>
+      <td>Docker 管理的数据存储区,容器删掉也不会消失</td>
+      </tr>
+      <tr>
+      <td><code>.env</code></td>
+      <td>你的配置文件(密码、校名、端口号),<strong>含机密,不要上传到任何地方</strong></td>
+      </tr>
+      </tbody>
+      </table></div>
+      <div class="foot">
+        本页由 <code>docs/deploy/README.md</code> 自动生成(<code>scripts/build_docs.py</code>)。
+        要修改内容请编辑 Markdown 源文件,不要直接编辑这份 HTML。<br>
+        学校排课系统 · MIT 授权 · <a href="https://github.com/sine-io/Course_Scheduling_System">GitHub</a>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn');
+    // 跨页记住深/浅色:读者在部署手册里是会一页一页翻的
+    try{var s=localStorage.getItem('csDocsTheme'); if(s)root.setAttribute('data-theme',s);}catch(e){}
+    function cur(){var d=root.getAttribute('data-theme');if(d)return d;
+      return matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';}
+    btn.addEventListener('click',function(){
+      var next=cur()==='dark'?'light':'dark';
+      root.setAttribute('data-theme',next);
+      try{localStorage.setItem('csDocsTheme',next);}catch(e){}
+    });
+
+    var side=document.getElementById('side'), scrim=document.getElementById('scrim'),
+        tog=document.getElementById('navToggle');
+    function close(){side.classList.remove('open');scrim.classList.remove('on');}
+    tog.addEventListener('click',function(){side.classList.toggle('open');scrim.classList.toggle('on');});
+    scrim.addEventListener('click',close);
+
+    var links=Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    links.forEach(function(a){a.addEventListener('click',function(){
+      if(window.innerWidth<=960)close();});});
+    var secs=links.map(function(a){return document.getElementById(
+      decodeURIComponent(a.getAttribute('href').slice(1)));});
+    function spy(){
+      var best=-1;
+      for(var i=0;i<secs.length;i++){
+        if(secs[i]&&secs[i].getBoundingClientRect().top<=120)best=i;
+      }
+      links.forEach(function(a,i){a.classList.toggle('on',i===best);});
+    }
+    addEventListener('scroll',spy,{passive:true});spy();
+  })();
+</script>
+</body>
+</html>

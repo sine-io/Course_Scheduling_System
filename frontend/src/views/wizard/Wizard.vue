@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import {
-  NButton, NCard, NGrid, NGridItem, NInputNumber, NResult, NSelect, NSpace, NStatistic,
-  NStep, NSteps, NText, useMessage,
+  NAlert, NButton, NCard, NGrid, NGridItem, NInputNumber, NResult, NSelect, NSpace,
+  NStatistic, NStep, NSteps, NText, useMessage,
 } from 'naive-ui'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ApiError } from '@/api/client'
+import { demoDataStatus, loadDemoData } from '@/api/assignments'
 import { createSemester, getSemester, listTemplates } from '@/api/semesters'
 import { PRIMARY } from '@/theme'
 import type { Semester, Template } from '@/api/semesters'
@@ -29,6 +30,9 @@ const semesterId = ref<number | null>(null)
 const semester = ref<Semester | null>(null)
 const summary = ref<SemesterSummary | null>(null)
 const busy = ref(false)
+const demoAvailable = ref(false)
+const demoSchool = ref('')
+const loadingDemo = ref(false)
 
 const termOptions = [
   { label: '第一学期', value: 1 },
@@ -43,6 +47,14 @@ onMounted(async () => {
     step.value = wizard.state.current_step
     semesterId.value = wizard.state.semester_id
     if (semesterId.value) await loadSemester(semesterId.value)
+  }
+  // 查询接口仅对管理员开放，其他角色进入向导时忽略 403 即可。
+  try {
+    const demo = await demoDataStatus()
+    demoAvailable.value = demo.available
+    demoSchool.value = demo.school_name
+  } catch {
+    demoAvailable.value = false
   }
 })
 
@@ -93,6 +105,24 @@ async function finish() {
   router.push({ name: 'basedata' })
 }
 
+async function onLoadDemo() {
+  loadingDemo.value = true
+  try {
+    const r = await loadDemoData()
+    await wizard.fetch()
+    message.success(
+      `已创建 ${r.classes} 个班级、${r.teachers} 名教师和 ${r.assignments} 条教学任务，`
+      + '现在可以直接试用自动排课。',
+      { duration: 8000 },
+    )
+    router.push({ name: 'dashboard' })
+  } catch (e) {
+    message.error((e as ApiError).message || '加载失败')
+  } finally {
+    loadingDemo.value = false
+  }
+}
+
 async function skip() {
   await wizard.patch({ completed: true })
   router.push({ name: 'dashboard' })
@@ -123,6 +153,28 @@ function openPeriodEditor() {
       <n-card>
         <!-- 步骤 0：学校模板 -->
         <template v-if="step === 0">
+          <n-alert
+            v-if="demoAvailable" type="info" title="先体验完整排课流程"
+            style="margin-bottom: 18px"
+          >
+            <n-space vertical size="small">
+              <n-text>
+                可加载虚构的初中示例学校“{{ demoSchool || '示例初中' }}”，系统会自动创建
+                班级、教师、科目、教学任务和教室，随后即可运行自动排课。
+              </n-text>
+              <n-text depth="3" style="font-size: 12px">
+                示例数据仅可在尚未创建任何学期的全新系统中加载，不适用于正式环境。
+              </n-text>
+              <div>
+                <n-button
+                  type="primary" size="small" :loading="loadingDemo"
+                  data-testid="wizard-demo-load" @click="onLoadDemo"
+                >
+                  加载示例数据
+                </n-button>
+              </div>
+            </n-space>
+          </n-alert>
           <n-text>选择初中空白模板，系统会带入可编辑的科目参考项和空白作息时间表。</n-text>
           <n-grid :cols="2" :x-gap="12" :y-gap="12" style="margin-top: 16px">
             <n-grid-item v-for="t in templates" :key="t.key">

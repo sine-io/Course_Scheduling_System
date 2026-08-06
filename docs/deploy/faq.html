@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="常见问题 FAQ — 学校排课系统部署与运维文档">
+<title>常见问题 FAQ · 学校排课系统</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>M</text></svg>">
+<!-- 本文件由 scripts/build_docs.py 从 docs/deploy/faq.md 自动生成,请勿直接编辑。 -->
+<style>
+  :root{
+    --bg:#f5f7f7; --surface:#ffffff; --surface-2:#eef2f2; --surface-3:#e3e9e8;
+    --text:#172221; --text-soft:#465654; --text-faint:#6d7c7a;
+    --border:#d9e1e0; --border-strong:#bac8c6;
+    --accent:#0f766e; --accent-2:#0b5f59; --accent-soft:#e4f3f1; --accent-line:#9dcfc9;
+    --good:#397a32; --warn:#9a6700; --warn-soft:#fff3cd; --danger:#b42318; --danger-soft:#fee9e7;
+    --info:#2563a6; --info-soft:#e8f1fb;
+    --font-sans:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --font-serif:"Noto Serif CJK SC","Songti SC","Source Han Serif SC",Georgia,serif;
+    --font-mono:"SF Mono","Cascadia Code","Consolas","Courier New",monospace;
+    --maxw:800px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#111716; --surface:#18201f; --surface-2:#222c2b; --surface-3:#2c3837;
+      --text:#edf4f3; --text-soft:#b1c0be; --text-faint:#879795;
+      --border:#344240; --border-strong:#465856;
+      --accent:#53c7ba; --accent-2:#82ddd3; --accent-soft:#173532; --accent-line:#28615b;
+      --good:#8bcf78; --warn:#e2b34d; --warn-soft:#352a10; --danger:#ff8c82; --danger-soft:#3a1f1d;
+      --info:#8cbcf0; --info-soft:#1b2b3c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#111716; --surface:#18201f; --surface-2:#222c2b; --surface-3:#2c3837;
+    --text:#edf4f3; --text-soft:#b1c0be; --text-faint:#879795;
+    --border:#344240; --border-strong:#465856;
+    --accent:#53c7ba; --accent-2:#82ddd3; --accent-soft:#173532; --accent-line:#28615b;
+    --good:#8bcf78; --warn:#e2b34d; --warn-soft:#352a10; --danger:#ff8c82; --danger-soft:#3a1f1d;
+    --info:#8cbcf0; --info-soft:#1b2b3c;
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font-sans);
+    line-height:1.78;font-size:16px;-webkit-font-smoothing:antialiased;letter-spacing:0}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
+
+  .shell{display:grid;grid-template-columns:292px minmax(0,1fr);max-width:1240px;margin:0 auto}
+
+  /* ── sidebar ── */
+  .side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:26px 18px 40px;
+    border-right:1px solid var(--border)}
+  .brand{display:block;margin-bottom:4px}
+  .brand .mark{font-family:var(--font-serif);font-weight:700;font-size:1.1rem;color:var(--accent);
+    display:block}
+  .brand .sub{font-size:.7rem;color:var(--text-faint);letter-spacing:0}
+  .side .grp{margin-top:20px;font-size:.7rem;letter-spacing:0;color:var(--text-faint);
+    text-transform:uppercase;font-family:var(--font-mono);padding:0 8px 6px}
+  .side nav{display:flex;flex-direction:column;gap:1px}
+  .side nav a{display:block;padding:6px 10px;border-radius:7px;color:var(--text-soft);
+    font-size:.88rem;transition:background .15s,color .15s}
+  .side nav a:hover{background:var(--surface-2);text-decoration:none;color:var(--text)}
+  .side nav a.here{background:var(--accent-soft);color:var(--accent-2);font-weight:600}
+  .side nav a .dev{font-size:.66rem;color:var(--text-faint);font-family:var(--font-mono);
+    margin-left:6px;letter-spacing:0}
+
+  /* 本页目录 */
+  .side .toc{margin-top:6px;display:flex;flex-direction:column;gap:0;
+    border-left:1px solid var(--border);padding-left:2px}
+  .side .toc a{font-size:.82rem;padding:4px 10px;color:var(--text-soft);border-radius:0 6px 6px 0}
+  .side .toc a.lv3{padding-left:24px;font-size:.78rem;color:var(--text-faint)}
+  .side .toc a:hover{background:var(--surface-2);color:var(--text);text-decoration:none}
+  .side .toc a.on{color:var(--accent-2);font-weight:600;box-shadow:inset 2px 0 0 var(--accent)}
+
+  .theme-btn{margin-top:22px;width:100%;padding:8px;border:1px solid var(--border);
+    background:var(--surface);color:var(--text-soft);border-radius:8px;cursor:pointer;
+    font-size:.8rem;font-family:var(--font-sans)}
+  .theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ── main ── */
+  main{padding:0 clamp(20px,5vw,60px) 110px;min-width:0}
+  .wrap{max-width:var(--maxw);margin:0 auto}
+
+  .head{padding:52px 0 22px;border-bottom:1px solid var(--border);margin-bottom:8px}
+  .eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:0;text-transform:uppercase;
+    color:var(--accent);margin-bottom:14px}
+  h1{font-family:var(--font-serif);font-weight:700;font-size:2.25rem;line-height:1.22;
+    margin:0;text-wrap:balance;letter-spacing:0}
+  .src{margin-top:16px;font-size:.78rem;color:var(--text-faint)}
+  .src code{font-size:.9em}
+
+  h2{font-family:var(--font-serif);font-size:1.55rem;font-weight:700;margin:52px 0 12px;line-height:1.3;
+    padding-bottom:8px;border-bottom:1px solid var(--border);text-wrap:balance;scroll-margin-top:16px}
+  h3{font-size:1.12rem;font-weight:700;margin:34px 0 10px;letter-spacing:0;
+    padding-left:12px;border-left:3px solid var(--accent);scroll-margin-top:16px}
+  h4{font-size:1rem;font-weight:700;margin:24px 0 8px;color:var(--text);scroll-margin-top:16px}
+  p{margin:14px 0}
+  strong{font-weight:700;color:var(--text)}
+  ul,ol{margin:14px 0;padding-left:1.4em}
+  li{margin:6px 0}
+  li > ul,li > ol{margin:6px 0}
+  hr{border:none;border-top:1px solid var(--border);margin:34px 0}
+
+  code{font-family:var(--font-mono);font-size:.86em;background:var(--surface-2);
+    padding:2px 6px;border-radius:5px;color:var(--accent-2);word-break:break-word}
+  pre{background:var(--surface-2);border:1px solid var(--border);border-radius:6px;
+    padding:14px 16px;overflow-x:auto;margin:18px 0;line-height:1.6}
+  pre code{background:none;padding:0;color:var(--text);font-size:.85rem;white-space:pre}
+
+  blockquote{margin:20px 0;padding:12px 18px;border:1px solid var(--border);border-left:4px solid var(--accent);
+    border-radius:6px;background:var(--accent-soft);color:var(--text-soft);font-size:.95rem}
+  blockquote p{margin:6px 0}
+  blockquote strong{color:var(--accent-2)}
+
+  .tw{overflow-x:auto;margin:20px 0;border:1px solid var(--border);border-radius:8px}
+  table{border-collapse:collapse;width:100%;font-size:.9rem;min-width:440px}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+  thead th{background:var(--surface-2);font-weight:700;font-size:.8rem;letter-spacing:0;
+    color:var(--text-soft);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+  td code{white-space:nowrap}
+
+  /* tasks.md 的任务卡复选框 */
+  .tick{display:inline-block;width:1.15em;margin-right:.35em;font-family:var(--font-mono);font-weight:700}
+  .tick.done{color:var(--good)}
+  .tick.wip{color:var(--warn)}
+  .tick.todo{color:var(--text-faint)}
+
+  .foot{margin-top:70px;padding-top:24px;border-top:1px solid var(--border);color:var(--text-faint);
+    font-size:.83rem}
+  .foot a{color:var(--text-soft)}
+
+  .navtoggle{display:none}
+  @media (max-width:960px){
+    .shell{grid-template-columns:1fr}
+    .side{position:fixed;z-index:40;top:0;left:0;width:284px;transform:translateX(-100%);
+      transition:transform .22s ease;background:var(--surface);height:100vh}
+    .side.open{transform:none;box-shadow:0 0 40px rgba(0,0,0,.34)}
+    .navtoggle{display:flex;position:fixed;z-index:50;top:14px;left:14px;gap:8px;align-items:center;
+      background:var(--surface);border:1px solid var(--border-strong);border-radius:8px;padding:8px 13px;
+      cursor:pointer;font-family:var(--font-sans);color:var(--text);font-size:.85rem;font-weight:600}
+    .scrim{display:none;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.45)}
+    .scrim.on{display:block}
+    .head{padding-top:56px}
+    h1{font-size:1.8rem}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+  @media print{.side,.navtoggle,.scrim{display:none}.shell{grid-template-columns:1fr}
+    main{padding:0}pre,blockquote,.tw{break-inside:avoid}}
+  html{scroll-behavior:smooth}
+</style>
+</head>
+<body>
+<button class="navtoggle" id="navToggle" aria-label="开启目录">☰ 目录</button>
+<div class="scrim" id="scrim"></div>
+<div class="shell">
+  <aside class="side" id="side">
+<a class="brand" href="../index.html"><span class="mark">学校排课系统</span><span class="sub">文档</span></a>
+<div class="grp">用户文档</div><nav>
+<a href="../index.html">排课管理员操作手册</a>
+</nav>
+<div class="grp">部署与运维手册</div><nav>
+<a class="doc" href="README.html">总览:从哪开始</a>
+<a class="doc" href="install.html">安装指南</a>
+<a class="doc" href="upgrade.html">升级指南</a>
+<a class="doc" href="backup.html">备份与恢复</a>
+<a class="doc" href="https.html">域名与 HTTPS</a>
+<a class="doc here" href="faq.html">常见问题 FAQ</a>
+</nav>
+<div class="grp">项目技术文档</div><nav>
+<a class="doc" href="../architecture.html">架构设计<span class="dev">开发用</span></a>
+<a class="doc" href="../roadmap.html">路线图<span class="dev">开发用</span></a>
+<a class="doc" href="../tasks.html">开发任务卡<span class="dev">开发用</span></a>
+</nav>
+<div class="grp">本页目录</div><div class="toc"><a class="lv2" href="#安装与启动">安装与启动</a><a class="lv2" href="#账号与登录">账号与登录</a><a class="lv2" href="#数据与备份">数据与备份</a><a class="lv2" href="#性能与规模">性能与规模</a><a class="lv2" href="#升级与版本">升级与版本</a><a class="lv2" href="#其他">其他</a></div>
+    <button class="theme-btn" id="themeBtn">◐ 切换深色 / 浅色</button>
+  </aside>
+  <main>
+    <div class="wrap">
+      <header class="head">
+        <div class="eyebrow">DEPLOYMENT GUIDE</div>
+        <h1>常见问题 FAQ</h1>
+        <div class="src">源文件 <code>docs/deploy/faq.md</code> · <a href="https://github.com/sine-io/Course_Scheduling_System/blob/main/docs/deploy/faq.md">在 GitHub 上查看</a></div>
+      </header>
+      <h2 id="安装与启动">安装与启动</h2>
+      <p><strong>Q：执行 <code>sudo docker compose up -d</code> 后，网页显示“502”或“无法连接”。</strong>
+      容器可能还在启动(尤其首次要跑数据库迁移)。等 20–30 秒再试,并看状态:</p>
+      <pre><code class="language-bash">sudo docker compose ps          # 查看服务是否均为 healthy
+      sudo docker compose logs api    # 查看 API 是否卡在迁移或发生错误
+      </code></pre>
+      <p><strong>Q：执行 <code>sudo docker compose ps</code> 时，有容器一直处于 restarting 状态。</strong>
+      看该容器 log 找原因:</p>
+      <pre><code class="language-bash">sudo docker compose logs --tail=50 &lt;服务名&gt;   # 例如 api / worker / postgres
+      </code></pre>
+      <p>常见:<code>.env</code> 的 <code>DATABASE_URL</code> 与 <code>POSTGRES_*</code> 账号和密码不一致;<code>SECRET_KEY</code> 未设。</p>
+      <p><strong>Q:80 端口被占用,启动失败(port is already allocated)。</strong>
+      修改 <code>.env</code> 中的 <code>HTTP_PORT</code>（例如 <code>8080</code>），再执行 <code>sudo docker compose up -d</code>，然后访问 <code>http://&lt;主机IP&gt;:8080</code>。</p>
+      <p><strong>Q:校内其他电脑连不到。</strong>
+      确认用的是主机的<strong>局域网 IP</strong>(非 <code>localhost</code>),且主机防火墙放行该端口。手机/平板需与主机同一网段(同一 Wi-Fi)。</p>
+      <hr />
+      <h2 id="账号与登录">账号与登录</h2>
+      <p><strong>Q:忘记管理员密码怎么办?</strong>
+      若你还记得 <code>.env</code> 的初始 <code>ADMIN_PASSWORD</code>,那是<strong>首次登录</strong>用的;登录后改过的密码存在数据库。若连改过的都忘了,目前需由具数据库访问权者重设。最务实的做法是<strong>恢复一份记得密码的旧备份</strong>(见<a href="backup.html">备份指南</a>),或联系维护者。请妥善保管管理员密码。</p>
+      <p><strong>Q:恢复备份后大家被登出了。</strong>
+      这是预期行为。恢复会替换整个数据库(含账号),为安全起见系统会强制所有人以恢复时点的账号和密码重新登录。</p>
+      <p><strong>Q:老师收不到调课与代课 Email。</strong>
+      Email 为<strong>选配</strong>;未在「系统管理」设置 SMTP 时,只有站内通知(铃铛),系统一切正常。要寄 Email 需填学校的 SMTP 主机信息,并可按「寄测试信」当场验证。</p>
+      <hr />
+      <h2 id="数据与备份">数据与备份</h2>
+      <p><strong>Q:我的数据存在哪?会不会不见?</strong>
+      数据保存在 Docker 卷 <code>pgdata</code> 中。只要不删除该卷，执行 <code>sudo docker compose down</code>、重启或升级都不会影响数据。主机硬盘损坏时卷也会丢失，因此必须做好<a href="backup.html">异地备份</a>。</p>
+      <p><strong>Q：执行 <code>sudo docker compose down</code> 会删除数据吗？</strong>
+      不会。<code>down</code> 只停止并移除容器，数据卷会保留。<strong>只有 <code>sudo docker compose down -v</code> 中的 <code>-v</code> 会删除数据卷及其中的数据</strong>，请勿误用。</p>
+      <p><strong>Q:怎么把系统搬到新主机?</strong>
+      新主机装好空系统 → 旧主机下载一份备份 <code>.dump</code> → 新主机「系统管理 → 上传恢复」。详见<a href="backup.html">备份指南</a>。</p>
+      <hr />
+      <h2 id="性能与规模">性能与规模</h2>
+      <p><strong>Q:自动排课很慢或跑不出来。</strong>
+      排课是计算密集工作,受班级数、约束复杂度影响。建议主机 ≥ 4 核 8GB。无解时系统会给「冲突定位」报告,依提示放宽条件或补资源。可设置求解超时(默认 10 分钟),超时取当前最佳解。</p>
+      <p><strong>Q:页面偶尔转圈久。</strong>
+      自动排课或大量导出时 worker 会比较繁忙，但它与 API 服务相互独立，一般操作不受影响。自 v1.1 起，排课（<code>worker</code>）与导出/备份（<code>worker-ops</code>）由不同容器负责，排课进行中提交导出任务仍会立即响应。若持续缓慢，请执行 <code>sudo docker stats</code> 检查主机资源使用情况。</p>
+      <p><strong>Q:导出/备份时出现「运维背景服务(worker-ops)没有在执行」。</strong></p>
+      <p>你的 <code>docker-compose.yml</code> 少了 <code>worker-ops</code> 这个容器(多半是用了旧版的 Compose 文件)。它负责导出、备份、恢复、发送邮件与每日自动备份——没有它,这些功能全都没人处理,而且<strong>每日自动备份是无声停摆的</strong>。</p>
+      <p>获取最新的 Compose 文件再重启即可,数据不受影响:</p>
+      <pre><code class="language-bash">curl -fLO https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
+      sudo docker compose up -d
+      sudo docker compose ps          # 应看到六个容器，包括 worker 和 worker-ops
+      </code></pre>
+      <p><strong>Q:导出课表 / 备份失败,说「背景忙碌或超时」。</strong></p>
+      <p><code>worker-ops</code> 有在跑但没做完。查它的 log:</p>
+      <pre><code class="language-bash">sudo docker compose ps worker-ops
+      sudo docker compose logs --tail=50 worker-ops
+      </code></pre>
+      <p>PDF/PNG 导出在配置较低的机器上偶尔会超过 90 秒；如果 <code>sudo docker stats</code> 显示资源紧张，请等待自动排课完成后重试。</p>
+      <hr />
+      <h2 id="升级与版本">升级与版本</h2>
+      <p><strong>Q:怎么知道有没有新版、这版改了什么?</strong>
+      看项目 <a href="../../CHANGELOG.html">CHANGELOG.md</a> 与 GitHub Releases。升级步骤见<a href="upgrade.html">升级指南</a>。</p>
+      <p><strong>Q:升级会不会弄坏数据?</strong>
+      数据表结构变更由 <code>api</code> 启动时自动、向前兼容地迁移,数据保留。仍建议升级前先「立即备份」。破坏性变更(若有)会在 CHANGELOG 该版本以 ⚠️ 标注。</p>
+      <hr />
+      <h2 id="其他">其他</h2>
+      <p><strong>Q:可以多所学校共用一套吗?</strong>
+      本系统设计为<strong>单校自建</strong>,一所学校一套部署,数据彼此隔离、最单纯也最安全。多校请各自部署。</p>
+      <p><strong>Q:如何完全移除?</strong></p>
+      <pre><code class="language-bash">sudo docker compose down -v     # ⚠️ 会连同数据卷一起删除且无法恢复，请先备份！
+      </code></pre>
+      <p><strong>Q:找不到答案 / 想反馈问题?</strong>
+      在项目 GitHub 创建 Issue（见 <a href="../../CONTRIBUTING.html">CONTRIBUTING.md</a>）。报告时附上 <code>sudo docker compose logs</code> 的相关片段，有助于更快定位问题。</p>
+      <div class="foot">
+        本页由 <code>docs/deploy/faq.md</code> 自动生成(<code>scripts/build_docs.py</code>)。
+        要修改内容请编辑 Markdown 源文件,不要直接编辑这份 HTML。<br>
+        学校排课系统 · MIT 授权 · <a href="https://github.com/sine-io/Course_Scheduling_System">GitHub</a>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  (function(){
+    var root=document.documentElement, btn=document.getElementById('themeBtn');
+    // 跨页记住深/浅色:读者在部署手册里是会一页一页翻的
+    try{var s=localStorage.getItem('csDocsTheme'); if(s)root.setAttribute('data-theme',s);}catch(e){}
+    function cur(){var d=root.getAttribute('data-theme');if(d)return d;
+      return matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';}
+    btn.addEventListener('click',function(){
+      var next=cur()==='dark'?'light':'dark';
+      root.setAttribute('data-theme',next);
+      try{localStorage.setItem('csDocsTheme',next);}catch(e){}
+    });
+
+    var side=document.getElementById('side'), scrim=document.getElementById('scrim'),
+        tog=document.getElementById('navToggle');
+    function close(){side.classList.remove('open');scrim.classList.remove('on');}
+    tog.addEventListener('click',function(){side.classList.toggle('open');scrim.classList.toggle('on');});
+    scrim.addEventListener('click',close);
+
+    var links=Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+    links.forEach(function(a){a.addEventListener('click',function(){
+      if(window.innerWidth<=960)close();});});
+    var secs=links.map(function(a){return document.getElementById(
+      decodeURIComponent(a.getAttribute('href').slice(1)));});
+    function spy(){
+      var best=-1;
+      for(var i=0;i<secs.length;i++){
+        if(secs[i]&&secs[i].getBoundingClientRect().top<=120)best=i;
+      }
+      links.forEach(function(a,i){a.classList.toggle('on',i===best);});
+    }
+    addEventListener('scroll',spy,{passive:true});spy();
+  })();
+</script>
+</body>
+</html>

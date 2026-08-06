@@ -176,6 +176,21 @@ def _apply(db: Session, assignment: CourseAssignment, body: AssignmentIn) -> Non
         )
 
 
+def _check_overtime(db: Session, semester_id: int, body: AssignmentIn) -> None:
+    """校验超课时上限，只检查本次安排的教师。
+
+    必须在提交前调用并先刷新会话，统计才能包含尚未提交的教学任务。
+    """
+    db.flush()
+    try:
+        svc.assert_within_overtime_limit(
+            db, semester_id, {t.teacher_id for t in body.teachers}
+        )
+    except svc.DomainError as exc:
+        db.rollback()
+        raise _domain(exc) from exc
+
+
 @router.post("/assignments", response_model=AssignmentOut, status_code=status.HTTP_201_CREATED)
 def create_assignment(
     body: AssignmentIn,
@@ -193,6 +208,7 @@ def create_assignment(
     db.add(assignment)
     db.flush()
     _apply(db, assignment, body)
+    _check_overtime(db, semester_id, body)
     db.commit()
     db.refresh(assignment)
     return svc.serialize_assignment(assignment)
@@ -222,6 +238,7 @@ def update_assignment(
     unit = _resolve_unit(db, a.semester_id, body)
     a.scheduling_unit_id = unit.id
     _apply(db, a, body)
+    _check_overtime(db, a.semester_id, body)
     db.commit()
     db.refresh(a)
     return svc.serialize_assignment(a)

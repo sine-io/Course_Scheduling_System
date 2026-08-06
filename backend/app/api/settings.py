@@ -1,6 +1,7 @@
-"""全域系统设置:SMTP 发送邮件(M4-3)。管理员专用。"""
+"""全局系统设置：SMTP 发送邮件、学校设置和排课规则。管理员专用。"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
@@ -14,6 +15,18 @@ from app.services import settings as app_settings
 router = APIRouter(tags=["settings"])
 
 admin_only = require_roles(Role.admin)
+
+
+class SchoolSettings(BaseModel):
+    school_name: str = Field(min_length=1, max_length=64)
+
+
+class SchedulingSettings(BaseModel):
+    max_overtime: int = Field(
+        ge=0,
+        le=20,
+        description="超课时上限：教师教学任务最多可超过应授课时的数量。0 表示不限制。",
+    )
 
 
 def _smtp_out(db: Session) -> SmtpSettingsOut:
@@ -45,6 +58,51 @@ def put_smtp(
     ))
     db.commit()
     return _smtp_out(db)
+
+
+@router.get("/settings/school", response_model=SchoolSettings)
+def get_school(db: Session = Depends(get_db), _: User = Depends(admin_only)):
+    return SchoolSettings(school_name=app_settings.school_name(db))
+
+
+@router.put("/settings/school", response_model=SchoolSettings)
+def put_school(
+    body: SchoolSettings, db: Session = Depends(get_db), user: User = Depends(admin_only)
+):
+    """校名会即时反映在界面、导出课表与通知邮件中，无需重启容器。"""
+    app_settings.save_school_name(db, body.school_name)
+    db.add(AuditLog(
+        user_id=user.id,
+        username=user.username,
+        action="update_school_name",
+        target_type="app_setting",
+        target_id=None,
+        detail=f"校名改为“{body.school_name}”"[:500],
+    ))
+    db.commit()
+    return SchoolSettings(school_name=app_settings.school_name(db))
+
+
+@router.get("/settings/scheduling", response_model=SchedulingSettings)
+def get_scheduling(db: Session = Depends(get_db), _: User = Depends(admin_only)):
+    return SchedulingSettings(max_overtime=app_settings.max_overtime(db))
+
+
+@router.put("/settings/scheduling", response_model=SchedulingSettings)
+def put_scheduling(
+    body: SchedulingSettings, db: Session = Depends(get_db), user: User = Depends(admin_only)
+):
+    app_settings.save_max_overtime(db, body.max_overtime)
+    db.add(AuditLog(
+        user_id=user.id,
+        username=user.username,
+        action="update_scheduling_settings",
+        target_type="app_setting",
+        target_id=None,
+        detail=f"超课时上限设置为 {body.max_overtime} 课时",
+    ))
+    db.commit()
+    return SchedulingSettings(max_overtime=app_settings.max_overtime(db))
 
 
 @router.post("/settings/smtp/test", status_code=status.HTTP_200_OK)

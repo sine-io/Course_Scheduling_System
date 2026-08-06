@@ -12,6 +12,7 @@ from app.models.assignment import (
 )
 from app.models.basedata import ClassUnit, Teacher
 from app.services import period_tables as pt_service
+from app.services import settings as settings_service
 
 
 class DomainError(Exception):
@@ -97,16 +98,46 @@ def teacher_loads(db: Session, semester_id: int) -> list[dict]:
     teachers = db.scalars(
         select(Teacher).where(Teacher.semester_id == semester_id).order_by(Teacher.name)
     )
+    limit = settings_service.max_overtime(db)
     out: list[dict] = []
     for t in teachers:
         target = max(t.base_periods - t.admin_reduction, 0)
         assigned = assigned_by.get(t.id, 0)
+        delta = assigned - target
         out.append({
             "teacher_id": t.id, "name": t.name,
             "base_periods": t.base_periods, "admin_reduction": t.admin_reduction,
-            "target": target, "assigned": assigned, "delta": assigned - target,
+            "target": target, "assigned": assigned, "delta": delta,
+            "max_overtime": limit,
+            # 两种情况不算违规：limit=0 表示学校未设上限；base=0 表示
+            # 尚未维护基本课时，此时不能把“应授 0 课时”当作真实工作量。
+            "over_limit": limit > 0 and t.base_periods > 0 and delta > limit,
         })
     return out
+
+
+def assert_within_overtime_limit(
+    db: Session, semester_id: int, teacher_ids: set[int]
+) -> None:
+    """教学任务变更后，检查受影响的教师是否超过超课时上限。
+
+    只检查本次涉及的教师。已有数据可能创建于上限调低之前；全面检查会导致
+    用户连减少某位教师课时的操作也无法完成。
+    """
+    if not teacher_ids:
+        return
+    limit = settings_service.max_overtime(db)
+    if limit <= 0:
+        return
+    for row in teacher_loads(db, semester_id):
+        if row["teacher_id"] not in teacher_ids or not row["over_limit"]:
+            continue
+        raise DomainError(
+            f"{row['name']} 应授 {row['target']} 课时，安排后为 {row['assigned']} 课时，"
+            f"超出 {row['delta']} 课时，已超过上限 {limit} 课时。"
+            "请调整教学任务，或在“系统管理”中修改超课时上限。",
+            status_code=409,
+        )
 
 
 def _unit_slot_consumption(db: Session, semester_id: int) -> dict[int, int]:

@@ -28,6 +28,26 @@
 
 需先安装 [Docker](https://docs.docker.com/get-docker/)。**完整步骤(含 Windows / Linux / NAS)见 [部署手册](docs/deploy/README.md)。**
 
+### 一键安装脚本(推荐新部署)
+
+脚本会询问学校名称、管理员密码和对外端口，并自动生成密钥；执行前会先检查同名项目，避免误接管另一套部署。
+
+**Windows(PowerShell)**:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/install.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
+**Linux / macOS / NAS**:
+
+```bash
+curl -fLO https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/install.sh
+bash install.sh
+```
+
+脚本刻意采用“先下载、再执行”的方式，方便学校管理员先检查内容；更多选项见[安装指南](docs/deploy/install.md)。
+
 ### 拉取官方镜像(推荐)
 
 ```bash
@@ -49,6 +69,8 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 ```
 
 启动后开浏览器连 `http://<主机IP>`(本机为 <http://localhost>),以 `.env` 的管理员账号和密码登录,依设置向导完成构建。
+
+**想先体验系统?** 可在首次设置向导中直接加载示例数据，也可在全新系统的“系统管理 → 示例数据”中加载：系统会生成一套虚构的国内初中示例，包含 18 个班、49 位教师、252 条教学任务、16 个科目和每周 594 课时。示例数据仅用于功能演示，不代表任何学校或政策。
 
 - 健康检查:`http://localhost/api/health` → `{"status":"ok"}`
 - 容器状态：`sudo docker compose ps`（六个容器均应为 healthy）
@@ -84,6 +106,8 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 | [变更记录](CHANGELOG.md) | 各版本变更 |
 | [贡献指南](CONTRIBUTING.md) | 开发环境、程序风格、测试、发布流程 |
 
+> **离线阅读**：`docs/` 下的部署与开发 Markdown 文档均有对应的 `.html` 文件。可直接用浏览器打开，无需联网；修改 Markdown 后运行 `python scripts/build_docs.py` 重新生成，CI 会检查两者是否同步。
+
 ---
 
 ## 技术栈
@@ -102,9 +126,9 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 
 ## 项目状态
 
-**v1.1.1 已发行(2026-07-14)。** 六大里程碑 M0–M5 全部完成,功能齐备并经完整验收(后端 490 项单元/整合测试、32 项 Playwright 端对端测试,每次提交均对真实 Docker 全栈跑过)。官方镜像(amd64 + arm64)已发布于 GHCR。
+**v1.2.0 已发行(2026-08-02)。** 六大里程碑 M0–M5 全部完成,功能齐备并经完整验收；本版加入可配置学校名称、国内示例数据、教学任务超课时上限、一键安装脚本和离线文档。官方镜像(amd64 + arm64)已发布于 GHCR。
 
-**请直接从最新版开始安装**(见上方快速开始);`v1.1.1` 是目前建议使用的版本。各版变更见 [CHANGELOG](CHANGELOG.md),开发历程见 [docs/tasks.md](docs/tasks.md)。
+**请直接从最新版开始安装**(见上方快速开始);`v1.2.0` 是目前建议使用的版本。各版变更见 [CHANGELOG](CHANGELOG.md),开发历程见 [docs/tasks.md](docs/tasks.md)。
 
 系统仍在实际校园环境试用中。如果你是第一批用户，欢迎通过 [Issues](https://github.com/sine-io/Course_Scheduling_System/issues) 报告问题。
 

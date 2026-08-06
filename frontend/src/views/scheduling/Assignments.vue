@@ -68,10 +68,20 @@ onMounted(async () => {
 })
 
 const overCapacity = computed(() => classLoads.value.filter((c) => c.over_capacity))
-function loadTagType(d: number): 'success' | 'error' | 'warning' {
-  if (d > 0) return 'error'
-  if (d < 0) return 'warning'
+function loadTagType(load: TeacherLoad): 'success' | 'error' | 'warning' | 'info' {
+  if (load.over_limit) return 'error'
+  if (load.delta > 0) return 'warning'
+  if (load.delta < 0) return 'info'
   return 'success'
+}
+
+function loadTagText(load: TeacherLoad): string {
+  if (load.delta > 0) {
+    return load.over_limit
+      ? `+${load.delta} 超过上限 ${load.max_overtime}`
+      : `+${load.delta} 超课时`
+  }
+  return load.delta < 0 ? `${load.delta} 不足` : '刚好'
 }
 
 // ── 教学任务 modal ──
@@ -294,8 +304,8 @@ function blockLabel(a: Assignment): string {
                 <td>{{ l.name }}</td>
                 <td>{{ l.assigned }} / {{ l.target }}</td>
                 <td>
-                  <n-tag size="tiny" :type="loadTagType(l.delta)">
-                    {{ l.delta > 0 ? `+${l.delta} 超课时` : l.delta < 0 ? `${l.delta} 不足` : '刚好' }}
+                  <n-tag size="tiny" :type="loadTagType(l)">
+                    {{ loadTagText(l) }}
                   </n-tag>
                 </td>
               </tr>

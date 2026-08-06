@@ -257,8 +257,9 @@ def test_preflight_errors_block_start(sched):
     c = client.post(f"/api/class-units?semester_id={sid}",
                     json={"grade": 3, "name": "301", "track": "junior_high"}).json()
     s = client.post(f"/api/subjects?semester_id={sid}", json={"name": "语文"}).json()
+    # 未维护基准课时的教师不受超课时上限限制，保留本测试的前置检查场景。
     t = client.post(f"/api/teachers?semester_id={sid}",
-                    json={"name": "王师", "base_periods": 20}).json()
+                    json={"name": "王师", "base_periods": 0}).json()
     client.post(f"/api/assignments?semester_id={sid}", json={  # 40 节 > 35 可排节次
         "class_id": c["id"], "subject_id": s["id"], "periods_per_week": 40,
         "teachers": [{"teacher_id": t["id"]}], "block_rules": [],

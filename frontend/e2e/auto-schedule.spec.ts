@@ -114,8 +114,9 @@ test('自动排课:数据未通过前置检查时拦截,并列出待修正项目
   const c = await post(page, `/api/class-units?semester_id=${sem.id}`,
     { grade: 3, name: '301', track: 'junior_high' })
   const s = await post(page, `/api/subjects?semester_id=${sem.id}`, { name: '语文X' })
+  // 未维护基准课时的教师不受超课时上限限制，才能创建这条刻意超载的数据。
   const t = await post(page, `/api/teachers?semester_id=${sem.id}`,
-    { name: '王师', base_periods: 20 })
+    { name: '王师', base_periods: 0 })
   await post(page, `/api/assignments?semester_id=${sem.id}`, { // 40 节 > 35 可排节次
     class_id: c.id, subject_id: s.id, periods_per_week: 40,
     teachers: [{ teacher_id: t.id }], block_rules: [],

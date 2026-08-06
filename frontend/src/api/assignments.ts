@@ -1,6 +1,6 @@
 // 教学任务(排课单位 / 教学任务 / 课时统计)API 类型与调用封装。
 
-import { apiGet, apiPost, request } from '@/api/client'
+import { apiGet, apiPost, apiPut, request } from '@/api/client'
 import type { RoomType } from '@/api/basedata'
 
 export interface ClassBrief {
@@ -45,6 +45,8 @@ export interface TeacherLoad {
   target: number
   assigned: number
   delta: number
+  max_overtime: number // 超课时上限；0 表示学校未设限
+  over_limit: boolean  // delta 已超过上限
 }
 export interface ClassLoad {
   class_id: number
@@ -88,3 +90,43 @@ export const teacherLoad = (semesterId: number) =>
   apiGet<TeacherLoad[]>(`/assignments/teacher-load?semester_id=${semesterId}`)
 export const classLoad = (semesterId: number) =>
   apiGet<ClassLoad[]>(`/assignments/class-load?semester_id=${semesterId}`)
+
+// ── 排课设置（管理员）──
+export interface SchedulingSettings {
+  /** 教师教学任务最多可超过应授课时的数量，0 表示不限制。 */
+  max_overtime: number
+}
+export const getSchedulingSettings = () =>
+  apiGet<SchedulingSettings>('/settings/scheduling')
+export const saveSchedulingSettings = (body: SchedulingSettings) =>
+  apiPut<SchedulingSettings>('/settings/scheduling', body)
+
+// ── 示例数据（管理员，仅限全新系统）──
+export interface DemoDataStatus {
+  available: boolean
+  reason: string
+  school_name: string
+}
+export interface DemoDataResult {
+  semester_id: number
+  school_name: string
+  classes: number
+  teachers: number
+  subjects: number
+  rooms: number
+  assignments: number
+  total_periods: number
+  max_overtime_used: number
+  under_target: number
+}
+export const demoDataStatus = () => apiGet<DemoDataStatus>('/demo-data')
+export const loadDemoData = () => apiPost<DemoDataResult>('/demo-data')
+
+// ── 学校信息（管理员）──
+export interface SchoolSettings {
+  /** 学校名称，显示在系统界面、导出课表、通知邮件和打印公告中。 */
+  school_name: string
+}
+export const getSchoolSettings = () => apiGet<SchoolSettings>('/settings/school')
+export const saveSchoolSettings = (body: SchoolSettings) =>
+  apiPut<SchoolSettings>('/settings/school', body)

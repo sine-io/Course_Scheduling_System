@@ -26,7 +26,11 @@ from app.models.basedata import (
 )
 from app.models.period import PeriodTable
 from app.models.user import Role, User, UserRole
-from app.services.assignments import get_or_create_single_unit
+from app.services.assignments import (
+    DomainError,
+    assert_within_overtime_limit,
+    get_or_create_single_unit,
+)
 
 HEADER_ROWS = 3  # 字段名 + 说明 + 示例
 
@@ -446,6 +450,19 @@ def _import_assignments(db: Session, semester_id: int, file_bytes: bytes) -> Imp
             assignment.block_rules.append(
                 BlockRule(block_size=block[0], count_per_week=block[1])
             )
+
+    # 超课时上限:整批一起检核。汇入是「一次几百笔」的操作,
+    # 逐列阻止只会让用户改一次汇一次;这里一次把所有超标的人列出来。
+    db.flush()
+    touched = {t.id for _, _, teacher_objs, _, _, _ in pending for t in teacher_objs}
+    try:
+        assert_within_overtime_limit(db, semester_id, touched)
+    except DomainError as exc:
+        db.rollback()
+        result.errors.append(exc.message)
+        result.imported = 0
+        return result
+
     db.commit()
     result.imported = len(pending)
     return result

@@ -12,14 +12,14 @@ def _login(client, db, username="s", roles=(Role.scheduler,)):
     client.post("/api/auth/login", json={"username": username, "password": PW})
 
 
-def _setup(client, sid, *, periods):
+def _setup(client, sid, *, periods, base_periods=20):
     c = client.post(
         f"/api/class-units?semester_id={sid}",
         json={"grade": 3, "name": "301", "track": "junior_high"},
     ).json()
     s = client.post(f"/api/subjects?semester_id={sid}", json={"name": "语文"}).json()
     t = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王师", "base_periods": 20}
+        f"/api/teachers?semester_id={sid}", json={"name": "王师", "base_periods": base_periods}
     ).json()
     client.post(f"/api/assignments?semester_id={sid}", json={
         "class_id": c["id"], "subject_id": s["id"], "periods_per_week": periods,
@@ -48,7 +48,8 @@ def test_preflight_reports_class_overload(env):
     client, db = env
     _login(client, db)
     sid = create_api_semester(client)["id"]
-    _setup(client, sid, periods=40)  # 40 > 35 可排节次,且超出王师应授课时
+    # base_periods=0 表示学校尚未维护基准课时，避免超课时上限在建教学任务时提前拦截。
+    _setup(client, sid, periods=40, base_periods=0)  # 40 > 35 可排节次
 
     body = client.get(f"/api/solver/preflight?semester_id={sid}").json()
     assert body["ok"] is False

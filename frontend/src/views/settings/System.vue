@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  NButton, NCard, NCheckbox, NInput, NInputNumber, NPopconfirm, NSpace, NTag, NText, NUpload,
-  useDialog, useMessage,
+  NAlert, NButton, NCard, NCheckbox, NInput, NInputNumber, NPopconfirm, NSpace, NTag, NText,
+  NUpload, useDialog, useMessage,
 } from 'naive-ui'
 import type { UploadCustomRequestOptions } from 'naive-ui'
 import { h, onMounted, ref } from 'vue'
@@ -11,6 +11,10 @@ import {
   createBackup, deleteBackup, downloadBackup, listBackups, restoreBackup, restoreUpload,
 } from '@/api/backups'
 import type { Backup, RestoreResult } from '@/api/backups'
+import {
+  demoDataStatus, getSchedulingSettings, getSchoolSettings, loadDemoData,
+  saveSchedulingSettings, saveSchoolSettings,
+} from '@/api/assignments'
 import { getSmtp, saveSmtp } from '@/api/notifications'
 import { resetWizard } from '@/api/wizard'
 import { useAuthStore } from '@/stores/auth'
@@ -116,15 +120,75 @@ const smtp = ref({
 const configured = ref(false)
 const hasPassword = ref(false)
 const savingSmtp = ref(false)
+const maxOvertime = ref(8)
+const savingScheduling = ref(false)
+const schoolName = ref('')
+const savingSchool = ref(false)
+const demoAvailable = ref(false)
+const demoSchool = ref('')
+const loadingDemo = ref(false)
+
+async function onSaveSchool() {
+  if (!schoolName.value.trim()) {
+    message.warning('请输入学校名称')
+    return
+  }
+  savingSchool.value = true
+  try {
+    schoolName.value = (await saveSchoolSettings({ school_name: schoolName.value })).school_name
+    message.success('学校名称已更新')
+  } catch (e) {
+    message.error((e as ApiError).message || '保存失败')
+  } finally {
+    savingSchool.value = false
+  }
+}
 
 onMounted(async () => {
   if (!isAdmin()) return
-  const s = await getSmtp()
+  const [s, scheduling, school, demo] = await Promise.all([
+    getSmtp(), getSchedulingSettings(), getSchoolSettings(), demoDataStatus(),
+  ])
   smtp.value = { host: s.host, port: s.port, user: s.user, password: '', sender: s.sender, use_tls: s.use_tls }
   configured.value = s.configured
   hasPassword.value = s.has_password
+  maxOvertime.value = scheduling.max_overtime
+  schoolName.value = school.school_name
+  demoAvailable.value = demo.available
+  demoSchool.value = demo.school_name
   await reloadBackups()
 })
+
+async function onLoadDemo() {
+  loadingDemo.value = true
+  try {
+    const r = await loadDemoData()
+    schoolName.value = r.school_name
+    demoAvailable.value = false
+    message.success(
+      `已创建 ${r.classes} 个班级、${r.teachers} 名教师和 ${r.assignments} 条教学任务`
+      + `（共 ${r.total_periods} 课时），现在可以试用自动排课。`,
+      { duration: 8000 },
+    )
+  } catch (e) {
+    message.error((e as ApiError).message || '加载失败')
+  } finally {
+    loadingDemo.value = false
+  }
+}
+
+async function onSaveScheduling() {
+  savingScheduling.value = true
+  try {
+    const s = await saveSchedulingSettings({ max_overtime: maxOvertime.value })
+    maxOvertime.value = s.max_overtime
+    message.success('排课设置已保存')
+  } catch (e) {
+    message.error((e as ApiError).message || '保存失败')
+  } finally {
+    savingScheduling.value = false
+  }
+}
 
 async function onSaveSmtp() {
   savingSmtp.value = true
@@ -152,6 +216,47 @@ async function onResetWizard() {
 <template>
   <n-space vertical size="large">
     <h1 style="margin: 0">{{ '系统管理' }}</h1>
+
+    <n-card v-if="isAdmin()" title="学校信息" data-testid="school-card">
+      <n-space vertical>
+        <n-text depth="3">
+          学校名称会显示在系统界面、导出的课表、代课通知邮件和打印公告中，保存后立即生效。
+        </n-text>
+        <n-space align="center">
+          <n-text style="width: 72px">学校名称</n-text>
+          <n-input
+            v-model:value="schoolName" placeholder="如：海州市启明实验初级中学"
+            style="width: 320px" data-testid="school-name"
+          />
+          <n-button
+            type="primary" :loading="savingSchool" data-testid="school-save"
+            @click="onSaveSchool"
+          >
+            保存
+          </n-button>
+        </n-space>
+      </n-space>
+    </n-card>
+
+    <n-card v-if="isAdmin() && demoAvailable" title="示例数据" data-testid="demo-card">
+      <n-space vertical>
+        <n-text depth="3">
+          加载虚构的初中示例学校“{{ demoSchool || '示例初中' }}”，自动创建班级、教师、
+          科目、教学任务和专用教室，便于直接体验自动排课及后续流程。
+        </n-text>
+        <n-alert type="warning" :show-icon="false">
+          仅可在尚未创建任何学期的全新系统中加载。请勿在正式使用的系统中加载示例数据。
+        </n-alert>
+        <div>
+          <n-button
+            type="primary" :loading="loadingDemo"
+            data-testid="demo-load" @click="onLoadDemo"
+          >
+            加载示例数据
+          </n-button>
+        </div>
+      </n-space>
+    </n-card>
 
     <n-card v-if="isAdmin()" :title="'通知邮件（SMTP）'" data-testid="smtp-card">
       <n-space vertical>
@@ -250,6 +355,33 @@ async function onResetWizard() {
             </tr>
           </tbody>
         </table>
+      </n-space>
+    </n-card>
+
+    <n-card v-if="isAdmin()" title="排课设置" data-testid="scheduling-card">
+      <n-space vertical>
+        <n-text depth="3">
+          超课时上限按学校实际规则设置，表示教师教学任务最多可超过其应授课时的课时数。
+        </n-text>
+        <n-space align="center">
+          <span>超课时上限</span>
+          <n-input-number
+            v-model:value="maxOvertime" :min="0" :max="20" style="width: 120px"
+            data-testid="max-overtime"
+          />
+          <n-text depth="3">课时（0 表示不限制）</n-text>
+        </n-space>
+        <n-text depth="3" style="font-size: 12px">
+          超过上限的教学任务将无法保存；尚未填写基本课时的教师暂不参与此项校验。
+        </n-text>
+        <div>
+          <n-button
+            type="primary" :loading="savingScheduling" data-testid="scheduling-save"
+            @click="onSaveScheduling"
+          >
+            保存排课设置
+          </n-button>
+        </div>
       </n-space>
     </n-card>
 

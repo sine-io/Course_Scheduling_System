@@ -25,7 +25,7 @@
 #    https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
 
 # 3) 选择版本:编辑 .env
-#    固定版本(可控):IMAGE_TAG=v1.1.1
+#    固定版本(可控):IMAGE_TAG=v1.2.0
 #    永远最新:        IMAGE_TAG=latest
 
 # 4) 拉新镜像并重启
@@ -55,7 +55,7 @@ sudo docker compose up -d --build   # 重新构建并重启
 
 ## 关于版本固定
 
-- **正式环境建议 `IMAGE_TAG=v1.1.1` 这样钉住特定版本**,你才能决定何时升级、升到哪一版,而不是每次 `pull` 都可能变动。
+- **正式环境建议 `IMAGE_TAG=v1.2.0` 这样钉住特定版本**,你才能决定何时升级、升到哪一版,而不是每次 `pull` 都可能变动。
 - 升级时，将 `IMAGE_TAG` 改为新版本号，再执行 `sudo docker compose pull && sudo docker compose up -d`。
 - 各版本的变更内容见项目根目录的 [CHANGELOG.md](../../CHANGELOG.md);破坏性变更(若有)会在该版本明确标注 ⚠️ 与对应处理方式。
 

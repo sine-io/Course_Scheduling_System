@@ -1,9 +1,10 @@
-# 正式部署的 web 容器:第一阶段用 Node 构建 Vue 前端,
-# 第二阶段用 Caddy 服务静态文件并反向代理 /api 至后端(保持 5 容器架构,不另开 Node 容器)。
-FROM node:22-alpine AS build
+# 正式部署的 web 容器：第一阶段用 Node 构建 Vue 前端，
+# 第二阶段用 Caddy 服务静态文件并反向代理 /api 至后端。
+# 静态资源与 CPU 架构无关，使用 BUILDPLATFORM 避免多架构构建时运行模拟器。
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
-COPY frontend/package.json ./
-RUN npm install
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 

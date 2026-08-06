@@ -13,16 +13,15 @@
 1. 下载并安装 [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/)。
 2. 安装时若提示启用 WSL 2,照着开启即可。
 3. 安装后开启 Docker Desktop,等左下角变绿灯(Engine running)。
-4. 打开“终端 / PowerShell”，执行 `sudo docker --version`，能够显示版本号即表示安装成功。
+4. 打开 Docker Desktop，确认界面显示 Docker Engine 正在运行。
 
 ### Linux(Ubuntu / Debian,校内服务器常见)
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER   # 让目前用户免 sudo 用 docker(需重新登录生效)
 ```
 
-重新登录后，执行 `sudo docker compose version` 能显示版本号即表示安装成功。
+执行 `sudo docker compose version` 能显示版本号即表示安装成功。
 
 ### NAS(Synology / QNAP)
 
@@ -35,6 +34,29 @@ sudo usermod -aG docker $USER   # 让目前用户免 sudo 用 docker(需重新�
 ---
 
 ## 步骤 1:获取配置文件
+
+### 一键安装脚本(推荐)
+
+脚本会检查 Docker、交互生成 `.env`、下载匹配版本的 Compose 文件并启动服务。正式环境建议填写明确的版本标签。
+
+Linux、macOS 或支持 SSH 的 NAS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/install.sh -o install.sh
+chmod +x install.sh
+./install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/install.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
+需要自定义安装目录、端口、Compose 项目名称、镜像版本，或只生成配置文件时，执行 `./install.sh --help` 或 `Get-Help .\install.ps1 -Detailed` 查看参数。脚本检测到同名项目位于其他目录时会要求确认，避免误接管已有数据库卷。
+
+以下步骤适合希望手工管理配置文件的用户。
 
 ### 方式 A:拉取官方预建镜像(推荐)
 
@@ -63,7 +85,7 @@ cp .env.example .env
 
 ```ini
 ADMIN_PASSWORD=改成你的管理员密码      # 首次登录后系统会再要求你改一次
-SCHOOL_NAME=示范中学                   # 显示在界面与导出的课表上
+SCHOOL_NAME=海州市启明实验初级中学     # 首次启动值，之后可在系统管理中修改
 SECRET_KEY=改成一长串随机字符          # 见下方生成方式,务必更换
 ```
 

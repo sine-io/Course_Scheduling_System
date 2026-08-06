@@ -42,6 +42,7 @@ cd frontend && npm install && npm run test
 | 范围 | 命令 | 要求 |
 |---|---|---|
 | 中文文案与术语 | `python3 scripts/check_simplified_chinese.py` | 无禁用字形、旧术语或地区化分支 |
+| 离线文档 | `python3 scripts/build_docs.py && git diff --exit-code -- docs/*.html docs/deploy/*.html` | 生成的 HTML 与 Markdown 同步 |
 | 后端 lint/格式 | `ruff check .` | 零错误 |
 | 后端类型 | `mypy app` | 零错误 |
 | 后端测试 | `pytest` | 全部通过，且不使现有测试退步 |
@@ -94,8 +95,8 @@ CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建�
 3. 打标签并推送:
 
    ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
+   git tag v1.2.0
+   git push origin v1.2.0
    ```
 
 4. `v*` 标签触发 CI 的 `images` job,构建并推送**双架构(amd64 + arm64)**镜像到 GHCR:
@@ -103,9 +104,9 @@ CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建�
    - `ghcr.io/sine-io/course_scheduling_system-worker`
    - `ghcr.io/sine-io/course_scheduling_system-web`
 
-   每个镜像会推 `:latest`、`:<版本标签>`(如 `v1.0.0`,即 `github.ref_name`)与 `:<commit sha>` 三个 tag。`main` push 仅建 amd64;**版本标签才建双架构**。
+   每个镜像会推 `:latest`、`:<版本标签>`(如 `v1.2.0`,即 `github.ref_name`)与 `:<commit sha>` 三个 tag。`main` push 仅建 amd64;**版本标签才建双架构**。
 5. 在 GitHub 创建 Release,关联该标签,粘贴该版 CHANGELOG 内容。
-6. 用户升级：在 `.env` 中设置 `IMAGE_TAG=v1.0.0`，然后执行 `sudo docker compose pull && sudo docker compose up -d`（见 [升级说明](docs/deploy/upgrade.md)）。`IMAGE_TAG` 对应此处推送的版本标签。
+6. 用户升级：在 `.env` 中设置 `IMAGE_TAG=v1.2.0`，然后执行 `sudo docker compose pull && sudo docker compose up -d`（见 [升级说明](docs/deploy/upgrade.md)）。`IMAGE_TAG` 对应此处推送的版本标签。
 
 ## 授权
 
