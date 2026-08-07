@@ -12,6 +12,8 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    // 允许通过部署域名访问开发服务器。
+    allowedHosts: ['jdms.sineio.top'],
     // 开发模式:/api 代理到后端。
     // Docker 内用服务名 api;本机直跑时设 VITE_API_PROXY=http://localhost:8000。
     proxy: {
