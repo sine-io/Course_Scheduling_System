@@ -12,8 +12,11 @@ async function bootstrap() {
   const app = createApp(App)
   const pinia = createPinia()
   app.use(pinia)
-  // 首次渲染前固定使用简体中文界面和中国大陆日期格式。
-  await useAppConfigStore(pinia).load()
+  // 原型是完全内存化的静态评审面；没有后端时跳过启动配置请求。
+  // 其他路径仍在首次渲染前加载真实的界面配置。
+  if (!window.location.pathname.startsWith('/prototype/')) {
+    await useAppConfigStore(pinia).load()
+  }
   app.use(router)
   app.use(naive)
 

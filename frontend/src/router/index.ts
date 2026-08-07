@@ -4,6 +4,13 @@ import { useWizardStore } from '@/stores/wizard'
 
 const routes = [
   {
+    // THROWAWAY PROTOTYPE: deliberately bypasses auth/API so the visual review runs standalone.
+    path: '/prototype/ui-style',
+    name: 'prototype-ui-style',
+    component: () => import('@/views/prototype/UiStylePrototype.vue'),
+    meta: { public: true, prototype: true },
+  },
+  {
     path: '/login',
     name: 'login',
     component: () => import('@/views/Login.vue'),
@@ -135,6 +142,10 @@ const AUTH_PAGES = new Set(['login', 'change-password'])
 const TEACHER_PAGES = new Set(['timetable-query', 'leaves', 'substitution-stats'])
 
 router.beforeEach(async (to) => {
+  // The prototype is a static, in-memory review surface and must remain runnable
+  // when the backend is not present. All production routes keep the normal guard.
+  if (to.meta.prototype) return true
+
   const auth = useAuthStore()
   if (!auth.loaded) {
     await auth.fetchMe()
