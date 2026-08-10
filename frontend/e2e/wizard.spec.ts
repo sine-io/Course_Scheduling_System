@@ -42,8 +42,9 @@ test('设置向导:使用初中空白模板创建学期并在仪表盘显示摘�
   await page.screenshot({ path: `${SHOTS}/wizard-5-done.png` })
   await page.getByTestId('wizard-finish').click()
 
-  // 完成后导向基础数据页
-  await expect(page.getByRole('heading', { name: '基础数据' })).toBeVisible()
+  // 完成后导向教学任务管理页
+  await expect(page).toHaveURL(/\/scheduling\/assignments$/)
+  await expect(page.getByRole('heading', { name: '教学任务管理' })).toBeVisible()
 
   // 仪表盘显示该学期摘要(验收①)
   await page.goto('/')

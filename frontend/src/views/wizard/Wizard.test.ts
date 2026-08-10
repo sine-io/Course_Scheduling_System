@@ -71,6 +71,7 @@ function makeRouter() {
     routes: [
       { path: '/wizard', name: 'wizard', component: Wizard },
       { path: '/basedata', name: 'basedata', component: { template: '<main>基础数据</main>' } },
+      { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main>教学任务管理</main>' } },
       { path: '/', name: 'dashboard', component: { template: '<main>仪表盘</main>' } },
       { path: '/settings/period-tables/:id', name: 'period-table-editor', component: { template: '<main>编辑器</main>' } },
     ],
@@ -228,7 +229,7 @@ describe('Wizard', () => {
     expect(wrapper.get('[data-testid="wizard-summary-error"]').text()).toContain('摘要服务暂时不可用')
   })
 
-  it('完成五步后跳转基础数据并显示真实摘要', async () => {
+  it('完成五步后跳转教学任务管理并显示真实摘要', async () => {
     const { router, wrapper } = await mountWizard()
 
     await wrapper.get('[data-testid="tpl-junior_high_draft"]').trigger('keydown.space')
@@ -246,6 +247,6 @@ describe('Wizard', () => {
     expect(wrapper.text()).toContain('8')
     await wrapper.get('[data-testid="wizard-finish"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('basedata')
+    expect(router.currentRoute.value.name).toBe('assignments')
   })
 })

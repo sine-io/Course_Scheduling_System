@@ -5,6 +5,11 @@ export interface ApiError extends Error {
   detail?: string
 }
 
+export function apiErrorMessage(error: unknown, fallback: string): string {
+  const detail = (error as Partial<ApiError> | null)?.detail
+  return detail || fallback
+}
+
 // 全域 401 处理器(由 main.ts 注册):session 过期/被撤销时清除登录状态并导回登录页。
 // 认证管理端点(/auth/*)的 401 由调用方自行处理,不触发全域导向,避免重导循环。
 let unauthorizedHandler: (() => void) | null = null

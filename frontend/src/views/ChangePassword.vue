@@ -3,7 +3,7 @@ import { KeyRound } from '@lucide/vue'
 import { NButton, NForm, NFormItem, NInput, useMessage } from 'naive-ui'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import AuthPageFrame from '@/components/AuthPageFrame.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -19,11 +19,6 @@ const loading = ref(false)
 const feedback = ref<{ text: string; kind: 'error' | 'warning' | 'success' } | null>(null)
 
 const forced = auth.mustChangePassword
-
-function apiErrorMessage(error: unknown): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return detail || '修改密码失败，请稍后重试。'
-}
 
 async function onSubmit() {
   if (loading.value) return
@@ -49,7 +44,7 @@ async function onSubmit() {
     message.success('密码已更新')
     await router.push({ name: 'dashboard' })
   } catch (error) {
-    feedback.value = { text: apiErrorMessage(error), kind: 'error' }
+    feedback.value = { text: apiErrorMessage(error, '修改密码失败，请稍后重试。'), kind: 'error' }
   } finally {
     loading.value = false
   }

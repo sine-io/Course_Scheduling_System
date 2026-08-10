@@ -216,7 +216,7 @@ async function finish() {
   try {
     await wizard.patch({ completed: true })
     message.success('初始设置完成')
-    await router.push({ name: 'basedata' })
+    await router.push({ name: 'assignments' })
   } catch (error) {
     actionError.value = errorMessage(error, '无法完成设置，请稍后重试。')
   } finally {
@@ -494,7 +494,7 @@ onMounted(loadWizardData)
           v-else data-testid="wizard-finish" type="primary" :loading="busy"
           :disabled="busy || !!summaryError || !summary" @click="finish"
         >
-          {{ '完成，前往基础数据' }}
+          {{ '完成，前往教学任务管理' }}
           <template #icon><ChevronRight :size="16" aria-hidden="true" /></template>
         </n-button>
       </footer>

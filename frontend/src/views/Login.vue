@@ -2,7 +2,7 @@
 import { NButton, NForm, NFormItem, NInput } from 'naive-ui'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import AuthPageFrame from '@/components/AuthPageFrame.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -13,11 +13,6 @@ const username = ref('')
 const password = ref('')
 const loading = ref(false)
 const feedback = ref<string | null>(null)
-
-function apiErrorMessage(error: unknown, fallback: string): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return detail || fallback
-}
 
 async function onSubmit() {
   if (loading.value) return
