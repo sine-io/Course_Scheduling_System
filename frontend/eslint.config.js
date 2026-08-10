@@ -26,6 +26,13 @@ export default [
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', '*.config.js', '*.config.ts'],
+    ignores: [
+      'dist/',
+      'node_modules/',
+      'playwright-report/',
+      'test-results/',
+      '*.config.js',
+      '*.config.ts',
+    ],
   },
 ]
