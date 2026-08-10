@@ -7,7 +7,7 @@ import {
   CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Clock3,
   LayoutTemplate, SkipForward, Upload,
 } from '@lucide/vue'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ApiError } from '@/api/client'
 import { demoDataStatus, loadDemoData } from '@/api/assignments'
@@ -37,6 +37,7 @@ const initialLoading = ref(true)
 const initialError = ref<string | null>(null)
 const actionError = ref<string | null>(null)
 const summaryError = ref<string | null>(null)
+const summaryLoading = ref(false)
 const demoAvailable = ref(false)
 const demoSchool = ref('')
 const loadingDemo = ref(false)
@@ -45,6 +46,11 @@ const termOptions = [
   { label: '第一学期', value: 1 },
   { label: '第二学期', value: 2 },
 ]
+const periodTable = computed(() => (
+  semester.value?.period_tables.find((table) => table.is_default)
+  ?? semester.value?.period_tables[0]
+  ?? null
+))
 
 function errorMessage(error: unknown, fallback: string): string {
   const apiError = error as Partial<ApiError> | null
@@ -52,13 +58,17 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 async function loadSummary(id: number) {
+  summaryLoading.value = true
   summaryError.value = null
+  summary.value = null
   try {
     summary.value = await getSemesterSummary(id)
   } catch (error) {
     summary.value = null
     summaryError.value = errorMessage(error, '无法读取当前学期的数据摘要')
     throw error
+  } finally {
+    summaryLoading.value = false
   }
 }
 
@@ -71,9 +81,8 @@ async function retrySummary() {
   }
 }
 
-async function loadSemester(id: number, withSummary = false) {
+async function loadSemester(id: number) {
   semester.value = await getSemester(id)
-  if (withSummary) await loadSummary(id)
 }
 
 async function loadWizardData() {
@@ -89,7 +98,16 @@ async function loadWizardData() {
     if (wizard.state) {
       step.value = wizard.state.current_step
       semesterId.value = wizard.state.semester_id
-      if (semesterId.value) await loadSemester(semesterId.value, step.value === 4)
+      if (semesterId.value) {
+        await loadSemester(semesterId.value)
+        if (step.value === 4) {
+          try {
+            await loadSummary(semesterId.value)
+          } catch {
+            // The completion step owns the inline retry state.
+          }
+        }
+      }
     }
 
     // 查询接口仅对管理员开放，其他角色进入向导时忽略 403 即可。
@@ -141,20 +159,35 @@ async function goNext() {
   const previousStep = step.value
   busy.value = true
   try {
-    // 第 2 步(学年学期)→创建学期。
-    if (step.value === 1 && !semesterId.value) {
-      const sem = await createSemester({
-        academic_year: year.value, term: term.value, template_key: templateKey.value,
-      })
-      semesterId.value = sem.id
-      await wizard.patch({ semester_id: sem.id })
-      await loadSemester(sem.id)
+    // 每项都独立检查，以便从创建、保存或读取任一失败点继续重试。
+    if (step.value === 1) {
+      if (!semesterId.value) {
+        const sem = await createSemester({
+          academic_year: year.value, term: term.value, template_key: templateKey.value,
+        })
+        semesterId.value = sem.id
+      }
+      if (wizard.state?.semester_id !== semesterId.value) {
+        await wizard.patch({ semester_id: semesterId.value })
+      }
+      if (semester.value?.id !== semesterId.value) {
+        await loadSemester(semesterId.value)
+      }
     }
 
     const nextStep = Math.min(step.value + 1, 4)
-    if (nextStep === 4 && semesterId.value) await loadSummary(semesterId.value)
     step.value = nextStep
-    if (!await persistStep(nextStep)) step.value = previousStep
+    if (!await persistStep(nextStep)) {
+      step.value = previousStep
+      return
+    }
+    if (nextStep === 4 && semesterId.value) {
+      try {
+        await loadSummary(semesterId.value)
+      } catch {
+        // The completion step owns the inline retry state.
+      }
+    }
   } catch (error) {
     step.value = previousStep
     if (!actionError.value) {
@@ -226,12 +259,11 @@ async function skip() {
 }
 
 function openPeriodEditor() {
-  const table = semester.value?.period_tables.find((t) => t.is_default)
-  if (!table) {
+  if (!periodTable.value) {
     actionError.value = '当前学期没有可编辑的作息时间表，请返回上一步重试。'
     return
   }
-  void router.push({ name: 'period-table-editor', params: { id: table.id } })
+  void router.push({ name: 'period-table-editor', params: { id: periodTable.value.id } })
 }
 
 onMounted(loadWizardData)
@@ -338,26 +370,27 @@ onMounted(loadWizardData)
             </n-empty>
           </div>
           <div v-else class="wizard-template-grid" role="radiogroup" aria-label="学制模板">
-            <button
+            <label
               v-for="t in templates"
               :key="t.key"
-              type="button"
               class="wizard-template"
               :class="{ 'is-selected': templateKey === t.key }"
-              :data-testid="`tpl-${t.key}`"
-              role="radio"
-              :aria-checked="templateKey === t.key"
-              @click="templateKey = t.key"
-              @keydown.enter.prevent="templateKey = t.key"
-              @keydown.space.prevent="templateKey = t.key"
             >
+              <input
+                v-model="templateKey"
+                class="wizard-template-input"
+                type="radio"
+                name="wizard-template"
+                :value="t.key"
+                :data-testid="`tpl-${t.key}`"
+              >
               <span class="wizard-template-mark" aria-hidden="true"><LayoutTemplate :size="19" /></span>
               <span class="wizard-template-copy">
                 <strong>{{ t.name }}</strong>
                 <span>{{ `空白作息时间表 · ${t.subject_count} 个科目参考项` }}</span>
               </span>
               <CheckCircle2 v-if="templateKey === t.key" class="wizard-template-check" :size="18" aria-hidden="true" />
-            </button>
+            </label>
           </div>
         </div>
 
@@ -390,15 +423,20 @@ onMounted(loadWizardData)
         <!-- 步骤 2：作息时间表 -->
         <div v-else-if="step === 2" class="wizard-step-content">
           <p class="wizard-step-intro">{{ '模板不会默认铃声和上课时段，请按学校实际作息填写。' }}</p>
-          <div v-if="semester?.period_tables[0]" class="wizard-period-summary">
-            <strong>{{ semester.period_tables[0].name }}</strong>
+          <div v-if="periodTable" class="wizard-period-summary">
+            <strong>{{ periodTable.name }}</strong>
             <span>
-              {{ '（共' }} {{ semester.period_tables[0].periods.length }} {{ '格，每周' }}
-              {{ semester.period_tables[0].num_weekdays }} {{ '天）' }}
+              {{ '（共' }} {{ periodTable.periods.length }} {{ '格，每周' }}
+              {{ periodTable.num_weekdays }} {{ '天）' }}
             </span>
           </div>
           <n-empty v-else :description="'当前学期还没有作息时间表'" data-testid="wizard-period-empty" />
-          <n-button class="wizard-secondary-action" :disabled="!semester?.period_tables.length" @click="openPeriodEditor">
+          <n-button
+            class="wizard-secondary-action"
+            data-testid="wizard-period-edit"
+            :disabled="!periodTable"
+            @click="openPeriodEditor"
+          >
             <template #icon><Clock3 :size="16" aria-hidden="true" /></template>
             {{ '打开作息时间表编辑器' }}
           </n-button>
@@ -414,7 +452,11 @@ onMounted(loadWizardData)
 
         <!-- 步骤 4：完成 -->
         <div v-else class="wizard-step-content wizard-finish-content">
-          <section v-if="summaryError" class="wizard-state wizard-error" data-testid="wizard-summary-error" role="alert">
+          <section v-if="summaryLoading" class="wizard-state" data-testid="wizard-summary-loading" role="status" aria-live="polite">
+            <n-spin size="small" />
+            <strong>{{ '正在读取当前学期的数据摘要' }}</strong>
+          </section>
+          <section v-else-if="summaryError" class="wizard-state wizard-error" data-testid="wizard-summary-error" role="alert">
             <CircleAlert :size="21" aria-hidden="true" />
             <strong>{{ summaryError }}</strong>
             <n-button type="primary" @click="retrySummary">{{ '重新读取摘要' }}</n-button>
@@ -540,6 +582,7 @@ onMounted(loadWizardData)
 .wizard-template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
 .wizard-template {
+  position: relative;
   display: flex;
   min-width: 0;
   min-height: 92px;
@@ -553,6 +596,17 @@ onMounted(loadWizardData)
   text-align: left;
   cursor: pointer;
   transition: border-color var(--app-motion-duration) var(--app-motion-ease), background var(--app-motion-duration) var(--app-motion-ease);
+}
+
+.wizard-template-input {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .wizard-template:hover { border-color: var(--app-primary-border); background: var(--app-primary-soft); }

@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { WizardState } from '@/api/wizard'
 import Wizard from './Wizard.vue'
 
 const mocks = vi.hoisted(() => ({
@@ -76,7 +77,7 @@ function makeRouter() {
   })
 }
 
-async function mountWizard(state = baseState) {
+async function mountWizard(state: WizardState = baseState) {
   mocks.getWizardState.mockResolvedValue({ ...state })
   const pinia = createPinia()
   const router = makeRouter()
@@ -134,6 +135,20 @@ describe('Wizard', () => {
     expect(wrapper.get('[data-testid="wizard-next"]').attributes('disabled')).toBeDefined()
   })
 
+  it('模板使用原生单选组以支持标准键盘操作', async () => {
+    mocks.listTemplates.mockResolvedValue([
+      template,
+      { ...template, key: 'senior_high_draft', name: '高中（空白模板）' },
+    ])
+    const { wrapper } = await mountWizard()
+
+    const radios = wrapper.findAll('input[type="radio"][name="wizard-template"]')
+    expect(radios).toHaveLength(2)
+    expect((radios[0].element as HTMLInputElement).checked).toBe(true)
+    await radios[1].setValue(true)
+    expect((radios[1].element as HTMLInputElement).checked).toBe(true)
+  })
+
   it('创建学期失败时保留当前步骤并给出重试提示', async () => {
     const { wrapper } = await mountWizard()
     await wrapper.get('[data-testid="wizard-next"]').trigger('click')
@@ -146,6 +161,71 @@ describe('Wizard', () => {
 
     expect(wrapper.get('[data-testid="wizard-error"]').text()).toContain('该学年学期已存在')
     expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学年学期')
+  })
+
+  it('学期创建成功但进度保存失败时可从断点重试', async () => {
+    let semesterPatchAttempts = 0
+    mocks.updateWizardState.mockImplementation((body: Record<string, unknown>) => {
+      if ('semester_id' in body) {
+        semesterPatchAttempts += 1
+        if (semesterPatchAttempts === 1) return Promise.reject({ detail: '进度保存失败' })
+      }
+      return Promise.resolve({
+        ...baseState,
+        ...body,
+        semester_id: body.semester_id ?? baseState.semester_id,
+      })
+    })
+    const { wrapper } = await mountWizard()
+
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="wizard-error"]').text()).toContain('进度保存失败')
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学年学期')
+
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.createSemester).toHaveBeenCalledTimes(1)
+    expect(semesterPatchAttempts).toBe(2)
+    expect(mocks.getSemester).toHaveBeenCalledWith(semester.id)
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('作息时间表')
+  })
+
+  it('没有默认作息表时显示并打开第一张表', async () => {
+    mocks.getSemester.mockResolvedValue({
+      ...semester,
+      period_tables: [{ ...semester.period_tables[0], is_default: false }],
+    })
+    const { router, wrapper } = await mountWizard({
+      ...baseState,
+      current_step: 2,
+      semester_id: semester.id,
+    })
+
+    expect(wrapper.text()).toContain('初中作息时间表')
+    await wrapper.get('[data-testid="wizard-period-edit"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('period-table-editor')
+    expect(router.currentRoute.value.params.id).toBe(String(semester.period_tables[0].id))
+  })
+
+  it('完成摘要读取失败时进入完成页并提供专用重试状态', async () => {
+    mocks.getSemesterSummary.mockRejectedValue({ detail: '摘要服务暂时不可用' })
+    const { wrapper } = await mountWizard({
+      ...baseState,
+      current_step: 3,
+      semester_id: semester.id,
+    })
+
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('完成')
+    expect(wrapper.get('[data-testid="wizard-summary-error"]').text()).toContain('摘要服务暂时不可用')
   })
 
   it('完成五步后跳转基础数据并显示真实摘要', async () => {

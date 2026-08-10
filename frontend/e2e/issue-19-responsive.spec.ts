@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
+import { login } from './helpers'
 
 const VIEWPORTS = [
   { width: 1920, height: 1080 },
@@ -8,23 +9,12 @@ const VIEWPORTS = [
   { width: 375, height: 812 },
 ] as const
 
-const USER = {
+const FORCED_PASSWORD_USER = {
   id: 7,
   username: 'responsive-user',
   display_name: '响应式验收用户',
   roles: ['scheduler'],
-  must_change_password: false,
-}
-
-const APP_CONFIG = {
-  school_name: '响应式验收学校',
-  timezone: 'Asia/Shanghai',
-  role_display_names: { scheduler: '排课管理员' },
-  academic_year: {
-    storage: 'start_year', min: 1900, max: 2100,
-    label_format: '{year}-{next_year}学年{term_label}',
-    term_labels: { '1': '第一学期', '2': '第二学期' },
-  },
+  must_change_password: true,
 }
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
@@ -35,18 +25,11 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
   })
 }
 
-async function mockSurface(page: Page, surface: 'login' | 'change-password' | 'wizard' | 'dashboard') {
-  await page.route('**/api/app-config', (route) => fulfillJson(route, APP_CONFIG))
-
-  if (surface === 'login') {
-    await page.route('**/api/auth/me', (route) => fulfillJson(route, { detail: '未登录' }, 401))
+async function mockSurfaceData(page: Page, surface: 'change-password' | 'wizard' | 'dashboard') {
+  if (surface === 'change-password') {
+    await page.route('**/api/auth/login', (route) => fulfillJson(route, FORCED_PASSWORD_USER))
     return
   }
-
-  const user = surface === 'change-password'
-    ? { ...USER, must_change_password: true }
-    : USER
-  await page.route('**/api/auth/me', (route) => fulfillJson(route, user))
 
   if (surface === 'wizard') {
     await page.route('**/api/school-templates', (route) => fulfillJson(route, [{
@@ -90,10 +73,10 @@ async function expectNoRootOverflow(page: Page) {
   expect(overflow).toBe(false)
 }
 
-async function expectVisibleFlow(page: Page, selectors: string[]) {
-  const boxes = await Promise.all(selectors.map((selector) => page.locator(selector).boundingBox()))
+async function expectVisibleFlow(page: Page, items: Array<{ name: string, locator: Locator }>) {
+  const boxes = await Promise.all(items.map(({ locator }) => locator.boundingBox()))
   for (const [index, box] of boxes.entries()) {
-    expect(box, `${selectors[index]} should have a layout box`).not.toBeNull()
+    expect(box, `${items[index].name} should have a layout box`).not.toBeNull()
     if (!box) continue
     expect(box.x).toBeGreaterThanOrEqual(0)
     expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1)
@@ -108,55 +91,76 @@ for (const viewport of VIEWPORTS) {
   test(`登录页 ${viewport.width}x${viewport.height} 保持可见且无溢出`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await mockSurface(page, 'login')
     await page.goto('/login')
 
     await expect(page.getByTestId('login-submit')).toBeVisible()
     await expect(page.getByPlaceholder('请输入账号')).toBeVisible()
     await expect(page.getByPlaceholder('请输入密码')).toBeVisible()
     await expectNoRootOverflow(page)
-    await expectVisibleFlow(page, ['.auth-panel-header', '.auth-form', '.auth-note'])
+    await expectVisibleFlow(page, [
+      { name: '登录标题', locator: page.getByRole('heading', { name: '登录教务排课' }) },
+      { name: '账号输入框', locator: page.getByPlaceholder('请输入账号') },
+      { name: '密码输入框', locator: page.getByPlaceholder('请输入密码') },
+      { name: '登录按钮', locator: page.getByTestId('login-submit') },
+      { name: '安全提示', locator: page.getByText('请勿在公共设备上保存密码。') },
+    ])
   })
 
   test(`改密页 ${viewport.width}x${viewport.height} 保持可见且无溢出`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await mockSurface(page, 'change-password')
-    await page.goto('/change-password')
+    await mockSurfaceData(page, 'change-password')
+    await login(page)
 
+    await expect(page).toHaveURL(/\/change-password$/)
     await expect(page.getByTestId('cp-forced')).toBeVisible()
     await expect(page.getByTestId('cp-submit')).toBeVisible()
     await expectNoRootOverflow(page)
-    await expectVisibleFlow(page, ['.auth-panel-header', '.auth-callout', '.auth-form', '.auth-note'])
+    await expectVisibleFlow(page, [
+      { name: '改密标题', locator: page.getByRole('heading', { name: '修改密码' }) },
+      { name: '强制改密提示', locator: page.getByTestId('cp-forced') },
+      { name: '原密码输入框', locator: page.getByPlaceholder('请输入原密码') },
+      { name: '新密码输入框', locator: page.getByPlaceholder('请输入新密码') },
+      { name: '确认密码输入框', locator: page.getByPlaceholder('请再次输入新密码') },
+      { name: '确认修改按钮', locator: page.getByTestId('cp-submit') },
+    ])
   })
 
   test(`设置向导 ${viewport.width}x${viewport.height} 保持五步控件可见`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await mockSurface(page, 'wizard')
-    await page.goto('/wizard')
+    await mockSurfaceData(page, 'wizard')
+    await login(page)
 
+    await expect(page).toHaveURL(/\/wizard$/)
     await expect(page.getByRole('heading', { name: '设置向导' })).toBeVisible()
     await expect(page.getByTestId('wizard-step-title')).toHaveText('学制模板')
     await expect(page.getByTestId('wizard-next')).toBeVisible()
     await expectNoRootOverflow(page)
-    await expectVisibleFlow(page, ['.wizard-header', '.wizard-progress', '.wizard-panel', '.wizard-actions'])
-    const progressOverflow = await page.locator('.wizard-progress').evaluate((element) => (
-      element.scrollWidth >= element.clientWidth
-    ))
-    expect(progressOverflow).toBe(true)
+    await expectVisibleFlow(page, [
+      { name: '向导标题', locator: page.getByRole('heading', { name: '设置向导' }) },
+      { name: '设置步骤', locator: page.getByRole('navigation', { name: '设置步骤' }) },
+      { name: '当前步骤标题', locator: page.getByTestId('wizard-step-title') },
+      { name: '下一步按钮', locator: page.getByTestId('wizard-next') },
+    ])
   })
 
   test(`仪表盘 ${viewport.width}x${viewport.height} 保持摘要与快捷入口可见`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await mockSurface(page, 'dashboard')
-    await page.goto('/')
+    await mockSurfaceData(page, 'dashboard')
+    await login(page)
 
+    await expect(page).toHaveURL(/\/$/)
     await expect(page.getByTestId('dash-summary')).toBeVisible()
     await expect(page.getByTestId('dash-today')).toBeVisible()
     await expect(page.getByTestId('dash-shortcut-workbench')).toBeVisible()
     await expectNoRootOverflow(page)
-    await expectVisibleFlow(page, ['.dashboard-header', '.dashboard-summary-panel', '.dashboard-today-panel', '.dashboard-shortcuts'])
+    await expectVisibleFlow(page, [
+      { name: '仪表盘标题', locator: page.getByRole('heading', { name: '仪表盘' }) },
+      { name: '学期摘要', locator: page.getByTestId('dash-summary') },
+      { name: '今日运行', locator: page.getByTestId('dash-today') },
+      { name: '排课工作台快捷入口', locator: page.getByTestId('dash-shortcut-workbench') },
+    ])
   })
 }

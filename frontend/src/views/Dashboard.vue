@@ -52,16 +52,20 @@ async function loadDashboard() {
     if (!semesters.length) return
 
     semester.value = semesters.find((item) => item.status === 'active') ?? semesters[0]
-    try {
-      summary.value = await getSemesterSummary(semester.value.id)
-    } catch {
+    const [summaryResult, boardResult] = await Promise.allSettled([
+      getSemesterSummary(semester.value.id),
+      getDailyBoard(semester.value.id),
+    ])
+
+    if (summaryResult.status === 'fulfilled') {
+      summary.value = summaryResult.value
+    } else {
       loadError.value = '无法读取学期摘要，请稍后重试。'
-      return
     }
 
-    try {
-      board.value = await getDailyBoard(semester.value.id)
-    } catch {
+    if (boardResult.status === 'fulfilled') {
+      board.value = boardResult.value
+    } else {
       boardError.value = '无法读取今日调课与代课。'
     }
   } catch {

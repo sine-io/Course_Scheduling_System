@@ -125,6 +125,33 @@ describe('Dashboard', () => {
     expect(wrapper.get('a[href="/daily-board"]')).toBeTruthy()
   })
 
+  it('并发读取学期摘要与今日看板', async () => {
+    const summaryRequest = deferred<ReturnType<typeof jsonResponse>>()
+    const board = {
+      date: '2042-09-02', weekday: 2, school_name: '测试学校',
+      semester_label: '2042-2043学年第一学期', entries: [],
+    }
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url).endsWith('/semesters')) {
+        return Promise.resolve(jsonResponse([{
+          id: 8, academic_year: 2042, term: 1, label: '2042-2043学年第一学期',
+          status: 'active', readiness: 'ready', start_date: null, end_date: null,
+        }])) as never
+      }
+      if (String(url).includes('/summary')) return summaryRequest.promise as never
+      return Promise.resolve(jsonResponse(board)) as never
+    })
+
+    mount(Dashboard, {
+      global: { plugins: [createPinia(), makeRouter()] },
+    })
+    await flushPromises()
+
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/daily-board'))).toBe(true)
+    summaryRequest.resolve(jsonResponse({ subjects: 1, teachers: 2, classes: 3, rooms: 4 }))
+    await flushPromises()
+  })
+
   it('摘要请求失败时显示错误状态和重试入口', async () => {
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url).endsWith('/semesters')) {
