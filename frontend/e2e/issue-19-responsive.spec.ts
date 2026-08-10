@@ -74,16 +74,29 @@ async function expectNoRootOverflow(page: Page) {
 }
 
 async function expectVisibleFlow(page: Page, items: Array<{ name: string, locator: Locator }>) {
+  const viewport = page.viewportSize()!
   const boxes = await Promise.all(items.map(({ locator }) => locator.boundingBox()))
   for (const [index, box] of boxes.entries()) {
     expect(box, `${items[index].name} should have a layout box`).not.toBeNull()
     if (!box) continue
     expect(box.x).toBeGreaterThanOrEqual(0)
-    expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width + 1)
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 1)
     if (index > 0 && boxes[index - 1]) {
       const previous = boxes[index - 1]!
       expect(box.y).toBeGreaterThanOrEqual(previous.y + previous.height - 1)
     }
+  }
+
+  for (const { name, locator } of items) {
+    await locator.scrollIntoViewIfNeeded()
+    const visibleBox = await locator.boundingBox()
+    expect(visibleBox, `${name} should remain visible after scrolling`).not.toBeNull()
+    if (!visibleBox) continue
+    expect(visibleBox.y, `${name} should not be clipped above the viewport`).toBeGreaterThanOrEqual(-1)
+    expect(
+      visibleBox.y + visibleBox.height,
+      `${name} should not be clipped below the viewport`,
+    ).toBeLessThanOrEqual(viewport.height + 1)
   }
 }
 

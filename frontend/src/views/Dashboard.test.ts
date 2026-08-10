@@ -152,7 +152,12 @@ describe('Dashboard', () => {
     await flushPromises()
   })
 
-  it('摘要请求失败时显示错误状态和重试入口', async () => {
+  it('摘要请求失败时保留今日看板和快捷入口并显示局部重试', async () => {
+    let summaryAttempts = 0
+    const board = {
+      date: '2042-09-02', weekday: 2, school_name: '测试学校',
+      semester_label: '2042-2043学年第一学期', entries: [],
+    }
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url).endsWith('/semesters')) {
         return Promise.resolve(jsonResponse([{
@@ -160,7 +165,14 @@ describe('Dashboard', () => {
           status: 'active', readiness: 'draft', start_date: null, end_date: null,
         }])) as never
       }
-      return Promise.resolve(jsonResponse({ detail: '摘要服务暂时不可用' }, 503)) as never
+      if (String(url).includes('/summary')) {
+        summaryAttempts += 1
+        if (summaryAttempts > 1) {
+          return Promise.resolve(jsonResponse({ subjects: 12, teachers: 34, classes: 18, rooms: 7 })) as never
+        }
+        return Promise.resolve(jsonResponse({ detail: '摘要服务暂时不可用' }, 503)) as never
+      }
+      return Promise.resolve(jsonResponse(board)) as never
     })
 
     const wrapper = mount(Dashboard, {
@@ -168,8 +180,16 @@ describe('Dashboard', () => {
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="dash-error"]').text()).toContain('无法读取学期摘要')
-    expect(wrapper.get('[data-testid="dash-retry"]').text()).toContain('重新加载')
+    expect(wrapper.find('[data-testid="dash-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="dash-summary-error"]').text()).toContain('无法读取学期摘要')
+    expect(wrapper.get('[data-testid="dash-summary-retry"]').text()).toContain('重新读取摘要')
+    expect(wrapper.get('[data-testid="dash-today"]').text()).toContain('今日无调课与代课')
+    expect(wrapper.get('[data-testid="dash-shortcut-workbench"]')).toBeTruthy()
+
+    await wrapper.get('[data-testid="dash-summary-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="dash-summary"]').text()).toContain('12')
+    expect(wrapper.find('[data-testid="dash-summary-error"]').exists()).toBe(false)
   })
 
   it('今日看板请求失败时保留摘要并显示局部错误', async () => {

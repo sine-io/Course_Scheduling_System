@@ -18,6 +18,8 @@ const summary = ref<SemesterSummary | null>(null)
 const board = ref<DailyBoard | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
+const summaryError = ref<string | null>(null)
+const summaryLoading = ref(false)
 const boardError = ref<string | null>(null)
 const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
@@ -42,6 +44,8 @@ function entryOutcome(entry: DailyBoard['entries'][number]): string {
 async function loadDashboard() {
   loading.value = true
   loadError.value = null
+  summaryError.value = null
+  summaryLoading.value = false
   boardError.value = null
   semester.value = null
   summary.value = null
@@ -60,7 +64,7 @@ async function loadDashboard() {
     if (summaryResult.status === 'fulfilled') {
       summary.value = summaryResult.value
     } else {
-      loadError.value = '无法读取学期摘要，请稍后重试。'
+      summaryError.value = '无法读取学期摘要，请稍后重试。'
     }
 
     if (boardResult.status === 'fulfilled') {
@@ -72,6 +76,21 @@ async function loadDashboard() {
     loadError.value = '无法读取仪表盘数据，请稍后重试。'
   } finally {
     loading.value = false
+  }
+}
+
+async function retrySummary() {
+  if (!semester.value || summaryLoading.value) return
+
+  summaryLoading.value = true
+  summaryError.value = null
+  try {
+    summary.value = await getSemesterSummary(semester.value.id)
+  } catch {
+    summary.value = null
+    summaryError.value = '无法读取学期摘要，请稍后重试。'
+  } finally {
+    summaryLoading.value = false
   }
 }
 
@@ -117,23 +136,46 @@ onMounted(loadDashboard)
           </div>
           <span class="dashboard-status-badge">{{ semesterStatusLabel }}</span>
         </div>
-        <div class="dashboard-summary-grid">
+        <div v-if="summary" class="dashboard-summary-grid">
           <div class="dashboard-metric">
             <span class="dashboard-metric-icon" aria-hidden="true"><BookOpen :size="18" /></span>
-            <n-statistic :label="'科目'" :value="summary?.subjects ?? 0" />
+            <n-statistic :label="'科目'" :value="summary.subjects" />
           </div>
           <div class="dashboard-metric">
             <span class="dashboard-metric-icon" aria-hidden="true"><Users :size="18" /></span>
-            <n-statistic :label="'教师'" :value="summary?.teachers ?? 0" />
+            <n-statistic :label="'教师'" :value="summary.teachers" />
           </div>
           <div class="dashboard-metric">
             <span class="dashboard-metric-icon" aria-hidden="true"><GraduationCap :size="18" /></span>
-            <n-statistic :label="'班级'" :value="summary?.classes ?? 0" />
+            <n-statistic :label="'班级'" :value="summary.classes" />
           </div>
           <div class="dashboard-metric">
             <span class="dashboard-metric-icon" aria-hidden="true"><DoorOpen :size="18" /></span>
-            <n-statistic :label="'教室/场地'" :value="summary?.rooms ?? 0" />
+            <n-statistic :label="'教室/场地'" :value="summary.rooms" />
           </div>
+        </div>
+        <div
+          v-else-if="summaryError"
+          class="dashboard-state dashboard-error dashboard-inline-state"
+          data-testid="dash-summary-error"
+          role="status"
+        >
+          <RefreshCw :size="21" aria-hidden="true" />
+          <strong>{{ summaryError }}</strong>
+          <span>{{ '今日运行和快捷入口仍可继续使用。' }}</span>
+          <n-button
+            data-testid="dash-summary-retry"
+            type="primary"
+            :loading="summaryLoading"
+            :disabled="summaryLoading"
+            @click="retrySummary"
+          >
+            {{ '重新读取摘要' }}
+          </n-button>
+        </div>
+        <div v-else class="dashboard-state dashboard-inline-state" role="status" aria-live="polite">
+          <n-spin size="small" />
+          <strong>{{ '正在读取学期摘要' }}</strong>
         </div>
       </section>
 
@@ -289,6 +331,7 @@ onMounted(loadDashboard)
 .dashboard-state span { font-size: 13px; }
 .dashboard-error { border-style: solid; }
 .dashboard-error > svg { color: var(--app-danger); }
+.dashboard-inline-state { min-height: 150px; padding: 20px; box-shadow: none; }
 
 @media (max-width: 820px) {
   .dashboard-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
