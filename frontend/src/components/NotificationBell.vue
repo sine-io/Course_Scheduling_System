@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { NBadge, NButton, NEmpty, NPopover, NScrollbar, NSpace, NTag, NText, useMessage } from 'naive-ui'
+import { Bell } from '@lucide/vue'
+import { NBadge, NButton, NEmpty, NPopover, NSpace, NTag, NText, useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { acknowledge, markRead, myNotifications } from '@/api/notifications'
 import type { Notification } from '@/api/notifications'
@@ -15,7 +16,12 @@ const POLL_MS = 20000 // 站内通知轮询;铃铛不需要实时更新,20 秒�
 const sid = ref<number | null>(null)
 const items = ref<Notification[]>([])
 const unread = ref(0)
+const compactViewport = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
+let viewportMedia: MediaQueryList | null = null
+
+const bellLabel = computed(() => unread.value > 0 ? `通知，${unread.value} 条未读` : '通知')
+const popoverPlacement = computed(() => compactViewport.value ? 'bottom' : 'bottom-end')
 
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
@@ -38,13 +44,25 @@ async function refresh() {
 }
 
 onMounted(async () => {
+  if (typeof window.matchMedia === 'function') {
+    viewportMedia = window.matchMedia('(max-width: 767px)')
+    compactViewport.value = viewportMedia.matches
+    viewportMedia.addEventListener('change', onViewportChange)
+  } else {
+    compactViewport.value = window.innerWidth < 768
+  }
   await resolveSemester()
   await refresh()
   timer = setInterval(refresh, POLL_MS)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  viewportMedia?.removeEventListener('change', onViewportChange)
 })
+
+function onViewportChange(event: MediaQueryListEvent) {
+  compactViewport.value = event.matches
+}
 
 async function onOpen(show: boolean) {
   if (show) await refresh()
@@ -72,16 +90,24 @@ const typeTag = computed<Record<string, string>>(() => ({
 </script>
 
 <template>
-  <n-popover trigger="click" placement="bottom-end" @update:show="onOpen">
+  <n-popover
+    trigger="click" :placement="popoverPlacement" :flip="!compactViewport"
+    @update:show="onOpen"
+  >
     <template #trigger>
       <n-badge :value="unread" :max="99" data-testid="notif-badge">
-        <n-button quaternary circle data-testid="notif-bell">🔔</n-button>
+        <n-button
+          quaternary circle class="notification-button" data-testid="notif-bell"
+          :aria-label="bellLabel" :title="bellLabel"
+        >
+          <Bell :size="18" :stroke-width="1.9" aria-hidden="true" />
+        </n-button>
       </n-badge>
     </template>
 
-    <div style="width: min(360px, 80vw)">
+    <div class="notification-panel">
       <n-empty v-if="!items.length" :description="'没有通知'" style="padding: 24px 0" />
-      <n-scrollbar v-else style="max-height: 60vh">
+      <div v-else class="notification-scroll">
         <n-space vertical size="small" style="padding-right: 8px">
           <div
             v-for="n in items" :key="n.id" data-testid="notif-item"
@@ -107,7 +133,31 @@ const typeTag = computed<Record<string, string>>(() => ({
             </div>
           </div>
         </n-space>
-      </n-scrollbar>
+      </div>
     </div>
   </n-popover>
 </template>
+
+<style scoped>
+.notification-panel {
+  width: min(360px, 80vw);
+  max-width: calc(100vw - 32px);
+}
+
+.notification-scroll {
+  max-height: min(360px, calc(100dvh - 88px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+}
+
+@media (max-width: 767px) {
+  .notification-panel {
+    width: min(320px, calc(100vw - 32px));
+  }
+
+  .notification-scroll {
+    max-height: calc(100dvh - 96px);
+  }
+}
+</style>

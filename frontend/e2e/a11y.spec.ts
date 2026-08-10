@@ -100,8 +100,7 @@ test('无障碍:内文与主要按钮对比度符合 WCAG AA 基本门槛', asyn
     .toBeGreaterThanOrEqual(4.5)
 
   // 主要按钮:按钮标签是「文字」,适用 WCAG 1.4.3 的 4.5:1,不是 1.4.11 非文字组件的 3:1。
-  // Naive 默认的 #18a058 配白字只有 ~3.4:1;M6-5 把主色压深到 #0d7a43(5.41:1)后真的达标,
-  // 门槛因此从权宜的 3:1 提到 AA 的 4.5:1(见 src/theme.ts)。
+  // 生产视觉 token 的 #2864dc 配白字为 5.32:1，默认态与交互态都应通过 AA。
   const btn = await colorsOf(page, '.n-button--primary-type')
   const btnRatio = contrastRatio(parseRgb(btn.fg), parseRgb(btn.bg))
   expect(btnRatio, `主要按钮对比 ${btnRatio.toFixed(2)}(fg=${btn.fg} bg=${btn.bg})`)
