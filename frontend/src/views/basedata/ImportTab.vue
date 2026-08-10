@@ -17,28 +17,37 @@ const entity = ref<ImportEntity>('subjects')
 const createAccounts = ref(false)
 const selectedFile = ref<File | null>(null)
 const uploading = ref(false)
+const downloading = ref(false)
 const result = ref<ImportResult | null>(null)
+const errorMessage = ref<string | null>(null)
 
 const isTeacher = computed(() => entity.value === 'teachers')
 
 async function onDownload() {
+  if (downloading.value) return
+  errorMessage.value = null
+  downloading.value = true
   try {
     await downloadTemplate(entity.value)
-  } catch {
-    message.error('模板下载失败')
+  } catch (e) {
+    errorMessage.value = (e as Error).message || '模板下载失败，请稍后重试。'
+  } finally {
+    downloading.value = false
   }
 }
 
 function onFileChange(data: { fileList: UploadFileInfo[] }) {
   selectedFile.value = data.fileList[0]?.file ?? null
   result.value = null
+  errorMessage.value = null
 }
 
 async function onUpload() {
   if (!selectedFile.value) {
-    message.warning('请先选择文件')
+    errorMessage.value = '请先选择文件'
     return
   }
+  errorMessage.value = null
   uploading.value = true
   result.value = null
   try {
@@ -53,7 +62,7 @@ async function onUpload() {
       message.error('导入未完成，请修正错误后重试')
     }
   } catch (e) {
-    message.error((e as Error).message || '导入失败')
+    errorMessage.value = (e as Error).message || '导入失败，请稍后重试。'
   } finally {
     uploading.value = false
   }
@@ -77,7 +86,9 @@ async function onUpload() {
 
     <n-space vertical>
       <n-text strong>{{ '② 下载模板' }}</n-text>
-      <n-button @click="onDownload">{{ '下载' }}「{{ labels[entity] }}」{{ '模板' }}</n-button>
+      <n-button :loading="downloading" :disabled="uploading" @click="onDownload">
+        {{ '下载' }}「{{ labels[entity] }}」{{ '模板' }}
+      </n-button>
     </n-space>
 
     <n-space vertical>
@@ -92,6 +103,10 @@ async function onUpload() {
         {{ '开始导入' }}
       </n-button>
     </n-space>
+
+    <n-alert v-if="errorMessage" type="error" data-testid="import-error" role="alert" aria-live="assertive">
+      {{ errorMessage }}
+    </n-alert>
 
     <n-alert v-if="result && result.errors.length === 0" type="success">
       {{ `成功导入 ${result.imported} 条数据。` }}
