@@ -11,6 +11,7 @@ import {
 import type { ClassTrack, ClassUnit, Teacher } from '@/api/basedata'
 import { getSemester } from '@/api/semesters'
 import type { PeriodTable } from '@/api/semesters'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './basedata-workspace.css'
 
 const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
@@ -59,7 +60,7 @@ async function reload() {
   loading.value = true
   loadError.value = null
   try {
-    items.value = await listClassUnits(props.semesterId, search.value.trim() || undefined)
+    items.value = await listClassUnits(props.semesterId, search.value || undefined)
   } catch (error) {
     loadError.value = errorMessage(error, '暂时无法读取班级，请重试。')
   } finally {
@@ -72,7 +73,7 @@ async function loadInitialData() {
   loadError.value = null
   try {
     const [classItems, teacherItems, semester] = await Promise.all([
-      listClassUnits(props.semesterId, search.value.trim() || undefined),
+      listClassUnits(props.semesterId, search.value || undefined),
       listTeachers(props.semesterId),
       getSemester(props.semesterId),
     ])
@@ -142,16 +143,16 @@ function closeModal() {
 
 async function save() {
   if (saving.value) return
-  if (!form.value.name.trim()) {
+  if (!form.value.name) {
     message.warning('请输入班级名称')
     return
   }
   saving.value = true
   const body = {
     grade: form.value.grade,
-    name: form.value.name.trim(),
+    name: form.value.name,
     track: form.value.track,
-    department: showDepartment.value ? form.value.department.trim() || null : null,
+    department: showDepartment.value ? form.value.department || null : null,
     student_count: form.value.student_count,
     homeroom_teacher_id: form.value.homeroom_teacher_id,
     period_table_id: showPeriodTable.value ? form.value.period_table_id : null,
@@ -283,25 +284,42 @@ async function remove(classUnit: ClassUnit) {
         <div class="basedata-form-row">
           <div class="basedata-field">
             <span class="basedata-field-label">{{ '年级' }}</span>
-            <n-input-number v-model:value="form.grade" :min="1" :max="12" />
+            <n-input-number
+              v-model:value="form.grade"
+              :min="1"
+              :max="12"
+              :input-props="{ 'aria-label': '年级' }"
+            />
           </div>
           <div class="basedata-field">
             <label for="class-name">{{ '班级名称' }}</label>
-            <n-input id="class-name" v-model:value="form.name" data-testid="class-name" :placeholder="'如：1班、七年级1班'" />
+            <n-input
+              id="class-name"
+              v-model:value="form.name"
+              data-testid="class-name"
+              :placeholder="'如：1班、七年级1班'"
+              :input-props="{ 'aria-label': '班级名称' }"
+            />
           </div>
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '学段' }}</span>
-          <n-select v-model:value="form.track" :options="trackOptions" />
+          <n-select v-model:value="form.track" v-accessible-select="'学段'" :options="trackOptions" />
         </div>
         <div v-if="showDepartment" class="basedata-field">
           <label for="class-department">{{ '专业（中职）' }}</label>
-          <n-input id="class-department" v-model:value="form.department" :placeholder="'如：机械专业'" />
+          <n-input
+            id="class-department"
+            v-model:value="form.department"
+            :placeholder="'如：机械专业'"
+            :input-props="{ 'aria-label': '专业（中职）' }"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '班主任（可选）' }}</span>
           <n-select
             v-model:value="form.homeroom_teacher_id"
+            v-accessible-select="'班主任'"
             :options="teacherOptions"
             clearable
             :placeholder="'（未指定）'"
@@ -311,6 +329,7 @@ async function remove(classUnit: ClassUnit) {
           <span class="basedata-field-label">{{ '作息时间表' }}</span>
           <n-select
             v-model:value="form.period_table_id"
+            v-accessible-select="'作息时间表'"
             data-testid="class-period-table"
             :options="periodTableOptions"
             clearable
@@ -319,7 +338,11 @@ async function remove(classUnit: ClassUnit) {
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '人数（可选）' }}</span>
-          <n-input-number v-model:value="form.student_count" :min="0" />
+          <n-input-number
+            v-model:value="form.student_count"
+            :min="0"
+            :input-props="{ 'aria-label': '人数' }"
+          />
         </div>
         <div class="basedata-modal-actions">
           <n-button quaternary :disabled="saving" @click="closeModal">

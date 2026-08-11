@@ -182,6 +182,13 @@
 .basedata-modal {
   width: min(560px, calc(100vw - 32px));
   max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 20px);
+}
+
+.basedata-modal > .n-card__content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 .basedata-modal--wide { width: min(640px, calc(100vw - 32px)); }

@@ -12,6 +12,7 @@ import {
   createTeacher, deleteTeacher, listBindableAccounts, listSubjects, listTeachers, updateTeacher,
 } from '@/api/basedata'
 import type { BindableAccount, Subject, Teacher } from '@/api/basedata'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import TeacherTimeRules from './TeacherTimeRules.vue'
 import './basedata-workspace.css'
 
@@ -43,7 +44,7 @@ async function reload() {
   loading.value = true
   loadError.value = null
   try {
-    items.value = await listTeachers(props.semesterId, search.value.trim() || undefined)
+    items.value = await listTeachers(props.semesterId, search.value || undefined)
   } catch (error) {
     loadError.value = errorMessage(error, '暂时无法读取教师，请重试。')
   } finally {
@@ -56,7 +57,7 @@ async function loadInitialData() {
   loadError.value = null
   try {
     const [teacherItems, subjectItems] = await Promise.all([
-      listTeachers(props.semesterId, search.value.trim() || undefined),
+      listTeachers(props.semesterId, search.value || undefined),
       listSubjects(props.semesterId),
     ])
     items.value = teacherItems
@@ -152,18 +153,17 @@ function closeModal() {
 
 async function save() {
   if (saving.value) return
-  if (!form.value.name.trim()) {
+  if (!form.value.name) {
     message.warning('请输入教师姓名')
     return
   }
   saving.value = true
   const body = {
     ...form.value,
-    name: form.value.name.trim(),
-    admin_title: form.value.admin_title.trim() || null,
-    email: form.value.email.trim() || null,
-    phone: form.value.phone.trim() || null,
-    line_id: form.value.line_id.trim() || null,
+    admin_title: form.value.admin_title || null,
+    email: form.value.email || null,
+    phone: form.value.phone || null,
+    line_id: form.value.line_id || null,
   }
   try {
     if (editingId.value) await updateTeacher(editingId.value, body)
@@ -315,29 +315,54 @@ function openRules(teacher: Teacher) {
       <div class="basedata-form">
         <div class="basedata-field">
           <label for="teacher-name">{{ '姓名' }}</label>
-          <n-input id="teacher-name" v-model:value="form.name" data-testid="teacher-name" :placeholder="'如：王小明'" />
+          <n-input
+            id="teacher-name"
+            v-model:value="form.name"
+            data-testid="teacher-name"
+            :placeholder="'如：王小明'"
+            :input-props="{ 'aria-label': '姓名' }"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '任教科目' }}</span>
-          <n-select v-model:value="form.subject_ids" multiple :options="subjectOptions" :placeholder="'可多选'" />
+          <n-select
+            v-model:value="form.subject_ids"
+            v-accessible-select="'任教科目'"
+            multiple
+            :options="subjectOptions"
+            :placeholder="'可多选'"
+          />
         </div>
         <div class="basedata-form-row">
           <div class="basedata-field">
             <span class="basedata-field-label">{{ '基本课时' }}</span>
-            <n-input-number v-model:value="form.base_periods" :min="0" />
+            <n-input-number
+              v-model:value="form.base_periods"
+              :min="0"
+              :input-props="{ 'aria-label': '基本课时' }"
+            />
           </div>
           <div class="basedata-field">
             <span class="basedata-field-label">{{ '行政减课' }}</span>
-            <n-input-number v-model:value="form.admin_reduction" :min="0" />
+            <n-input-number
+              v-model:value="form.admin_reduction"
+              :min="0"
+              :input-props="{ 'aria-label': '行政减课' }"
+            />
           </div>
         </div>
         <div class="basedata-field">
           <label for="teacher-admin-title">{{ '行政职务（可选）' }}</label>
-          <n-input id="teacher-admin-title" v-model:value="form.admin_title" :placeholder="'如：教务排课管理员'" />
+          <n-input
+            id="teacher-admin-title"
+            v-model:value="form.admin_title"
+            :placeholder="'如：教务排课管理员'"
+            :input-props="{ 'aria-label': '行政职务' }"
+          />
         </div>
         <div class="basedata-switch-row">
-          <label><span>{{ '外聘教师' }}</span><n-switch v-model:value="form.is_external" /></label>
-          <label><span>{{ '在职' }}</span><n-switch v-model:value="form.is_active" /></label>
+          <label><span>{{ '外聘教师' }}</span><n-switch v-model:value="form.is_external" aria-label="外聘教师" /></label>
+          <label><span>{{ '在职' }}</span><n-switch v-model:value="form.is_active" aria-label="在职" /></label>
         </div>
 
         <n-divider class="basedata-divider" title-placement="left">
@@ -346,21 +371,38 @@ function openRules(teacher: Teacher) {
         <div class="basedata-form-row">
           <div class="basedata-field">
             <label for="teacher-email">{{ '电子邮箱' }}</label>
-            <n-input id="teacher-email" v-model:value="form.email" data-testid="teacher-email" :placeholder="'用于发送通知'" />
+            <n-input
+              id="teacher-email"
+              v-model:value="form.email"
+              data-testid="teacher-email"
+              :placeholder="'用于发送通知'"
+              :input-props="{ 'aria-label': '电子邮箱' }"
+            />
           </div>
           <div class="basedata-field">
             <label for="teacher-phone">{{ '手机' }}</label>
-            <n-input id="teacher-phone" v-model:value="form.phone" :placeholder="'用于人工联系'" />
+            <n-input
+              id="teacher-phone"
+              v-model:value="form.phone"
+              :placeholder="'用于人工联系'"
+              :input-props="{ 'aria-label': '手机' }"
+            />
           </div>
         </div>
         <div class="basedata-field">
           <label for="teacher-line-id">{{ '即时通讯账号（可选，用于人工联系）' }}</label>
-          <n-input id="teacher-line-id" v-model:value="form.line_id" :placeholder="'即时通讯账号'" />
+          <n-input
+            id="teacher-line-id"
+            v-model:value="form.line_id"
+            :placeholder="'即时通讯账号'"
+            :input-props="{ 'aria-label': '即时通讯账号' }"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '绑定登录账号（可选）' }}</span>
           <n-select
             v-model:value="form.user_id"
+            v-accessible-select="'绑定登录账号'"
             data-testid="teacher-account"
             :options="accountOptions"
             :loading="loadingAccounts"

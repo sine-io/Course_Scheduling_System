@@ -309,6 +309,7 @@ for (const viewport of VIEWPORTS) {
 
     await page.goto('/scheduling/assignments')
     await expect(page.getByTestId('assignments-page')).toBeVisible()
+    await expect(page.getByLabel('选择工作学期')).toBeVisible()
     await expect(page.getByTestId('assignment-table')).toContainText('语文')
     await expect(page.getByTestId('teacher-load')).toContainText('+1 超课时')
     await expectNoRootOverflow(page)
@@ -328,6 +329,14 @@ for (const viewport of VIEWPORTS) {
     if (viewport.width === 375) {
       await page.getByTestId('assignment-add').click()
       const modal = page.locator('.n-modal').filter({ hasText: '新增教学任务' })
+      await expect(modal.getByRole('radiogroup', { name: '排课对象' })).toBeVisible()
+      await expect(modal.getByLabel('选择排课班级')).toBeVisible()
+      await expect(modal.getByLabel('选择科目')).toBeVisible()
+      await expect(modal.getByLabel('选择授课教师')).toBeVisible()
+      await expect(modal.getByLabel('每周课时')).toBeVisible()
+      await expect(modal.getByLabel('选择教室/场地类型')).toBeVisible()
+      await expect(modal.getByLabel('指定教室/场地')).toBeVisible()
+      await expect(modal.getByRole('checkbox', { name: '锁定教室/场地（排课时不得变更）' })).toBeVisible()
       const box = await modal.boundingBox()
       expect(box).not.toBeNull()
       expect(box!.x).toBeGreaterThanOrEqual(0)
@@ -339,6 +348,10 @@ for (const viewport of VIEWPORTS) {
 
     await page.goto('/scheduling/workbench')
     await expect(page.getByTestId('workbench-page')).toBeVisible()
+    await expect(page.getByLabel('选择工作学期')).toBeVisible()
+    await expect(page.getByLabel('选择课表草稿')).toBeVisible()
+    await expect(page.getByRole('radiogroup', { name: '课表视角' })).toBeVisible()
+    await expect(page.getByLabel('选择班级')).toBeVisible()
     await expect(page.getByTestId('wb-remaining')).toHaveText('剩余 2 节')
     await expect(page.getByTestId('timetable-scroll')).toBeVisible()
     await expectNoRootOverflow(page)
@@ -356,6 +369,7 @@ for (const viewport of VIEWPORTS) {
     }
 
     await page.getByTestId('wb-view-teacher').click()
+    await expect(page.getByLabel('选择教师')).toBeVisible()
     await expect(page.getByTestId('workbench-readonly')).toContainText('只读')
     await expectNoRootOverflow(page)
 
@@ -379,6 +393,14 @@ for (const viewport of VIEWPORTS) {
       await page.keyboard.press('Enter')
       await expect(page.getByTestId('wb-remaining')).toHaveText('剩余 1 节')
       await expect(page.getByTestId('workbench-save-status')).toContainText('已保存')
+
+      await page.getByTestId('wb-undo').click()
+      await expect(cell(page, 1, 3)).not.toContainText('语文')
+      await expect(page.getByTestId('wb-remaining')).toHaveText('剩余 2 节')
+      await expect(page.getByTestId('wb-redo')).toBeEnabled()
+      await page.getByTestId('wb-redo').click()
+      await expect(cell(page, 1, 3)).toContainText('语文')
+      await expect(page.getByTestId('wb-remaining')).toHaveText('剩余 1 节')
 
       const moveAction = cell(page, 1, 3).getByRole('button', { name: '移动语文' })
       await moveAction.focus()

@@ -4,7 +4,7 @@ import {
   NAlert, NButton, NCheckbox, NList, NListItem, NRadioButton, NRadioGroup, NUpload, useMessage,
 } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { downloadTemplate, ENTITY_LABELS, uploadImport } from '@/api/imports'
 import type { ImportEntity, ImportResult } from '@/api/imports'
 import './basedata-workspace.css'
@@ -24,14 +24,6 @@ const result = ref<ImportResult | null>(null)
 const errorMessage = ref<string | null>(null)
 
 const isTeacher = computed(() => entity.value === 'teachers')
-
-watch(entity, () => {
-  fileList.value = []
-  selectedFile.value = null
-  result.value = null
-  errorMessage.value = null
-  createAccounts.value = false
-})
 
 async function onDownload() {
   if (downloading.value) return
@@ -99,11 +91,13 @@ async function onUpload() {
           <FileSpreadsheet :size="18" aria-hidden="true" />
           <strong>{{ '① 数据类型' }}</strong>
         </div>
-        <n-radio-group v-model:value="entity" class="basedata-import-entities" aria-label="选择导入数据类型">
-          <n-radio-button v-for="(label, key) in labels" :key="key" :value="key">
-            {{ label }}
-          </n-radio-button>
-        </n-radio-group>
+        <div role="radiogroup" aria-label="选择导入数据类型">
+          <n-radio-group v-model:value="entity" class="basedata-import-entities">
+            <n-radio-button v-for="(label, key) in labels" :key="key" :value="key">
+              {{ label }}
+            </n-radio-button>
+          </n-radio-group>
+        </div>
       </section>
 
       <section class="basedata-import-step">

@@ -52,7 +52,7 @@ test.describe('页面加载性能(60 班)', () => {
     await page.close()
   })
 
-  test('教学任务页与课表查询页加载 p95 < 2s', async ({ page }) => {
+  test('教学任务页、排课工作台与课表查询页加载 p95 < 2s', async ({ page }) => {
     test.setTimeout(300_000)
     await login(page)
     await page.request.patch('/api/wizard/state', { data: { completed: true } })
@@ -75,6 +75,7 @@ test.describe('页面加载性能(60 班)', () => {
 
     const cases: [string, RegExp][] = [
       ['教学任务', /教学任务/],
+      ['排课工作台', /排课工作台/],
       ['课表查询', /课表查询/],
     ]
 
@@ -84,7 +85,7 @@ test.describe('页面加载性能(60 班)', () => {
         await page.getByRole('link', { name: '仪表盘' }).click()
         await page.getByRole('heading', { name: /仪表盘/ }).first().waitFor({ state: 'visible' })
         const t0 = Date.now()
-        await page.getByRole('link', { name: linkName }).click()
+        await page.getByRole('link', { name: linkName, exact: true }).click()
         await page.getByRole('heading', { name: heading }).first().waitFor({ state: 'visible' })
         await page.waitForLoadState('networkidle')
         samples.push(Date.now() - t0)

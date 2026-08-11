@@ -51,6 +51,11 @@ function key(weekday: number, periodNo: number) {
 function cellExists(weekday: number, periodNo: number) {
   return slots.value.some((slot) => slot.weekday === weekday && slot.period_no === periodNo)
 }
+function slotName(weekday: number, periodNo: number) {
+  return slots.value.find((slot) => slot.weekday === weekday && slot.period_no === periodNo)?.name
+    ?? slots.value.find((slot) => slot.period_no === periodNo)?.name
+    ?? '未定义时段'
+}
 function cycle(weekday: number, periodNo: number) {
   if (!cellExists(weekday, periodNo)) return
   const ruleKey = key(weekday, periodNo)
@@ -60,10 +65,11 @@ function cycle(weekday: number, periodNo: number) {
   else ruleMap.value[ruleKey] = next
 }
 function cellLabel(weekday: number, periodNo: number) {
-  if (!cellExists(weekday, periodNo)) return `周${WEEKDAY_NAMES[weekday - 1]}，第 ${periodNo} 节，不可用时段`
+  const periodName = slotName(weekday, periodNo)
+  if (!cellExists(weekday, periodNo)) return `周${WEEKDAY_NAMES[weekday - 1]}，${periodName}，不可用时段`
   const rule = ruleMap.value[key(weekday, periodNo)]
   const action = props.canEdit ? '按下切换' : '只读'
-  return `周${WEEKDAY_NAMES[weekday - 1]}，第 ${periodNo} 节，当前${rule ? ruleLabel(rule) : '无规则'}，${action}`
+  return `周${WEEKDAY_NAMES[weekday - 1]}，${periodName}，当前${rule ? ruleLabel(rule) : '无规则'}，${action}`
 }
 function errorMessage(error: unknown, fallback: string) {
   return (error as Partial<ApiError> | null)?.detail || fallback

@@ -19,6 +19,7 @@ import { listClassUnits, listRooms, listSubjects, listTeachers, ROOM_TYPE_LABELS
 import type { ClassUnit, Room, Subject, Teacher } from '@/api/basedata'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
 import './scheduling-workspace.css'
 
@@ -300,11 +301,11 @@ function blockLabel(a: Assignment): string {
       <div class="scheduling-header-actions">
         <n-select
           v-if="semesters.length"
+          v-accessible-select="'选择工作学期'"
           :value="sid"
           :options="semesterOptions"
           :placeholder="'选择学期'"
           data-testid="assignments-semester-select"
-          aria-label="选择工作学期"
           @update:value="onSemesterChange"
         />
       </div>
@@ -515,48 +516,50 @@ function blockLabel(a: Assignment): string {
       <div class="scheduling-form">
         <div class="scheduling-field">
           <label>{{ '排课对象' }}</label>
-          <n-radio-group v-model:value="form.target" aria-label="排课对象">
-            <n-radio-button value="single">{{ '单个班级' }}</n-radio-button>
-            <n-radio-button value="group">{{ '走班分组' }}</n-radio-button>
-          </n-radio-group>
+          <div role="radiogroup" aria-label="排课对象">
+            <n-radio-group v-model:value="form.target">
+              <n-radio-button value="single">{{ '单个班级' }}</n-radio-button>
+              <n-radio-button value="group">{{ '走班分组' }}</n-radio-button>
+            </n-radio-group>
+          </div>
           <n-select
             v-if="form.target === 'single'"
             v-model:value="form.class_id"
+            v-accessible-select="'选择排课班级'"
             data-testid="a-class"
             :options="classOptions"
             :placeholder="'选择班级'"
-            aria-label="选择排课班级"
             filterable
           />
           <n-select
             v-else
             v-model:value="form.scheduling_unit_id"
+            v-accessible-select="'选择走班分组'"
             :options="groupOptions"
             :placeholder="'选择走班分组（需先创建）'"
-            aria-label="选择走班分组"
           />
         </div>
 
         <div class="scheduling-field">
           <label>{{ '科目' }}</label>
-          <n-select v-model:value="form.subject_id" data-testid="a-subject" :options="subjectOptions" filterable :placeholder="'选择科目'" aria-label="选择科目" />
+          <n-select v-model:value="form.subject_id" v-accessible-select="'选择科目'" data-testid="a-subject" :options="subjectOptions" filterable :placeholder="'选择科目'" />
         </div>
 
         <div class="scheduling-field">
           <label>{{ '授课教师（可多人协同，第一位默认为主讲）' }}</label>
-          <n-select v-model:value="form.teacher_ids" data-testid="a-teachers" multiple :options="teacherOptions" filterable :placeholder="'选择教师'" aria-label="选择授课教师" />
+          <n-select v-model:value="form.teacher_ids" v-accessible-select="'选择授课教师'" data-testid="a-teachers" multiple :options="teacherOptions" filterable :placeholder="'选择教师'" />
           <n-select
             v-if="form.teacher_ids.length > 1"
             v-model:value="form.lead_teacher_id"
+            v-accessible-select="'指定主讲教师'"
             :options="leadOptions"
             :placeholder="'指定主讲教师'"
-            aria-label="指定主讲教师"
           />
         </div>
 
         <div class="scheduling-field scheduling-field-narrow">
           <label>{{ '每周课时' }}</label>
-          <n-input-number v-model:value="form.periods_per_week" data-testid="a-periods" :min="1" :max="40" aria-label="每周课时" />
+          <n-input-number v-model:value="form.periods_per_week" data-testid="a-periods" :min="1" :max="40" :input-props="{ 'aria-label': '每周课时' }" />
         </div>
 
         <div class="assignment-block-heading">
@@ -567,9 +570,9 @@ function blockLabel(a: Assignment): string {
           </n-button>
         </div>
         <div v-for="(block, index) in form.block_rules" :key="index" class="assignment-block-row">
-          <n-input-number v-model:value="block.block_size" :data-testid="`a-block-size-${index}`" :min="2" :max="4" :aria-label="`第${index + 1}条连堂规则的连堂节数`" />
+          <n-input-number v-model:value="block.block_size" :data-testid="`a-block-size-${index}`" :min="2" :max="4" :input-props="{ 'aria-label': `第${index + 1}条连堂规则的连堂节数` }" />
           <span>{{ '连堂 ×' }}</span>
-          <n-input-number v-model:value="block.count_per_week" :data-testid="`a-block-count-${index}`" :min="1" :aria-label="`第${index + 1}条连堂规则的每周次数`" />
+          <n-input-number v-model:value="block.count_per_week" :data-testid="`a-block-count-${index}`" :min="1" :input-props="{ 'aria-label': `第${index + 1}条连堂规则的每周次数` }" />
           <span>{{ '次/周' }}</span>
           <n-button size="tiny" type="error" ghost :aria-label="`移除第${index + 1}条连堂规则`" @click="removeBlock(index)">
             <template #icon><Trash2 :size="13" aria-hidden="true" /></template>
@@ -580,11 +583,11 @@ function blockLabel(a: Assignment): string {
         <div class="scheduling-form-grid">
           <div class="scheduling-field">
             <label>{{ '教室/场地类型（可选）' }}</label>
-            <n-select v-model:value="form.required_room_type" :options="roomTypeOptions" clearable :placeholder="'教室/场地类型'" aria-label="选择教室/场地类型" />
+            <n-select v-model:value="form.required_room_type" v-accessible-select="'选择教室/场地类型'" :options="roomTypeOptions" clearable :placeholder="'教室/场地类型'" />
           </div>
           <div class="scheduling-field">
             <label>{{ '指定教室/场地（可选）' }}</label>
-            <n-select v-model:value="form.room_id" :options="roomOptions" clearable :placeholder="'指定教室/场地'" aria-label="指定教室/场地" />
+            <n-select v-model:value="form.room_id" v-accessible-select="'指定教室/场地'" :options="roomOptions" clearable :placeholder="'指定教室/场地'" />
           </div>
         </div>
         <n-checkbox v-model:checked="form.lock_room">{{ '锁定教室/场地（排课时不得变更）' }}</n-checkbox>
@@ -605,6 +608,7 @@ function blockLabel(a: Assignment): string {
           <label>{{ '分组名称' }}</label>
           <n-select
             v-model:value="groupForm.name"
+            v-accessible-select="'分组名称'"
             data-testid="group-name"
             filterable
             tag
@@ -613,12 +617,11 @@ function blockLabel(a: Assignment): string {
               { label: '综合实践走班', value: '综合实践走班' },
             ]"
             :placeholder="'输入或选择分组名称'"
-            aria-label="分组名称"
           />
         </div>
         <div class="scheduling-field">
           <label>{{ '成员班级（至少 2 个班，须使用同一作息时间表）' }}</label>
-          <n-select v-model:value="groupForm.class_ids" data-testid="group-classes" multiple :options="classOptions" filterable :placeholder="'选择班级'" aria-label="选择分组成员班级" />
+          <n-select v-model:value="groupForm.class_ids" v-accessible-select="'选择分组成员班级'" data-testid="group-classes" multiple :options="classOptions" filterable :placeholder="'选择班级'" />
         </div>
         <div class="scheduling-modal-actions">
           <n-button :disabled="groupSaving" @click="groupShow = false">{{ '取消' }}</n-button>

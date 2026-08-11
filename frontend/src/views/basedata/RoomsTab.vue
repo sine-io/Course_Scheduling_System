@@ -10,6 +10,7 @@ import {
   ROOM_TYPE_LABELS, createRoom, deleteRoom, listRooms, listSubjects, updateRoom,
 } from '@/api/basedata'
 import type { Room, RoomType, Subject } from '@/api/basedata'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './basedata-workspace.css'
 
 const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
@@ -46,7 +47,7 @@ async function reload() {
   loading.value = true
   loadError.value = null
   try {
-    items.value = await listRooms(props.semesterId, search.value.trim() || undefined)
+    items.value = await listRooms(props.semesterId, search.value || undefined)
   } catch (error) {
     loadError.value = errorMessage(error, '暂时无法读取教室/场地，请重试。')
   } finally {
@@ -59,7 +60,7 @@ async function loadInitialData() {
   loadError.value = null
   try {
     const [roomItems, subjectItems] = await Promise.all([
-      listRooms(props.semesterId, search.value.trim() || undefined),
+      listRooms(props.semesterId, search.value || undefined),
       listSubjects(props.semesterId),
     ])
     items.value = roomItems
@@ -103,15 +104,14 @@ function closeModal() {
 
 async function save() {
   if (saving.value) return
-  if (!form.value.name.trim()) {
+  if (!form.value.name) {
     message.warning('请输入教室/场地名称')
     return
   }
   saving.value = true
-  const body = { ...form.value, name: form.value.name.trim() }
   try {
-    if (editingId.value) await updateRoom(editingId.value, body)
-    else await createRoom(props.semesterId, body)
+    if (editingId.value) await updateRoom(editingId.value, form.value)
+    else await createRoom(props.semesterId, form.value)
     show.value = false
     message.success('已保存')
     await reload()
@@ -234,19 +234,39 @@ async function remove(room: Room) {
       <div class="basedata-form">
         <div class="basedata-field">
           <label for="room-name">{{ '名称' }}</label>
-          <n-input id="room-name" v-model:value="form.name" data-testid="room-name" :placeholder="'如：物理实验室'" />
+          <n-input
+            id="room-name"
+            v-model:value="form.name"
+            data-testid="room-name"
+            :placeholder="'如：物理实验室'"
+            :input-props="{ 'aria-label': '名称' }"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '类型' }}</span>
-          <n-select v-model:value="form.room_type" :options="roomTypeOptions" />
+          <n-select
+            v-model:value="form.room_type"
+            v-accessible-select="'教室/场地类型'"
+            :options="roomTypeOptions"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '容量（可选）' }}</span>
-          <n-input-number v-model:value="form.capacity" :min="0" />
+          <n-input-number
+            v-model:value="form.capacity"
+            :min="0"
+            :input-props="{ 'aria-label': '容量' }"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '适用科目（可选）' }}</span>
-          <n-select v-model:value="form.subject_ids" multiple :options="subjectOptions" :placeholder="'可多选'" />
+          <n-select
+            v-model:value="form.subject_ids"
+            v-accessible-select="'适用科目'"
+            multiple
+            :options="subjectOptions"
+            :placeholder="'可多选'"
+          />
         </div>
         <div class="basedata-modal-actions">
           <n-button quaternary :disabled="saving" @click="closeModal">

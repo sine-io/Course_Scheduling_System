@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import type { Page, Route } from '@playwright/test'
+import type { Locator, Page, Route } from '@playwright/test'
 
 const VIEWPORTS = [
   { width: 1280, height: 800 },
@@ -80,6 +80,9 @@ const PERIOD_TABLE = {
 interface MockState {
   uploadAttempts: number
   savedRules: unknown
+  roomRequests?: Array<{ method: string; body?: unknown }>
+  failNextRoomSave?: boolean
+  rooms?: Array<(typeof ROOMS)[number]>
 }
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
@@ -92,6 +95,26 @@ async function expectNoRootOverflow(page: Page) {
     clientWidth: document.documentElement.clientWidth,
   }))
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
+}
+
+async function expectInternalOverflow(page: Page, testId: string) {
+  const dimensions = await page.getByTestId(testId).evaluate((element) => ({
+    scrollWidth: element.scrollWidth,
+    clientWidth: element.clientWidth,
+  }))
+  expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.clientWidth)
+}
+
+async function expectModalWithinViewport(
+  modal: Locator,
+  viewport: { width: number; height: number },
+) {
+  const box = await modal.boundingBox()
+  expect(box).not.toBeNull()
+  expect(box!.x).toBeGreaterThanOrEqual(0)
+  expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1)
+  expect(box!.y).toBeGreaterThanOrEqual(0)
+  expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1)
 }
 
 function tab(page: Page, label: string) {
@@ -137,7 +160,10 @@ async function mockSession(page: Page, roles: string[], state: MockState) {
   await page.route('**/api/semesters', (route) => fulfillJson(route, [SEMESTER]))
   await page.route('**/api/semesters/44', (route) => fulfillJson(route, {
     ...SEMESTER,
-    period_tables: [PERIOD_TABLE],
+    period_tables: [
+      PERIOD_TABLE,
+      { ...PERIOD_TABLE, id: 78, name: '走班作息时间表', is_default: false },
+    ],
   }))
   await page.route('**/api/subjects?**', (route) => fulfillJson(route, SUBJECTS))
   await page.route('**/api/teachers?**', (route) => fulfillJson(route, TEACHERS))
@@ -145,19 +171,69 @@ async function mockSession(page: Page, roles: string[], state: MockState) {
     { id: 12, username: 'chen', display_name: '陈老师' },
   ]))
   await page.route('**/api/class-units?**', (route) => fulfillJson(route, CLASSES))
-  await page.route('**/api/rooms?**', (route) => fulfillJson(route, ROOMS))
+  state.rooms ??= ROOMS.map((room) => ({ ...room, subjects: [...room.subjects] }))
+  await page.route('**/api/rooms**', async (route) => {
+    const request = route.request()
+    const method = request.method()
+    const path = new URL(request.url()).pathname
+    if (method === 'GET') return fulfillJson(route, state.rooms)
+
+    const body = request.postDataJSON() as {
+      name: string
+      room_type: string
+      capacity: number | null
+      subject_ids: number[]
+    } | null
+    state.roomRequests?.push({ method, body })
+
+    if (method === 'POST') {
+      if (state.failNextRoomSave) {
+        state.failNextRoomSave = false
+        return fulfillJson(route, { detail: '模拟保存失败，请重试' }, 503)
+      }
+      const room = {
+        id: Math.max(0, ...state.rooms.map((item) => item.id)) + 1,
+        semester_id: 44,
+        name: body!.name,
+        room_type: body!.room_type,
+        capacity: body!.capacity,
+        subjects: SUBJECTS.filter((subject) => body!.subject_ids.includes(subject.id))
+          .map((subject) => ({ id: subject.id, name: subject.name })),
+      }
+      state.rooms.push(room)
+      return fulfillJson(route, room, 201)
+    }
+
+    const roomId = Number(path.split('/').at(-1))
+    if (method === 'PATCH') {
+      const room = state.rooms.find((item) => item.id === roomId)!
+      Object.assign(room, {
+        name: body!.name,
+        room_type: body!.room_type,
+        capacity: body!.capacity,
+        subjects: SUBJECTS.filter((subject) => body!.subject_ids.includes(subject.id))
+          .map((subject) => ({ id: subject.id, name: subject.name })),
+      })
+      return fulfillJson(route, room)
+    }
+    if (method === 'DELETE') {
+      state.rooms = state.rooms.filter((item) => item.id !== roomId)
+      return route.fulfill({ status: 204 })
+    }
+    return fulfillJson(route, { detail: `未模拟 ${method} ${path}` }, 501)
+  })
   await page.route('**/api/period-tables/77/available-slots', (route) => fulfillJson(route, [
     {
       weekday: 1,
       period_no: 1,
-      name: '第一节',
+      name: '早自习',
       start_time: '08:00',
       end_time: '08:40',
     },
     {
       weekday: 2,
       period_no: 1,
-      name: '第一节',
+      name: '早自习',
       start_time: '08:00',
       end_time: '08:40',
     },
@@ -183,8 +259,106 @@ async function mockSession(page: Page, roles: string[], state: MockState) {
   })
 }
 
+test('教室/场地保留原有校验、失败重试和完整 CRUD 语义', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const state: MockState = {
+    uploadAttempts: 0,
+    savedRules: null,
+    roomRequests: [],
+    failNextRoomSave: true,
+  }
+  await mockSession(page, ['scheduler'], state)
+
+  await page.goto('/basedata')
+  await tab(page, '教室/场地').click()
+  await page.getByTestId('room-add').click()
+  const modal = page.locator('.n-modal').filter({ hasText: '新增教室/场地' })
+
+  await modal.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByText('请输入教室/场地名称')).toBeVisible()
+  expect(state.roomRequests).toEqual([])
+
+  await modal.getByLabel('名称').fill('   ')
+  await modal.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByText('模拟保存失败，请重试')).toBeVisible()
+  await expect.poll(() => state.roomRequests?.length).toBe(1)
+  expect(state.roomRequests?.[0]).toEqual({
+    method: 'POST',
+    body: { name: '   ', room_type: 'normal', capacity: null, subject_ids: [] },
+  })
+
+  await modal.getByLabel('名称').fill('  备用教室  ')
+  await modal.getByRole('button', { name: '保存' }).click()
+  await expect(modal).toBeHidden()
+  await expect(page.getByTestId('rooms-table')).toContainText('备用教室')
+
+  await page.getByTestId('room-edit-10').click()
+  const editModal = page.locator('.n-modal').filter({ hasText: '编辑教室/场地' })
+  await editModal.getByLabel('名称').fill('  更新后的教室  ')
+  await editModal.getByLabel('容量').fill('55')
+  await editModal.getByRole('button', { name: '保存' }).click()
+  await expect(page.getByTestId('rooms-table')).toContainText('更新后的教室')
+  expect(state.roomRequests?.at(-1)).toMatchObject({
+    method: 'PATCH',
+    body: { name: '  更新后的教室  ', capacity: 55 },
+  })
+
+  await page.getByTestId('room-delete-10').click()
+  const confirmation = page.locator('.n-popover').filter({ hasText: '确定删除此教室/场地吗？' })
+  await confirmation.getByRole('button', { name: '确认' }).click()
+  await expect(page.getByTestId('rooms-table')).not.toContainText('更新后的教室')
+  expect(state.roomRequests?.at(-1)).toEqual({ method: 'DELETE', body: null })
+})
+
+test('基础数据在学期请求期间显示加载状态', async ({ page }) => {
+  const state: MockState = { uploadAttempts: 0, savedRules: null }
+  await mockSession(page, ['scheduler'], state)
+  let release!: () => void
+  const pending = new Promise<void>((resolve) => { release = resolve })
+  await page.route('**/api/semesters', async (route) => {
+    await pending
+    await fulfillJson(route, [SEMESTER])
+  })
+
+  const navigation = page.goto('/basedata')
+  await expect(page.getByTestId('basedata-loading')).toBeVisible()
+  release()
+  await navigation
+  await expect(page.getByTestId('basedata-workspace')).toBeVisible()
+})
+
+test('基础数据在没有学期时显示明确空状态', async ({ page }) => {
+  const state: MockState = { uploadAttempts: 0, savedRules: null }
+  await mockSession(page, ['scheduler'], state)
+  await page.route('**/api/semesters', (route) => fulfillJson(route, []))
+
+  await page.goto('/basedata')
+  await expect(page.getByTestId('basedata-empty')).toContainText('尚未创建任何学期')
+  await expect(page.getByRole('button', { name: '前往学期配置' })).toBeVisible()
+})
+
+test('基础数据学期请求失败后可以重试', async ({ page }) => {
+  const state: MockState = { uploadAttempts: 0, savedRules: null }
+  await mockSession(page, ['scheduler'], state)
+  let attempts = 0
+  let failing = true
+  await page.route('**/api/semesters', (route) => {
+    attempts += 1
+    return failing
+      ? fulfillJson(route, { detail: '学期服务暂时不可用' }, 503)
+      : fulfillJson(route, [SEMESTER])
+  })
+
+  await page.goto('/basedata')
+  await expect(page.getByTestId('basedata-error')).toContainText('学期服务暂时不可用')
+  failing = false
+  await page.getByTestId('basedata-retry').click()
+  await expect(page.getByTestId('basedata-workspace')).toBeVisible()
+  expect(attempts).toBeGreaterThanOrEqual(2)
+})
+
 for (const viewport of VIEWPORTS) {
-  test(`基础数据工作面 ${viewport.width}x${viewport.height} 保持功能与内部滚动`, async ({ page }) => {
+  test(`基础数据工作面 ${viewport.width}x${viewport.height} 保持功能与内部滚动`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const state: MockState = { uploadAttempts: 0, savedRules: null }
@@ -192,32 +366,37 @@ for (const viewport of VIEWPORTS) {
 
     await page.goto('/basedata')
     await expect(page.getByTestId('basedata-workspace')).toBeVisible()
+    await expect(page.getByLabel('选择工作学期')).toBeVisible()
     await expect(page.getByTestId('teachers-table')).toContainText('陈老师')
     await expectNoRootOverflow(page)
 
-    if (viewport.width <= 768) {
-      const dimensions = await page.getByTestId('teachers-table-scroll').evaluate((element) => ({
-        scrollWidth: element.scrollWidth,
-        clientWidth: element.clientWidth,
-      }))
-      expect(dimensions.scrollWidth).toBeGreaterThan(dimensions.clientWidth)
-    }
+    if (viewport.width <= 768) await expectInternalOverflow(page, 'teachers-table-scroll')
+    await page.screenshot({
+      path: testInfo.outputPath(`basedata-${viewport.width}x${viewport.height}.png`),
+      fullPage: true,
+    })
 
     await page.getByTestId('teacher-add').click()
     const teacherModal = page.locator('.n-modal').filter({ hasText: '新增教师' })
-    await expect(teacherModal.getByTestId('teacher-email')).toBeVisible()
-    await expect(teacherModal.getByTestId('teacher-account')).toBeVisible()
+    await expect(teacherModal.getByLabel('姓名')).toBeVisible()
+    await expect(teacherModal.getByLabel('任教科目')).toBeVisible()
+    await expect(teacherModal.getByLabel('基本课时')).toBeVisible()
+    await expect(teacherModal.getByLabel('行政减课')).toBeVisible()
+    await expect(teacherModal.getByLabel('行政职务')).toBeVisible()
+    await expect(teacherModal.getByRole('switch', { name: '外聘教师' })).toBeVisible()
+    await expect(teacherModal.getByRole('switch', { name: '在职' })).toBeVisible()
+    await expect(teacherModal.getByLabel('电子邮箱')).toBeVisible()
+    await expect(teacherModal.getByLabel('手机')).toBeVisible()
+    await expect(teacherModal.getByLabel('即时通讯账号')).toBeVisible()
+    await expect(teacherModal.getByLabel('绑定登录账号')).toBeVisible()
     if (viewport.width === 375) {
-      const box = await teacherModal.boundingBox()
-      expect(box).not.toBeNull()
-      expect(box!.x).toBeGreaterThanOrEqual(0)
-      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1)
+      await expectModalWithinViewport(teacherModal, viewport)
     }
     await teacherModal.getByRole('button', { name: '取消' }).click()
 
     if (viewport.width === 1280) {
       await page.getByTestId('teacher-rules-7').click()
-      const ruleButton = page.getByRole('button', { name: /周一，第 1 节/ })
+      const ruleButton = page.getByRole('button', { name: /周一，早自习/ })
       await expect(ruleButton).toBeVisible()
       await ruleButton.focus()
       await ruleButton.press('Enter')
@@ -230,27 +409,50 @@ for (const viewport of VIEWPORTS) {
 
     await tab(page, '班级').click()
     await expect(page.getByTestId('classes-table')).toContainText('七年级1班')
+    if (viewport.width <= 768) await expectInternalOverflow(page, 'classes-table-scroll')
+    await page.getByTestId('class-add').click()
+    const classModal = page.locator('.n-modal').filter({ hasText: '新增班级' })
+    await expect(classModal.getByLabel('年级')).toBeVisible()
+    await expect(classModal.getByLabel('班级名称')).toBeVisible()
+    await expect(classModal.getByLabel('学段')).toBeVisible()
+    await expect(classModal.getByLabel('班主任')).toBeVisible()
+    await expect(classModal.getByLabel('作息时间表')).toBeVisible()
+    await expect(classModal.getByLabel('人数')).toBeVisible()
+    if (viewport.width === 375) await expectModalWithinViewport(classModal, viewport)
+    await classModal.getByRole('button', { name: '取消' }).click()
     await expectNoRootOverflow(page)
 
     await tab(page, '科目').click()
     await expect(page.getByTestId('subjects-table')).toContainText('数学')
+    if (viewport.width <= 768) await expectInternalOverflow(page, 'subjects-table-scroll')
     await page.getByTestId('subject-add').click()
     const subjectModal = page.locator('.n-modal').filter({ hasText: '新增科目' })
-    await expect(subjectModal.getByTestId('sub-name')).toBeVisible()
+    await expect(subjectModal.getByLabel('名称')).toBeVisible()
+    await expect(subjectModal.getByLabel('领域/类别')).toBeVisible()
+    await expect(subjectModal.getByLabel('所需教室/场地类型')).toBeVisible()
+    await expect(subjectModal.getByLabel('默认连堂长度')).toBeVisible()
+    await expect(subjectModal.getByRole('checkbox', { name: /主科/ })).toBeVisible()
     if (viewport.width === 375) {
-      const box = await subjectModal.boundingBox()
-      expect(box).not.toBeNull()
-      expect(box!.x).toBeGreaterThanOrEqual(0)
-      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport.width + 1)
+      await expectModalWithinViewport(subjectModal, viewport)
     }
     await subjectModal.getByRole('button', { name: '取消' }).click()
     await expectNoRootOverflow(page)
 
     await tab(page, '教室/场地').click()
     await expect(page.getByTestId('rooms-table')).toContainText('物理实验室')
+    if (viewport.width <= 768) await expectInternalOverflow(page, 'rooms-table-scroll')
+    await page.getByTestId('room-add').click()
+    const roomModal = page.locator('.n-modal').filter({ hasText: '新增教室/场地' })
+    await expect(roomModal.getByLabel('名称')).toBeVisible()
+    await expect(roomModal.getByLabel('教室/场地类型')).toBeVisible()
+    await expect(roomModal.getByLabel('容量')).toBeVisible()
+    await expect(roomModal.getByLabel('适用科目')).toBeVisible()
+    if (viewport.width === 375) await expectModalWithinViewport(roomModal, viewport)
+    await roomModal.getByRole('button', { name: '取消' }).click()
     await expectNoRootOverflow(page)
 
     await tab(page, '批量导入').click()
+    await expect(page.getByRole('radiogroup', { name: '选择导入数据类型' })).toBeVisible()
     await expect(page.getByTestId('import-download')).toBeVisible()
     await expect(page.getByTestId('import-upload')).toBeDisabled()
     await expectNoRootOverflow(page)
@@ -270,6 +472,20 @@ for (const viewport of VIEWPORTS) {
       await page.getByTestId('import-upload').click()
       await expect(page.getByTestId('import-result-errors')).toContainText('第 4 行：科目名称不能为空')
       await expect(page.getByTestId('import-upload')).toContainText('修正文件后重试')
+
+      const importWorkspace = page.getByTestId('import-workspace')
+      const importEntity = (label: string) => importWorkspace.locator('.n-radio-button', { hasText: label })
+      await importEntity('教师').click()
+      const createAccounts = page.getByRole('checkbox', { name: /同时创建教师登录账号/ })
+      await importWorkspace.locator('.n-checkbox', { hasText: '同时创建教师登录账号' }).click()
+      await expect(createAccounts).toBeChecked()
+      await importEntity('科目').click()
+      await expect(page.getByTestId('import-result-errors')).toBeVisible()
+      await importEntity('教师').click()
+      await expect(createAccounts).toBeChecked()
+      await expect(page.getByText('subjects.xlsx')).toBeVisible()
+      await importEntity('科目').click()
+
       await page.getByTestId('import-upload').click()
       await expect(page.getByTestId('import-success')).toContainText('成功导入 1 条数据')
       expect(state.uploadAttempts).toBe(2)
@@ -294,7 +510,7 @@ test('教务主任仅能查看基础数据且不会触发写请求', async ({ pa
   await expect(page.getByTestId('teacher-add')).toHaveCount(0)
   await expect(page.getByTestId('teacher-edit-7')).toHaveCount(0)
   await page.getByTestId('teacher-rules-7').click()
-  const readOnlyRule = page.getByRole('button', { name: /周一，第 1 节/ })
+  const readOnlyRule = page.getByRole('button', { name: /周一，早自习/ })
   await expect(readOnlyRule).toBeDisabled()
   await expect(page.getByTestId('time-rules-save')).toHaveCount(0)
   await page.keyboard.press('Escape')

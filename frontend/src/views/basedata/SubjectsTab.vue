@@ -10,6 +10,7 @@ import {
   ROOM_TYPE_LABELS, createSubject, deleteSubject, listSubjects, updateSubject,
 } from '@/api/basedata'
 import type { RoomType, Subject } from '@/api/basedata'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './basedata-workspace.css'
 
 const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
@@ -40,7 +41,7 @@ async function reload() {
   loading.value = true
   loadError.value = null
   try {
-    items.value = await listSubjects(props.semesterId, search.value.trim() || undefined)
+    items.value = await listSubjects(props.semesterId, search.value || undefined)
   } catch (error) {
     loadError.value = errorMessage(error, '暂时无法读取科目，请重试。')
   } finally {
@@ -81,14 +82,14 @@ function closeModal() {
 
 async function save() {
   if (saving.value) return
-  if (!form.value.name.trim()) {
+  if (!form.value.name) {
     message.warning('请输入科目名称')
     return
   }
   saving.value = true
   const body = {
-    name: form.value.name.trim(),
-    domain: form.value.domain.trim() || null,
+    name: form.value.name,
+    domain: form.value.domain || null,
     required_room_type: form.value.required_room_type,
     default_block_size: form.value.default_block_size,
     is_major: form.value.is_major,
@@ -220,19 +221,41 @@ async function remove(subject: Subject) {
       <div class="basedata-form">
         <div class="basedata-field">
           <label for="subject-name">{{ '名称' }}</label>
-          <n-input id="subject-name" v-model:value="form.name" data-testid="sub-name" :placeholder="'如：数学'" />
+          <n-input
+            id="subject-name"
+            v-model:value="form.name"
+            data-testid="sub-name"
+            :placeholder="'如：数学'"
+            :input-props="{ 'aria-label': '名称' }"
+          />
         </div>
         <div class="basedata-field">
           <label for="subject-domain">{{ '领域/类别（可选）' }}</label>
-          <n-input id="subject-domain" v-model:value="form.domain" :placeholder="'如：数学领域'" />
+          <n-input
+            id="subject-domain"
+            v-model:value="form.domain"
+            :placeholder="'如：数学领域'"
+            :input-props="{ 'aria-label': '领域/类别' }"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '所需教室/场地类型（可选）' }}</span>
-          <n-select v-model:value="form.required_room_type" :options="roomTypeOptions" clearable :placeholder="'不限'" />
+          <n-select
+            v-model:value="form.required_room_type"
+            v-accessible-select="'所需教室/场地类型'"
+            :options="roomTypeOptions"
+            clearable
+            :placeholder="'不限'"
+          />
         </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '默认连堂长度' }}</span>
-          <n-input-number v-model:value="form.default_block_size" :min="1" :max="8" />
+          <n-input-number
+            v-model:value="form.default_block_size"
+            :min="1"
+            :max="8"
+            :input-props="{ 'aria-label': '默认连堂长度' }"
+          />
         </div>
         <n-checkbox v-model:checked="form.is_major" data-testid="sub-is-major">
           {{ '主科（自动排课会尽量安排在上午）' }}

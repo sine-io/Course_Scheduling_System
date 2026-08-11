@@ -24,6 +24,7 @@ import {
 } from '@/api/timetables'
 import type { Timetable, TimetableBrief } from '@/api/timetables'
 import { useAuthStore } from '@/stores/auth'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './scheduling-workspace.css'
 
 type ViewKind = 'class' | 'teacher' | 'room'
@@ -640,18 +641,18 @@ function onKey(event: KeyboardEvent) {
       <div class="scheduling-header-actions workbench-header-actions">
         <n-select
           v-if="semesters.length"
+          v-accessible-select="'选择工作学期'"
           :value="sid"
           :options="semesterOptions"
           :placeholder="'选择学期'"
-          aria-label="选择工作学期"
           data-testid="wb-semester"
           @update:value="loadSemester"
         />
         <n-select
           v-if="drafts.length"
+          v-accessible-select="'选择课表草稿'"
           :value="ttId"
           :options="draftOptions"
-          aria-label="选择课表草稿"
           data-testid="wb-draft"
           @update:value="onDraftChange"
         />
@@ -684,13 +685,16 @@ function onKey(event: KeyboardEvent) {
     <template v-else>
       <section class="scheduling-panel workbench-toolbar" aria-label="课表筛选与操作">
         <div class="workbench-view-controls">
-          <n-radio-group :value="view" @update:value="onViewChange">
-            <n-radio-button value="class" data-testid="wb-view-class">{{ '班级视图' }}</n-radio-button>
-            <n-radio-button value="teacher" data-testid="wb-view-teacher">{{ '教师视图' }}</n-radio-button>
-            <n-radio-button value="room" data-testid="wb-view-room">{{ '教室/场地视图' }}</n-radio-button>
-          </n-radio-group>
+          <div role="radiogroup" aria-label="课表视角">
+            <n-radio-group :value="view" @update:value="onViewChange">
+              <n-radio-button value="class" data-testid="wb-view-class">{{ '班级视图' }}</n-radio-button>
+              <n-radio-button value="teacher" data-testid="wb-view-teacher">{{ '教师视图' }}</n-radio-button>
+              <n-radio-button value="room" data-testid="wb-view-room">{{ '教室/场地视图' }}</n-radio-button>
+            </n-radio-group>
+          </div>
           <n-select
             v-if="view === 'class'"
+            v-accessible-select="'选择班级'"
             :value="classId"
             :options="classOptions"
             :placeholder="'选择班级'"
@@ -701,6 +705,7 @@ function onKey(event: KeyboardEvent) {
           <n-select
             v-else-if="view === 'teacher'"
             v-model:value="teacherId"
+            v-accessible-select="'选择教师'"
             :options="teacherOptions"
             :placeholder="'选择教师'"
             data-testid="wb-teacher"
@@ -709,6 +714,7 @@ function onKey(event: KeyboardEvent) {
           <n-select
             v-else
             v-model:value="roomId"
+            v-accessible-select="'选择教室/场地'"
             :options="roomOptions"
             :placeholder="'选择教室/场地'"
             data-testid="wb-room"

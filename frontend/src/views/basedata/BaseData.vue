@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import type { ApiError } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
 import ClassesTab from './ClassesTab.vue'
 import ImportTab from './ImportTab.vue'
@@ -60,9 +61,9 @@ onMounted(loadSemesters)
         <n-select
           v-if="semesters.length"
           v-model:value="currentId"
+          v-accessible-select="'选择工作学期'"
           :options="semesterOptions"
           data-testid="basedata-semester-select"
-          aria-label="选择工作学期"
           :placeholder="'选择学期'"
         />
       </div>
