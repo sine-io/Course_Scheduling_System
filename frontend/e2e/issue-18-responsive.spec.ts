@@ -523,9 +523,15 @@ test('教务主任仅能查看基础数据且不会触发写请求', async ({ pa
   await expect(page.getByTestId('room-add')).toHaveCount(0)
   await tab(page, '批量导入').click()
   await expect(page.getByTestId('import-readonly')).toContainText('没有批量导入权限')
-  await expect(page.getByTestId('import-download')).toHaveCount(0)
+  await expect(page.getByRole('radiogroup', { name: '选择导入数据类型' })).toBeVisible()
+  await expect(page.getByTestId('import-download')).toBeVisible()
   await expect(page.getByTestId('import-file')).toHaveCount(0)
   await expect(page.getByTestId('import-upload')).toHaveCount(0)
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByTestId('import-download').click(),
+  ])
+  expect(download.suggestedFilename()).toBe('subjects_template.xlsx')
   await expectNoRootOverflow(page)
 
   expect(writeRequests).toEqual([])

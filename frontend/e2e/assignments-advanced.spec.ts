@@ -53,7 +53,7 @@ test('教学任务管理:走班群组创建、协同教师+连堂、班级超节
   await pickFiltered(page, 'group-classes', '2年202')
   await page.keyboard.press('Escape')
   await page.getByTestId('group-save').click()
-  const groupCard = page.locator('.n-card').filter({ hasText: '八年级选修走班' })
+  const groupCard = page.locator('.assignment-group-panel').filter({ hasText: '八年级选修走班' })
   await expect(groupCard).toContainText('八年级选修走班')
   await expect(groupCard).toContainText('2年201')
   await expect(groupCard).toContainText('2年202')
