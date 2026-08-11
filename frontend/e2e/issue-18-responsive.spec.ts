@@ -34,7 +34,7 @@ const TEACHERS = [
     semester_id: 44,
     name: '陈老师',
     base_periods: 12,
-    admin_title: '年级组长',
+    admin_title: '年级负责人',
     admin_reduction: 2,
     is_external: false,
     is_active: true,
@@ -293,7 +293,11 @@ test('教务主任仅能查看基础数据且不会触发写请求', async ({ pa
   await expect(page.getByTestId('teachers-table')).toContainText('陈老师')
   await expect(page.getByTestId('teacher-add')).toHaveCount(0)
   await expect(page.getByTestId('teacher-edit-7')).toHaveCount(0)
-  await expect(page.getByTestId('teacher-rules-7')).toHaveCount(0)
+  await page.getByTestId('teacher-rules-7').click()
+  const readOnlyRule = page.getByRole('button', { name: /周一，第 1 节/ })
+  await expect(readOnlyRule).toBeDisabled()
+  await expect(page.getByTestId('time-rules-save')).toHaveCount(0)
+  await page.keyboard.press('Escape')
 
   await tab(page, '班级').click()
   await expect(page.getByTestId('class-add')).toHaveCount(0)
@@ -301,7 +305,11 @@ test('教务主任仅能查看基础数据且不会触发写请求', async ({ pa
   await expect(page.getByTestId('subject-add')).toHaveCount(0)
   await tab(page, '教室/场地').click()
   await expect(page.getByTestId('room-add')).toHaveCount(0)
-  await expect(tab(page, '批量导入')).toHaveCount(0)
+  await tab(page, '批量导入').click()
+  await expect(page.getByTestId('import-readonly')).toContainText('没有批量导入权限')
+  await expect(page.getByTestId('import-download')).toHaveCount(0)
+  await expect(page.getByTestId('import-file')).toHaveCount(0)
+  await expect(page.getByTestId('import-upload')).toHaveCount(0)
   await expectNoRootOverflow(page)
 
   expect(writeRequests).toEqual([])

@@ -9,7 +9,10 @@ import { getAvailableSlots, getSemester } from '@/api/semesters'
 import type { AvailableSlot } from '@/api/semesters'
 import './basedata-workspace.css'
 
-const props = defineProps<{ teacherId: number; semesterId: number }>()
+const props = withDefaults(
+  defineProps<{ teacherId: number; semesterId: number; canEdit?: boolean }>(),
+  { canEdit: true },
+)
 const emit = defineEmits<{ saved: [] }>()
 const message = useMessage()
 
@@ -59,7 +62,8 @@ function cycle(weekday: number, periodNo: number) {
 function cellLabel(weekday: number, periodNo: number) {
   if (!cellExists(weekday, periodNo)) return `周${WEEKDAY_NAMES[weekday - 1]}，第 ${periodNo} 节，不可用时段`
   const rule = ruleMap.value[key(weekday, periodNo)]
-  return `周${WEEKDAY_NAMES[weekday - 1]}，第 ${periodNo} 节，当前${rule ? ruleLabel(rule) : '无规则'}，按下切换`
+  const action = props.canEdit ? '按下切换' : '只读'
+  return `周${WEEKDAY_NAMES[weekday - 1]}，第 ${periodNo} 节，当前${rule ? ruleLabel(rule) : '无规则'}，${action}`
 }
 function errorMessage(error: unknown, fallback: string) {
   return (error as Partial<ApiError> | null)?.detail || fallback
@@ -136,7 +140,7 @@ async function save() {
     </section>
     <template v-else>
       <div class="basedata-rule-legend" aria-label="时段规则图例">
-        <span>{{ '按单元格依次切换：' }}</span>
+        <span>{{ canEdit ? '按单元格依次切换：' : '当前时段规则：' }}</span>
         <span data-rule="unavailable">{{ ruleLabel('unavailable') }}</span>
         <span data-rule="avoid">{{ ruleLabel('avoid') }}</span>
         <span data-rule="prefer">{{ ruleLabel('prefer') }}</span>
@@ -157,7 +161,7 @@ async function save() {
                   type="button"
                   class="basedata-rule-cell"
                   :data-rule="ruleMap[key(weekday, row.period_no)] || undefined"
-                  :disabled="!cellExists(weekday, row.period_no)"
+                  :disabled="!canEdit || !cellExists(weekday, row.period_no)"
                   :aria-label="cellLabel(weekday, row.period_no)"
                   @click="cycle(weekday, row.period_no)"
                 >
@@ -168,7 +172,7 @@ async function save() {
           </tbody>
         </table>
       </div>
-      <div class="basedata-modal-actions">
+      <div v-if="canEdit" class="basedata-modal-actions">
         <n-button type="primary" data-testid="time-rules-save" :loading="saving" :disabled="saving" @click="save">
           <template #icon><Save :size="15" aria-hidden="true" /></template>
           {{ '保存规则' }}

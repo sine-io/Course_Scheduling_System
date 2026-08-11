@@ -222,7 +222,7 @@ function openRules(teacher: Teacher) {
     </div>
 
     <n-alert v-if="!canEdit" class="basedata-readonly" type="info" data-testid="teachers-readonly">
-      {{ '仅可查看教师，当前角色没有新增、编辑、删除或维护时段规则的权限。' }}
+      {{ '仅可查看教师，当前角色没有新增、编辑或删除权限；时段规则可查看但不能修改。' }}
     </n-alert>
 
     <section v-if="loading && !items.length" class="basedata-state" data-testid="teachers-loading" role="status" aria-live="polite">
@@ -252,7 +252,7 @@ function openRules(teacher: Teacher) {
             <th>{{ '行政' }}</th>
             <th>{{ '账号' }}</th>
             <th>{{ '状态' }}</th>
-            <th v-if="canEdit">{{ '操作' }}</th>
+            <th>{{ '操作' }}</th>
           </tr>
         </thead>
         <tbody>
@@ -278,9 +278,9 @@ function openRules(teacher: Teacher) {
                 {{ teacher.is_active ? '在职' : '离职' }}
               </n-tag>
             </td>
-            <td v-if="canEdit">
+            <td>
               <div class="basedata-command-group">
-                <n-button size="small" :data-testid="`teacher-edit-${teacher.id}`" @click="openEdit(teacher)">
+                <n-button v-if="canEdit" size="small" :data-testid="`teacher-edit-${teacher.id}`" @click="openEdit(teacher)">
                   <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                   {{ '编辑' }}
                 </n-button>
@@ -288,7 +288,7 @@ function openRules(teacher: Teacher) {
                   <template #icon><CalendarClock :size="14" aria-hidden="true" /></template>
                   {{ '时段规则' }}
                 </n-button>
-                <n-popconfirm :disabled="deletingId !== null" @positive-click="remove(teacher)">
+                <n-popconfirm v-if="canEdit" :disabled="deletingId !== null" @positive-click="remove(teacher)">
                   <template #trigger>
                     <n-button
                       size="small"
@@ -345,7 +345,7 @@ function openRules(teacher: Teacher) {
         </n-divider>
         <div class="basedata-form-row">
           <div class="basedata-field">
-            <label for="teacher-email">Email</label>
+            <label for="teacher-email">{{ '电子邮箱' }}</label>
             <n-input id="teacher-email" v-model:value="form.email" data-testid="teacher-email" :placeholder="'用于发送通知'" />
           </div>
           <div class="basedata-field">
@@ -391,6 +391,7 @@ function openRules(teacher: Teacher) {
         v-if="rulesTeacher"
         :teacher-id="rulesTeacher.id"
         :semester-id="semesterId"
+        :can-edit="canEdit"
         @saved="rulesShow = false"
       />
     </n-modal>

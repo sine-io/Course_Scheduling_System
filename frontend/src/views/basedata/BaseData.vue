@@ -38,7 +38,6 @@ async function loadSemesters() {
   try {
     semesters.value = await listSemesters()
     currentId.value = semesters.value[0]?.id ?? null
-    if (!canEdit.value && activeTab.value === 'import') activeTab.value = 'teachers'
   } catch (error) {
     loadError.value = errorMessage(error)
   } finally {
@@ -110,8 +109,8 @@ onMounted(loadSemesters)
         <n-tab-pane name="rooms" :tab="'教室/场地'">
           <RoomsTab :key="`r-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
         </n-tab-pane>
-        <n-tab-pane v-if="canEdit" name="import" :tab="'批量导入'">
-          <ImportTab :key="`i-${currentId}`" :semester-id="currentId" />
+        <n-tab-pane name="import" :tab="'批量导入'">
+          <ImportTab :key="`i-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
         </n-tab-pane>
       </n-tabs>
     </section>
