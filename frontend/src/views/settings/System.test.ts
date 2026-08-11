@@ -62,7 +62,7 @@ function makeRouter() {
   })
 }
 
-async function mountSystem(role: string) {
+async function mountSystem(role: string, stubs: Record<string, unknown> = {}) {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore(pinia)
@@ -87,8 +87,10 @@ async function mountSystem(role: string) {
       stubs: {
         Popconfirm: {
           emits: ['positive-click'],
-          template: '<span><slot name="trigger" /><button data-testid="confirm-reset-wizard" @click="$emit(\'positive-click\')">确认</button></span>',
+          props: ['confirmId'],
+          template: '<span><slot name="trigger" /><button :data-testid="confirmId || \'confirm-reset-wizard\'" @click="$emit(\'positive-click\')">确认</button></span>',
         },
+        ...stubs,
       },
     },
   })
@@ -108,12 +110,13 @@ describe('System', () => {
     wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, semester_id: null, total_steps: 4, has_semesters: false })
   })
 
-  it('非管理员只看到受限说明，不读取管理员设置接口', async () => {
+  it('非管理员保持原有可见性，只显示设置向导且不读取管理员接口', async () => {
     const wrapper = await mountSystem('scheduler')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="system-restricted"]').text()).toContain('仅系统管理员可管理')
     expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="backup-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="wizard-reset-card"]').exists()).toBe(true)
     expect(notificationMocks.getSmtp).not.toHaveBeenCalled()
     expect(backupMocks.listBackups).not.toHaveBeenCalled()
   })
@@ -153,5 +156,53 @@ describe('System', () => {
     expect(wrapper.get('[data-testid="reset-wizard"]').attributes('disabled')).toBeDefined()
     reset.resolve({ current_step: 0, completed: false, semester_id: null, total_steps: 4, has_semesters: false })
     await flushPromises()
+  })
+
+  it('恢复备份进行中时重复确认只发送一次请求', async () => {
+    const restore = (() => {
+      let resolve!: (value: unknown) => void
+      const promise = new Promise((done) => { resolve = done })
+      return { promise, resolve }
+    })()
+    backupMocks.listBackups.mockResolvedValue([backup])
+    backupMocks.restoreBackup.mockReturnValue(restore.promise)
+    const wrapper = await mountSystem('admin', {
+      Popconfirm: {
+        emits: ['positive-click'],
+        template: '<span><slot name="trigger" /><button data-testid="confirm-backup-action" @click="$emit(\'positive-click\')">确认</button></span>',
+      },
+    })
+    await flushPromises()
+
+    const confirmations = wrapper.findAll('[data-testid="confirm-backup-action"]')
+    await confirmations[0].trigger('click')
+    await confirmations[0].trigger('click')
+
+    expect(backupMocks.restoreBackup).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="backup-restore"]').attributes('disabled')).toBeDefined()
+    restore.resolve({ presafe_backup: 'presafe.dump', warnings: [] })
+    await flushPromises()
+  })
+
+  it('删除备份失败后解除进行中状态并允许重试', async () => {
+    backupMocks.listBackups.mockResolvedValue([backup])
+    backupMocks.deleteBackup
+      .mockRejectedValueOnce({ detail: '备份删除失败' })
+      .mockResolvedValueOnce({ deleted: backup.name })
+    const wrapper = await mountSystem('admin', {
+      Popconfirm: {
+        emits: ['positive-click'],
+        template: '<span><slot name="trigger" /><button data-testid="confirm-backup-action" @click="$emit(\'positive-click\')">确认</button></span>',
+      },
+    })
+    await flushPromises()
+
+    const confirmations = wrapper.findAll('[data-testid="confirm-backup-action"]')
+    await confirmations[1].trigger('click')
+    await flushPromises()
+    await confirmations[1].trigger('click')
+    await flushPromises()
+
+    expect(backupMocks.deleteBackup).toHaveBeenCalledTimes(2)
   })
 })

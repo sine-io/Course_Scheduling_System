@@ -26,6 +26,20 @@
   line-height: 1.6;
 }
 
+.settings-header-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-header-actions .n-select {
+  width: 240px;
+  max-width: 100%;
+}
+
 .settings-eyebrow {
   margin: 0 0 7px;
   color: var(--app-primary-strong);
@@ -142,6 +156,10 @@
 
 .settings-item {
   padding: 20px;
+}
+
+.settings-item[data-selected='true'] {
+  border-color: var(--app-primary);
 }
 
 .settings-item-header {
@@ -303,6 +321,15 @@
   .settings-page-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .settings-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .settings-header-actions .n-select {
+    flex: 1 1 220px;
   }
 
   .settings-page-header h1 {

@@ -149,9 +149,10 @@ for (const viewport of VIEWPORTS) {
     }
 
     await page.goto('/settings/system')
-    await expect(page.getByTestId('system-restricted')).toContainText('仅系统管理员可管理')
     await expect(page.getByTestId('wizard-reset-card')).toBeVisible()
     await expect(page.getByTestId('school-card')).toHaveCount(0)
+    await expect(page.getByTestId('backup-card')).toHaveCount(0)
+    await expect(page.getByTestId('scheduling-card')).toHaveCount(0)
     await expectNoRootOverflow(page)
     expect(requestedAdminPaths).toEqual([])
   })

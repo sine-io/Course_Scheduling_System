@@ -7,7 +7,7 @@ import {
   NPopconfirm, NSelect, NSpace, NSpin, NSwitch, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { ApiError } from '@/api/client'
 import {
   copySemester, createPeriodTable, createSemester, deletePeriodTable,
@@ -18,6 +18,7 @@ import { useAppConfigStore } from '@/stores/appConfig'
 import './settings-workspace.css'
 
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const appConfig = useAppConfigStore()
 
@@ -26,6 +27,7 @@ const templates = ref<Template[]>([])
 const initialLoading = ref(true)
 const refreshing = ref(false)
 const loadError = ref<string | null>(null)
+const selectedSemesterId = ref<number | null>(null)
 
 const creating = ref(false)
 const deletingSemesterId = ref<number | null>(null)
@@ -49,10 +51,21 @@ const termOptions = [
   { label: '第一学期', value: 1 },
   { label: '第二学期', value: 2 },
 ]
+const semesterOptions = computed(() => semesters.value.map((semester) => ({
+  label: semester.label,
+  value: semester.id,
+})))
 
 async function fetchSemesters() {
   const items = await listSemesters()
   semesters.value = await Promise.all(items.map((item: SemesterListItem) => getSemester(item.id)))
+  const queryId = Number(route.query.semester)
+  const currentId = selectedSemesterId.value
+  selectedSemesterId.value = semesters.value.some((semester) => semester.id === currentId)
+    ? currentId
+    : (semesters.value.some((semester) => semester.id === queryId)
+      ? queryId
+      : (semesters.value[0]?.id ?? null))
 }
 
 function errorMessage(error: unknown): string {
@@ -170,6 +183,12 @@ function editTable(id: number) {
   router.push({ name: 'period-table-editor', params: { id } })
 }
 
+async function selectSemester(id: number | null) {
+  if (!id) return
+  selectedSemesterId.value = id
+  await router.replace({ query: { ...route.query, semester: String(id) } })
+}
+
 const showCopy = ref(false)
 const copySource = ref<Semester | null>(null)
 
@@ -246,10 +265,20 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
         <h1>{{ '学期与作息时间表' }}</h1>
         <p>{{ '管理学期生命周期、作息表和排课准备状态。每个危险操作都会在提交前明确确认。' }}</p>
       </div>
-      <n-button text type="primary" @click="router.push({ name: 'calendar' })">
-        <template #icon><CalendarDays :size="16" aria-hidden="true" /></template>
-        {{ '查看校历' }}
-      </n-button>
+      <div class="settings-header-actions">
+        <n-select
+          v-if="semesters.length"
+          :value="selectedSemesterId"
+          :options="semesterOptions"
+          data-testid="semester-select"
+          aria-label="选择工作学期"
+          @update:value="selectSemester"
+        />
+        <n-button text type="primary" @click="router.push({ name: 'calendar' })">
+          <template #icon><CalendarDays :size="16" aria-hidden="true" /></template>
+          {{ '查看校历' }}
+        </n-button>
+      </div>
     </header>
 
     <section v-if="initialLoading" class="settings-state" data-testid="semesters-loading" role="status" aria-live="polite">
@@ -313,7 +342,13 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
           <n-spin size="small" />
           <strong>{{ '正在更新学期列表' }}</strong>
         </div>
-        <article v-for="semester in semesters" v-else :key="semester.id" class="n-card settings-item" :data-testid="`semester-${semester.id}`">
+        <article
+          v-for="semester in semesters" v-else :key="semester.id"
+          class="settings-item"
+          :data-testid="`semester-${semester.id}`"
+          :data-selected="selectedSemesterId === semester.id"
+          :aria-current="selectedSemesterId === semester.id ? 'true' : undefined"
+        >
           <header class="settings-item-header">
             <div>
               <div class="settings-meta">
@@ -322,6 +357,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                 <n-tag :type="semester.readiness === 'ready' ? 'success' : 'warning'" size="small">
                   {{ readinessLabel(semester.readiness) }}
                 </n-tag>
+                <n-tag v-if="selectedSemesterId === semester.id" type="info" size="small">{{ '当前选择' }}</n-tag>
               </div>
               <p>{{ semester.start_date || '未设置开始日期' }} - {{ semester.end_date || '未设置结束日期' }}</p>
             </div>

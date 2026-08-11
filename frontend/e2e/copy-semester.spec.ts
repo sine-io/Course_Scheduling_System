@@ -34,7 +34,8 @@ test('开新学期:复制到新学期,带起止日与排课偏好设置', async 
   })
 
   await page.goto('/settings/semesters')
-  const srcCard = page.locator('.n-card').filter({ hasText: semesterLabel(SRC) })
+  const srcCard = page.getByTestId(`semester-${src.id}`)
+  await expect(page.getByTestId('semester-select')).toBeVisible()
   await srcCard.getByTestId('copy-semester').first().click()
 
   // 对话框:目标学年默认 +1;起止日默认为来源往后推半年(排课管理员只要确认校历再改)

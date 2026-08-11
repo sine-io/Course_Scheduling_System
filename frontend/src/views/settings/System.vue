@@ -31,7 +31,7 @@ const wizard = useWizardStore()
 const auth = useAuthStore()
 
 const isAdmin = computed(() => auth.hasRole('admin'))
-const adminLoading = ref(true)
+const adminLoading = ref(isAdmin.value)
 const adminError = ref<string | null>(null)
 
 const backups = ref<Backup[]>([])
@@ -320,13 +320,7 @@ async function onResetWizard() {
       </n-button>
     </section>
 
-    <section v-else-if="!isAdmin" class="settings-state settings-restricted" data-testid="system-restricted" role="status">
-      <AlertTriangle :size="21" aria-hidden="true" />
-      <strong>{{ '仅系统管理员可管理系统设置' }}</strong>
-      <span>{{ '当前账号可以继续使用已有工作面；学校、SMTP、备份和排课参数不会向你开放。' }}</span>
-    </section>
-
-    <template v-else>
+    <template v-else-if="isAdmin">
       <section class="settings-panel" data-testid="school-card">
         <div class="settings-panel-heading">
           <div>
@@ -456,7 +450,7 @@ async function onResetWizard() {
                     </n-popconfirm>
                     <n-popconfirm :disabled="backupBusy" @positive-click="onDeleteBackup(backup.name)">
                       <template #trigger>
-                        <n-button size="small" type="error" ghost :loading="deletingBackup === backup.name" :disabled="backupBusy">
+                        <n-button size="small" type="error" ghost data-testid="backup-delete" :loading="deletingBackup === backup.name" :disabled="backupBusy">
                           <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
                           {{ '删除' }}
                         </n-button>
@@ -519,7 +513,6 @@ async function onResetWizard() {
 </template>
 
 <style scoped>
-.settings-restricted > svg { color: var(--app-warning); }
 .settings-field-checkbox { align-content: center; }
 .settings-danger-panel > .settings-panel-heading > svg { color: var(--app-warning); }
 </style>
