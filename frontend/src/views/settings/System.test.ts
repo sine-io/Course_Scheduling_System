@@ -205,4 +205,57 @@ describe('System', () => {
 
     expect(backupMocks.deleteBackup).toHaveBeenCalledTimes(2)
   })
+
+  it('上传备份需确认，进行中不重复恢复且失败后可重试', async () => {
+    const firstRestore = (() => {
+      let reject!: (reason: unknown) => void
+      const promise = new Promise((_, fail) => { reject = fail })
+      return { promise, reject }
+    })()
+    backupMocks.restoreUpload
+      .mockReturnValueOnce(firstRestore.promise)
+      .mockRejectedValueOnce({ detail: '上传恢复失败' })
+    const wrapper = await mountSystem('admin')
+    await flushPromises()
+
+    async function chooseBackup(name: string) {
+      const input = wrapper.get('input[type="file"]')
+      Object.defineProperty(input.element, 'files', {
+        configurable: true,
+        value: [new File(['backup'], name, { type: 'application/octet-stream' })],
+      })
+      await input.trigger('change')
+      await flushPromises()
+    }
+
+    function confirmationButton(): HTMLButtonElement {
+      const dialogs = Array.from(document.body.querySelectorAll<HTMLElement>('[role="dialog"]'))
+      const confirmation = dialogs
+        .filter((element) => element.textContent?.includes('确认上传并恢复备份'))
+        .at(-1)
+      const button = Array.from(confirmation?.querySelectorAll('button') ?? [])
+        .find((element) => element.textContent?.includes('确认恢复'))
+      if (!(button instanceof HTMLButtonElement)) throw new Error('未找到上传恢复确认按钮')
+      return button
+    }
+
+    await chooseBackup('first.dump')
+    expect(backupMocks.restoreUpload).not.toHaveBeenCalled()
+
+    const firstConfirmation = confirmationButton()
+    firstConfirmation.click()
+    firstConfirmation.click()
+    await flushPromises()
+    expect(backupMocks.restoreUpload).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="backup-upload"]').attributes('disabled')).toBeDefined()
+
+    firstRestore.reject({ detail: '上传恢复失败' })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="backup-upload"]').attributes('disabled')).toBeUndefined()
+
+    await chooseBackup('retry.dump')
+    confirmationButton().click()
+    await flushPromises()
+    expect(backupMocks.restoreUpload).toHaveBeenCalledTimes(2)
+  })
 })

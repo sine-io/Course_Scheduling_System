@@ -6,7 +6,7 @@ import {
   NAlert, NButton, NCheckbox, NInput, NInputNumber, NPopconfirm, NTag, NUpload,
   useDialog, useMessage,
 } from 'naive-ui'
-import type { UploadCustomRequestOptions } from 'naive-ui'
+import type { UploadCustomRequestOptions, UploadSettledFileInfo } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ApiError } from '@/api/client'
@@ -37,11 +37,18 @@ const adminError = ref<string | null>(null)
 const backups = ref<Backup[]>([])
 const creatingBackup = ref(false)
 const restoringBackup = ref<string | null>(null)
+const confirmingUploadRestore = ref(false)
+const confirmedUploadRestoreId = ref<string | null>(null)
 const uploadingRestore = ref(false)
 const deletingBackup = ref<string | null>(null)
 const downloadingBackup = ref<string | null>(null)
 const backupBusy = computed(() => (
-  creatingBackup.value || restoringBackup.value !== null || uploadingRestore.value || deletingBackup.value !== null
+  creatingBackup.value
+  || restoringBackup.value !== null
+  || confirmingUploadRestore.value
+  || confirmedUploadRestoreId.value !== null
+  || uploadingRestore.value
+  || deletingBackup.value !== null
 ))
 
 const smtp = ref({ host: '', port: 25, user: '', password: '', sender: '', use_tls: false })
@@ -196,11 +203,52 @@ async function onRestore(name: string) {
   }
 }
 
+function onBeforeUploadRestore({ file }: { file: UploadSettledFileInfo }): Promise<boolean> {
+  if (backupBusy.value) return Promise.resolve(false)
+  if (!file.file) {
+    message.error('无法读取所选备份文件，请重新选择。')
+    return Promise.resolve(false)
+  }
+
+  confirmingUploadRestore.value = true
+  return new Promise((resolve) => {
+    let settled = false
+    const finishConfirmation = (confirmed: boolean) => {
+      if (settled) return
+      settled = true
+      confirmingUploadRestore.value = false
+      confirmedUploadRestoreId.value = confirmed ? file.id : null
+      resolve(confirmed)
+    }
+
+    dialog.warning({
+      title: '确认上传并恢复备份',
+      content: `将使用“${file.name}”覆盖当前所有数据。系统会先自动备份当前状态，恢复后所有用户需要重新登录。`,
+      positiveText: '确认恢复',
+      negativeText: '取消',
+      maskClosable: false,
+      onPositiveClick: () => finishConfirmation(true),
+      onNegativeClick: () => finishConfirmation(false),
+      onClose: () => finishConfirmation(false),
+    })
+  })
+}
+
 async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestOptions) {
-  if (backupBusy.value) return
+  if (confirmedUploadRestoreId.value !== file.id || uploadingRestore.value) {
+    onError()
+    return
+  }
+  const uploadFile = file.file
+  confirmedUploadRestoreId.value = null
+  if (!uploadFile) {
+    onError()
+    message.error('无法读取所选备份文件，请重新选择。')
+    return
+  }
   uploadingRestore.value = true
   try {
-    const result = await restoreUpload(file.file as File)
+    const result = await restoreUpload(uploadFile)
     onFinish()
     await afterRestore(result)
   } catch (error) {
@@ -415,8 +463,14 @@ async function onResetWizard() {
             <template #icon><DatabaseBackup :size="15" aria-hidden="true" /></template>
             {{ '立即备份' }}
           </n-button>
-          <n-upload :custom-request="onUploadRestore" :show-file-list="false" accept=".dump" :disabled="backupBusy">
-            <n-button :disabled="backupBusy" data-testid="backup-upload">
+          <n-upload
+            :custom-request="onUploadRestore"
+            :on-before-upload="onBeforeUploadRestore"
+            :show-file-list="false"
+            accept=".dump"
+            :disabled="backupBusy"
+          >
+            <n-button :loading="uploadingRestore" :disabled="backupBusy" data-testid="backup-upload">
               <template #icon><Upload :size="15" aria-hidden="true" /></template>
               {{ '上传备份并恢复' }}
             </n-button>
