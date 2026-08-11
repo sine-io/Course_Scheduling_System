@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import {
-  NButton, NDivider, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NSwitch, NTag, NText, useMessage,
+  AlertTriangle, CalendarClock, Pencil, Plus, RefreshCw, Save, Trash2, X,
+} from '@lucide/vue'
+import {
+  NAlert, NButton, NDivider, NEmpty, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpin,
+  NSwitch, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import type { ApiError } from '@/api/client'
@@ -9,76 +13,157 @@ import {
 } from '@/api/basedata'
 import type { BindableAccount, Subject, Teacher } from '@/api/basedata'
 import TeacherTimeRules from './TeacherTimeRules.vue'
+import './basedata-workspace.css'
 
-const props = defineProps<{ semesterId: number }>()
+const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
 const message = useMessage()
 
 const items = ref<Teacher[]>([])
 const subjects = ref<Subject[]>([])
 const accounts = ref<BindableAccount[]>([])
 const search = ref('')
-const subjectOptions = computed(() => subjects.value.map((s) => ({ label: s.name, value: s.id })))
+const loading = ref(true)
+const loadError = ref<string | null>(null)
+const saving = ref(false)
+const loadingAccounts = ref(false)
+const deletingId = ref<number | null>(null)
+const subjectOptions = computed(() => subjects.value.map((subject) => ({ label: subject.name, value: subject.id })))
 const accountOptions = computed(() =>
-  accounts.value.map((a) => ({ label: `${a.display_name}(${a.username})`, value: a.id })),
+  accounts.value.map((account) => ({
+    label: `${account.display_name}（${account.username}）`,
+    value: account.id,
+  })),
 )
 
-async function reload() {
-  items.value = await listTeachers(props.semesterId, search.value || undefined)
+function errorMessage(error: unknown, fallback: string) {
+  return (error as Partial<ApiError> | null)?.detail || fallback
 }
-onMounted(async () => {
-  subjects.value = await listSubjects(props.semesterId)
-  await reload()
-})
+
+async function reload() {
+  loading.value = true
+  loadError.value = null
+  try {
+    items.value = await listTeachers(props.semesterId, search.value.trim() || undefined)
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取教师，请重试。')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadInitialData() {
+  loading.value = true
+  loadError.value = null
+  try {
+    const [teacherItems, subjectItems] = await Promise.all([
+      listTeachers(props.semesterId, search.value.trim() || undefined),
+      listSubjects(props.semesterId),
+    ])
+    items.value = teacherItems
+    subjects.value = subjectItems
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取教师，请重试。')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadInitialData)
 
 const show = ref(false)
 const editingId = ref<number | null>(null)
 interface TeacherForm {
-  name: string; base_periods: number; admin_title: string; admin_reduction: number
-  is_external: boolean; is_active: boolean; subject_ids: number[]
-  email: string; phone: string; line_id: string; user_id: number | null
+  name: string
+  base_periods: number
+  admin_title: string
+  admin_reduction: number
+  is_external: boolean
+  is_active: boolean
+  subject_ids: number[]
+  email: string
+  phone: string
+  line_id: string
+  user_id: number | null
 }
 function emptyForm(): TeacherForm {
   return {
-    name: '', base_periods: 0, admin_title: '', admin_reduction: 0,
-    is_external: false, is_active: true, subject_ids: [],
-    email: '', phone: '', line_id: '', user_id: null,
+    name: '',
+    base_periods: 0,
+    admin_title: '',
+    admin_reduction: 0,
+    is_external: false,
+    is_active: true,
+    subject_ids: [],
+    email: '',
+    phone: '',
+    line_id: '',
+    user_id: null,
   }
 }
 const form = ref<TeacherForm>(emptyForm())
 
 async function loadAccounts(currentTeacherId?: number) {
-  accounts.value = await listBindableAccounts(props.semesterId, currentTeacherId)
+  loadingAccounts.value = true
+  try {
+    accounts.value = await listBindableAccounts(props.semesterId, currentTeacherId)
+  } catch (error) {
+    message.error(errorMessage(error, '账号列表加载失败'))
+    throw error
+  } finally {
+    loadingAccounts.value = false
+  }
 }
 
 async function openCreate() {
   editingId.value = null
   form.value = emptyForm()
-  await loadAccounts()
   show.value = true
-}
-async function openEdit(t: Teacher) {
-  editingId.value = t.id
-  form.value = {
-    name: t.name, base_periods: t.base_periods, admin_title: t.admin_title ?? '',
-    admin_reduction: t.admin_reduction, is_external: t.is_external, is_active: t.is_active,
-    subject_ids: t.subjects.map((s) => s.id),
-    email: t.email ?? '', phone: t.phone ?? '', line_id: t.line_id ?? '', user_id: t.user_id,
+  try {
+    await loadAccounts()
+  } catch {
+    show.value = false
   }
-  await loadAccounts(t.id)
+}
+async function openEdit(teacher: Teacher) {
+  editingId.value = teacher.id
+  form.value = {
+    name: teacher.name,
+    base_periods: teacher.base_periods,
+    admin_title: teacher.admin_title ?? '',
+    admin_reduction: teacher.admin_reduction,
+    is_external: teacher.is_external,
+    is_active: teacher.is_active,
+    subject_ids: teacher.subjects.map((subject) => subject.id),
+    email: teacher.email ?? '',
+    phone: teacher.phone ?? '',
+    line_id: teacher.line_id ?? '',
+    user_id: teacher.user_id,
+  }
   show.value = true
+  try {
+    await loadAccounts(teacher.id)
+  } catch {
+    show.value = false
+  }
+}
+function closeModal() {
+  if (!saving.value) show.value = false
 }
 
 async function save() {
-  if (!form.value.name) {
+  if (saving.value) return
+  if (!form.value.name.trim()) {
     message.warning('请输入教师姓名')
     return
   }
+  saving.value = true
   const body = {
     ...form.value,
-    admin_title: form.value.admin_title || null,
-    email: form.value.email || null,
-    phone: form.value.phone || null,
-    line_id: form.value.line_id || null,
+    name: form.value.name.trim(),
+    admin_title: form.value.admin_title.trim() || null,
+    email: form.value.email.trim() || null,
+    phone: form.value.phone.trim() || null,
+    line_id: form.value.line_id.trim() || null,
   }
   try {
     if (editingId.value) await updateTeacher(editingId.value, body)
@@ -86,137 +171,221 @@ async function save() {
     show.value = false
     message.success('已保存')
     await reload()
-  } catch (e) {
-    message.error((e as ApiError).detail || '保存失败')
+  } catch (error) {
+    message.error(errorMessage(error, '保存失败'))
+  } finally {
+    saving.value = false
   }
 }
 
-async function remove(t: Teacher) {
+async function remove(teacher: Teacher) {
+  if (deletingId.value !== null) return
+  deletingId.value = teacher.id
   try {
-    await deleteTeacher(t.id)
+    await deleteTeacher(teacher.id)
     message.success('已删除')
     await reload()
-  } catch (e) {
-    message.error((e as ApiError).detail || '删除失败')
+  } catch (error) {
+    message.error(errorMessage(error, '删除失败'))
+  } finally {
+    deletingId.value = null
   }
 }
 
-// 时段规则
 const rulesShow = ref(false)
 const rulesTeacher = ref<Teacher | null>(null)
-function openRules(t: Teacher) {
-  rulesTeacher.value = t
+function openRules(teacher: Teacher) {
+  rulesTeacher.value = teacher
   rulesShow.value = true
 }
 </script>
 
 <template>
-  <n-space vertical>
-    <n-space>
-      <n-input v-model:value="search" :placeholder="'搜索教师姓名'" clearable style="width: 200px" @input="reload" />
-      <n-button type="primary" data-testid="teacher-add" @click="openCreate">{{ '新增教师' }}</n-button>
-    </n-space>
-
-    <table class="data-table">
-      <thead>
-        <tr><th>{{ '姓名' }}</th><th>{{ '任教科目' }}</th><th>{{ '基本课时' }}</th><th>{{ '行政' }}</th><th>{{ '账号' }}</th><th>{{ '状态' }}</th><th>{{ '操作' }}</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="t in items" :key="t.id">
-          <td>
-            {{ t.name }}
-            <n-tag v-if="t.is_external" size="tiny" type="warning" style="margin-left: 4px">{{ '外聘' }}</n-tag>
-          </td>
-          <td>
-            <n-space size="small">
-              <n-tag v-for="s in t.subjects" :key="s.id" size="small">{{ s.name }}</n-tag>
-              <n-text v-if="t.subjects.length === 0" depth="3">—</n-text>
-            </n-space>
-          </td>
-          <td>{{ t.base_periods }}</td>
-          <td>{{ t.admin_title ? `${t.admin_title}（减 ${t.admin_reduction}）` : '—' }}</td>
-          <td>
-            <n-tag v-if="t.user_id" size="small" type="info">{{ '已绑定' }}</n-tag>
-            <n-text v-else depth="3">—</n-text>
-          </td>
-          <td>
-            <n-tag :type="t.is_active ? 'success' : 'default'" size="small">
-              {{ t.is_active ? '在职' : '离职' }}
-            </n-tag>
-          </td>
-          <td>
-            <n-space>
-              <n-button size="tiny" @click="openEdit(t)">{{ '编辑' }}</n-button>
-              <n-button size="tiny" @click="openRules(t)">{{ '时段规则' }}</n-button>
-              <n-popconfirm @positive-click="remove(t)">
-                <template #trigger><n-button size="tiny" type="error" ghost>{{ '删除' }}</n-button></template>
-                {{ '确定删除此教师吗？' }}
-              </n-popconfirm>
-            </n-space>
-          </td>
-        </tr>
-        <tr v-if="items.length === 0"><td colspan="7"><n-text depth="3">{{ '暂无教师' }}</n-text></td></tr>
-      </tbody>
-    </table>
-
-    <n-modal v-model:show="show" preset="card" :title="editingId ? '编辑教师' : '新增教师'" style="max-width: 460px">
-      <n-space vertical>
-        <n-text>{{ '姓名' }}</n-text>
-        <n-input v-model:value="form.name" data-testid="teacher-name" :placeholder="'如：王小明'" />
-        <n-text>{{ '任教科目' }}</n-text>
-        <n-select v-model:value="form.subject_ids" multiple :options="subjectOptions" :placeholder="'可多选'" />
-        <n-space>
-          <n-space vertical style="flex: 1">
-            <n-text>{{ '基本课时' }}</n-text>
-            <n-input-number v-model:value="form.base_periods" :min="0" />
-          </n-space>
-          <n-space vertical style="flex: 1">
-            <n-text>{{ '行政减课' }}</n-text>
-            <n-input-number v-model:value="form.admin_reduction" :min="0" />
-          </n-space>
-        </n-space>
-        <n-text>{{ '行政职务（可选）' }}</n-text>
-        <n-input v-model:value="form.admin_title" :placeholder="'如：教务排课管理员'" />
-        <n-space align="center">
-          <n-text>{{ '外聘教师' }}</n-text>
-          <n-switch v-model:value="form.is_external" />
-          <n-text style="margin-left: 16px">{{ '在职' }}</n-text>
-          <n-switch v-model:value="form.is_active" />
-        </n-space>
-
-        <n-divider style="margin: 4px 0" title-placement="left">
-          <n-text depth="3" style="font-size: 12px">{{ '联系信息（可选，用于调课与代课通知）' }}</n-text>
-        </n-divider>
-        <n-space>
-          <n-space vertical style="flex: 1">
-            <n-text>Email</n-text>
-            <n-input v-model:value="form.email" data-testid="teacher-email" :placeholder="'用于发送通知'" />
-          </n-space>
-          <n-space vertical style="flex: 1">
-            <n-text>{{ '手机' }}</n-text>
-            <n-input v-model:value="form.phone" :placeholder="'用于人工联系'" />
-          </n-space>
-        </n-space>
-        <n-text>{{ '即时通讯账号（可选，用于人工联系）' }}</n-text>
-        <n-input v-model:value="form.line_id" :placeholder="'即时通讯账号'" />
-        <n-text>{{ '绑定登录账号（可选）' }}</n-text>
-        <n-select
-          v-model:value="form.user_id"
-          data-testid="teacher-account"
-          :options="accountOptions"
+  <div class="basedata-tab-content" :aria-busy="loading">
+    <div class="basedata-toolbar">
+      <div class="basedata-toolbar-main">
+        <n-input
+          v-model:value="search"
+          class="basedata-search"
+          :placeholder="'搜索教师姓名'"
           clearable
-          :placeholder="'绑定后该教师可使用此账号登录查询课表或请假'"
+          aria-label="搜索教师姓名"
+          @input="reload"
         />
+      </div>
+      <div v-if="canEdit" class="basedata-toolbar-actions">
+        <n-button type="primary" data-testid="teacher-add" @click="openCreate">
+          <template #icon><Plus :size="16" aria-hidden="true" /></template>
+          {{ '新增教师' }}
+        </n-button>
+      </div>
+    </div>
 
-        <n-button type="primary" data-testid="teacher-save" @click="save">{{ '保存' }}</n-button>
-      </n-space>
+    <n-alert v-if="!canEdit" class="basedata-readonly" type="info" data-testid="teachers-readonly">
+      {{ '仅可查看教师，当前角色没有新增、编辑、删除或维护时段规则的权限。' }}
+    </n-alert>
+
+    <section v-if="loading && !items.length" class="basedata-state" data-testid="teachers-loading" role="status" aria-live="polite">
+      <n-spin size="small" />
+      <strong>{{ '正在读取教师' }}</strong>
+      <span>{{ '教师列表加载完成后会显示在这里。' }}</span>
+    </section>
+    <section v-else-if="loadError" class="basedata-state basedata-state-error" data-testid="teachers-error" role="alert">
+      <AlertTriangle :size="22" aria-hidden="true" />
+      <strong>{{ loadError }}</strong>
+      <span>{{ '当前列表未更新。' }}</span>
+      <n-button type="primary" data-testid="teachers-retry" @click="loadInitialData">
+        <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+        {{ '重新读取' }}
+      </n-button>
+    </section>
+    <section v-else-if="!items.length" class="basedata-state" data-testid="teachers-empty" role="status">
+      <n-empty :description="'暂无教师'" />
+    </section>
+    <div v-else class="basedata-table-scroll" data-testid="teachers-table-scroll" tabindex="0" aria-label="教师列表，可横向滚动">
+      <table class="basedata-data-table basedata-data-table--teachers" data-testid="teachers-table">
+        <thead>
+          <tr>
+            <th>{{ '姓名' }}</th>
+            <th>{{ '任教科目' }}</th>
+            <th>{{ '基本课时' }}</th>
+            <th>{{ '行政' }}</th>
+            <th>{{ '账号' }}</th>
+            <th>{{ '状态' }}</th>
+            <th v-if="canEdit">{{ '操作' }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="teacher in items" :key="teacher.id">
+            <td>
+              {{ teacher.name }}
+              <n-tag v-if="teacher.is_external" size="tiny" type="warning">{{ '外聘' }}</n-tag>
+            </td>
+            <td>
+              <div class="basedata-command-group">
+                <n-tag v-for="subject in teacher.subjects" :key="subject.id" size="small">{{ subject.name }}</n-tag>
+                <span v-if="teacher.subjects.length === 0">—</span>
+              </div>
+            </td>
+            <td>{{ teacher.base_periods }}</td>
+            <td>{{ teacher.admin_title ? `${teacher.admin_title}（减 ${teacher.admin_reduction}）` : '—' }}</td>
+            <td>
+              <n-tag v-if="teacher.user_id" size="small" type="info">{{ '已绑定' }}</n-tag>
+              <span v-else>—</span>
+            </td>
+            <td>
+              <n-tag :type="teacher.is_active ? 'success' : 'default'" size="small">
+                {{ teacher.is_active ? '在职' : '离职' }}
+              </n-tag>
+            </td>
+            <td v-if="canEdit">
+              <div class="basedata-command-group">
+                <n-button size="small" :data-testid="`teacher-edit-${teacher.id}`" @click="openEdit(teacher)">
+                  <template #icon><Pencil :size="14" aria-hidden="true" /></template>
+                  {{ '编辑' }}
+                </n-button>
+                <n-button size="small" :data-testid="`teacher-rules-${teacher.id}`" @click="openRules(teacher)">
+                  <template #icon><CalendarClock :size="14" aria-hidden="true" /></template>
+                  {{ '时段规则' }}
+                </n-button>
+                <n-popconfirm :disabled="deletingId !== null" @positive-click="remove(teacher)">
+                  <template #trigger>
+                    <n-button
+                      size="small"
+                      type="error"
+                      ghost
+                      :data-testid="`teacher-delete-${teacher.id}`"
+                      :loading="deletingId === teacher.id"
+                      :disabled="deletingId !== null"
+                    >
+                      <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
+                      {{ '删除' }}
+                    </n-button>
+                  </template>
+                  {{ '确定删除此教师吗？' }}
+                </n-popconfirm>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <n-modal v-model:show="show" preset="card" class="basedata-modal basedata-modal--wide" :title="editingId ? '编辑教师' : '新增教师'">
+      <div class="basedata-form">
+        <div class="basedata-field">
+          <label for="teacher-name">{{ '姓名' }}</label>
+          <n-input id="teacher-name" v-model:value="form.name" data-testid="teacher-name" :placeholder="'如：王小明'" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '任教科目' }}</span>
+          <n-select v-model:value="form.subject_ids" multiple :options="subjectOptions" :placeholder="'可多选'" />
+        </div>
+        <div class="basedata-form-row">
+          <div class="basedata-field">
+            <span class="basedata-field-label">{{ '基本课时' }}</span>
+            <n-input-number v-model:value="form.base_periods" :min="0" />
+          </div>
+          <div class="basedata-field">
+            <span class="basedata-field-label">{{ '行政减课' }}</span>
+            <n-input-number v-model:value="form.admin_reduction" :min="0" />
+          </div>
+        </div>
+        <div class="basedata-field">
+          <label for="teacher-admin-title">{{ '行政职务（可选）' }}</label>
+          <n-input id="teacher-admin-title" v-model:value="form.admin_title" :placeholder="'如：教务排课管理员'" />
+        </div>
+        <div class="basedata-switch-row">
+          <label><span>{{ '外聘教师' }}</span><n-switch v-model:value="form.is_external" /></label>
+          <label><span>{{ '在职' }}</span><n-switch v-model:value="form.is_active" /></label>
+        </div>
+
+        <n-divider class="basedata-divider" title-placement="left">
+          {{ '联系信息（可选，用于调课与代课通知）' }}
+        </n-divider>
+        <div class="basedata-form-row">
+          <div class="basedata-field">
+            <label for="teacher-email">Email</label>
+            <n-input id="teacher-email" v-model:value="form.email" data-testid="teacher-email" :placeholder="'用于发送通知'" />
+          </div>
+          <div class="basedata-field">
+            <label for="teacher-phone">{{ '手机' }}</label>
+            <n-input id="teacher-phone" v-model:value="form.phone" :placeholder="'用于人工联系'" />
+          </div>
+        </div>
+        <div class="basedata-field">
+          <label for="teacher-line-id">{{ '即时通讯账号（可选，用于人工联系）' }}</label>
+          <n-input id="teacher-line-id" v-model:value="form.line_id" :placeholder="'即时通讯账号'" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '绑定登录账号（可选）' }}</span>
+          <n-select
+            v-model:value="form.user_id"
+            data-testid="teacher-account"
+            :options="accountOptions"
+            :loading="loadingAccounts"
+            clearable
+            :placeholder="'绑定后该教师可使用此账号登录查询课表或请假'"
+          />
+        </div>
+        <div class="basedata-modal-actions">
+          <n-button quaternary :disabled="saving" @click="closeModal">
+            <template #icon><X :size="15" aria-hidden="true" /></template>
+            {{ '取消' }}
+          </n-button>
+          <n-button type="primary" data-testid="teacher-save" :loading="saving" :disabled="saving" @click="save">
+            <template #icon><Save :size="15" aria-hidden="true" /></template>
+            {{ '保存' }}
+          </n-button>
+        </div>
+      </div>
     </n-modal>
 
     <n-modal
       v-model:show="rulesShow"
       preset="card"
-      :title="`${'时段规则'}:${rulesTeacher?.name}`"
-      style="max-width: 640px"
+      class="basedata-modal basedata-modal--rules"
+      :title="`${'时段规则'}：${rulesTeacher?.name}`"
     >
       <TeacherTimeRules
         v-if="rulesTeacher"
@@ -225,11 +394,5 @@ function openRules(t: Teacher) {
         @saved="rulesShow = false"
       />
     </n-modal>
-  </n-space>
+  </div>
 </template>
-
-<style scoped>
-.data-table { border-collapse: collapse; width: 100%; }
-.data-table th, .data-table td { border: 1px solid var(--n-border-color, #e0e0e0); padding: 8px 10px; text-align: left; }
-.data-table th { background: rgba(128,128,128,0.08); font-weight: 600; }
-</style>

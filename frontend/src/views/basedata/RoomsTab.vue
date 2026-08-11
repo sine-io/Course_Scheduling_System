@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { AlertTriangle, Pencil, Plus, RefreshCw, Save, Trash2, X } from '@lucide/vue'
 import {
-  NButton, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NTag, NText, useMessage,
+  NAlert, NButton, NEmpty, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpin, NTag,
+  useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import type { ApiError } from '@/api/client'
@@ -8,37 +10,76 @@ import {
   ROOM_TYPE_LABELS, createRoom, deleteRoom, listRooms, listSubjects, updateRoom,
 } from '@/api/basedata'
 import type { Room, RoomType, Subject } from '@/api/basedata'
+import './basedata-workspace.css'
 
-const props = defineProps<{ semesterId: number }>()
+const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
 const message = useMessage()
 
 const items = ref<Room[]>([])
 const subjects = ref<Subject[]>([])
 const search = ref('')
+const loading = ref(true)
+const loadError = ref<string | null>(null)
+const saving = ref(false)
+const deletingId = ref<number | null>(null)
 
 const roomTypeLabels: Record<RoomType, string> = {
-  normal: '普通教室', special: '专用教室', workshop: '实训场地', outdoor: '户外',
+  normal: '普通教室',
+  special: '专用教室',
+  workshop: '实训场地',
+  outdoor: '户外',
 }
 function roomTypeLabel(type: RoomType) {
   return roomTypeLabels[type]
 }
 const roomTypeOptions = computed(() => (Object.keys(ROOM_TYPE_LABELS) as RoomType[]).map((type) => ({
-  label: roomTypeLabel(type), value: type,
+  label: roomTypeLabel(type),
+  value: type,
 })))
-const subjectOptions = computed(() => subjects.value.map((s) => ({ label: s.name, value: s.id })))
+const subjectOptions = computed(() => subjects.value.map((subject) => ({ label: subject.name, value: subject.id })))
+
+function errorMessage(error: unknown, fallback: string) {
+  return (error as Partial<ApiError> | null)?.detail || fallback
+}
 
 async function reload() {
-  items.value = await listRooms(props.semesterId, search.value || undefined)
+  loading.value = true
+  loadError.value = null
+  try {
+    items.value = await listRooms(props.semesterId, search.value.trim() || undefined)
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取教室/场地，请重试。')
+  } finally {
+    loading.value = false
+  }
 }
-onMounted(async () => {
-  subjects.value = await listSubjects(props.semesterId)
-  await reload()
-})
+
+async function loadInitialData() {
+  loading.value = true
+  loadError.value = null
+  try {
+    const [roomItems, subjectItems] = await Promise.all([
+      listRooms(props.semesterId, search.value.trim() || undefined),
+      listSubjects(props.semesterId),
+    ])
+    items.value = roomItems
+    subjects.value = subjectItems
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取教室/场地，请重试。')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadInitialData)
 
 const show = ref(false)
 const editingId = ref<number | null>(null)
 const form = ref<{ name: string; room_type: RoomType; capacity: number | null; subject_ids: number[] }>({
-  name: '', room_type: 'normal', capacity: null, subject_ids: [],
+  name: '',
+  room_type: 'normal',
+  capacity: null,
+  subject_ids: [],
 })
 
 function openCreate() {
@@ -46,96 +87,178 @@ function openCreate() {
   form.value = { name: '', room_type: 'normal', capacity: null, subject_ids: [] }
   show.value = true
 }
-function openEdit(r: Room) {
-  editingId.value = r.id
+function openEdit(room: Room) {
+  editingId.value = room.id
   form.value = {
-    name: r.name, room_type: r.room_type, capacity: r.capacity,
-    subject_ids: r.subjects.map((s) => s.id),
+    name: room.name,
+    room_type: room.room_type,
+    capacity: room.capacity,
+    subject_ids: room.subjects.map((subject) => subject.id),
   }
   show.value = true
 }
+function closeModal() {
+  if (!saving.value) show.value = false
+}
 
 async function save() {
-  if (!form.value.name) {
+  if (saving.value) return
+  if (!form.value.name.trim()) {
     message.warning('请输入教室/场地名称')
     return
   }
+  saving.value = true
+  const body = { ...form.value, name: form.value.name.trim() }
   try {
-    if (editingId.value) await updateRoom(editingId.value, form.value)
-    else await createRoom(props.semesterId, form.value)
+    if (editingId.value) await updateRoom(editingId.value, body)
+    else await createRoom(props.semesterId, body)
     show.value = false
     message.success('已保存')
     await reload()
-  } catch (e) {
-    message.error((e as ApiError).detail || '保存失败')
+  } catch (error) {
+    message.error(errorMessage(error, '保存失败'))
+  } finally {
+    saving.value = false
   }
 }
 
-async function remove(r: Room) {
+async function remove(room: Room) {
+  if (deletingId.value !== null) return
+  deletingId.value = room.id
   try {
-    await deleteRoom(r.id)
+    await deleteRoom(room.id)
     message.success('已删除')
     await reload()
-  } catch (e) {
-    message.error((e as ApiError).detail || '删除失败')
+  } catch (error) {
+    message.error(errorMessage(error, '删除失败'))
+  } finally {
+    deletingId.value = null
   }
 }
 </script>
 
 <template>
-  <n-space vertical>
-    <n-space>
-      <n-input v-model:value="search" :placeholder="'搜索教室/场地名称'" clearable style="width: 200px" @input="reload" />
-      <n-button type="primary" @click="openCreate">{{ '新增教室/场地' }}</n-button>
-    </n-space>
+  <div class="basedata-tab-content" :aria-busy="loading">
+    <div class="basedata-toolbar">
+      <div class="basedata-toolbar-main">
+        <n-input
+          v-model:value="search"
+          class="basedata-search"
+          :placeholder="'搜索教室/场地名称'"
+          clearable
+          aria-label="搜索教室/场地名称"
+          @input="reload"
+        />
+      </div>
+      <div v-if="canEdit" class="basedata-toolbar-actions">
+        <n-button type="primary" data-testid="room-add" @click="openCreate">
+          <template #icon><Plus :size="16" aria-hidden="true" /></template>
+          {{ '新增教室/场地' }}
+        </n-button>
+      </div>
+    </div>
 
-    <table class="data-table">
-      <thead>
-        <tr><th>{{ '名称' }}</th><th>{{ '类型' }}</th><th>{{ '容量' }}</th><th>{{ '适用科目' }}</th><th>{{ '操作' }}</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="r in items" :key="r.id">
-          <td>{{ r.name }}</td>
-          <td>{{ roomTypeLabel(r.room_type) }}</td>
-          <td>{{ r.capacity ?? '—' }}</td>
-          <td>
-            <n-space size="small">
-              <n-tag v-for="s in r.subjects" :key="s.id" size="small">{{ s.name }}</n-tag>
-              <n-text v-if="r.subjects.length === 0" depth="3">—</n-text>
-            </n-space>
-          </td>
-          <td>
-            <n-space>
-              <n-button size="tiny" @click="openEdit(r)">{{ '编辑' }}</n-button>
-              <n-popconfirm @positive-click="remove(r)">
-                <template #trigger><n-button size="tiny" type="error" ghost>{{ '删除' }}</n-button></template>
-                {{ '确定删除此教室/场地吗？' }}
-              </n-popconfirm>
-            </n-space>
-          </td>
-        </tr>
-        <tr v-if="items.length === 0"><td colspan="5"><n-text depth="3">{{ '暂无教室/场地' }}</n-text></td></tr>
-      </tbody>
-    </table>
+    <n-alert v-if="!canEdit" class="basedata-readonly" type="info" data-testid="rooms-readonly">
+      {{ '仅可查看教室/场地，当前角色没有新增、编辑或删除权限。' }}
+    </n-alert>
 
-    <n-modal v-model:show="show" preset="card" :title="editingId ? '编辑教室/场地' : '新增教室/场地'" style="max-width: 440px">
-      <n-space vertical>
-        <n-text>{{ '名称' }}</n-text>
-        <n-input v-model:value="form.name" :placeholder="'如：物理实验室'" />
-        <n-text>{{ '类型' }}</n-text>
-        <n-select v-model:value="form.room_type" :options="roomTypeOptions" />
-        <n-text>{{ '容量（可选）' }}</n-text>
-        <n-input-number v-model:value="form.capacity" :min="0" />
-        <n-text>{{ '适用科目（可选）' }}</n-text>
-        <n-select v-model:value="form.subject_ids" multiple :options="subjectOptions" :placeholder="'可多选'" />
-        <n-button type="primary" @click="save">{{ '保存' }}</n-button>
-      </n-space>
+    <section v-if="loading && !items.length" class="basedata-state" data-testid="rooms-loading" role="status" aria-live="polite">
+      <n-spin size="small" />
+      <strong>{{ '正在读取教室/场地' }}</strong>
+      <span>{{ '教室/场地列表加载完成后会显示在这里。' }}</span>
+    </section>
+    <section v-else-if="loadError" class="basedata-state basedata-state-error" data-testid="rooms-error" role="alert">
+      <AlertTriangle :size="22" aria-hidden="true" />
+      <strong>{{ loadError }}</strong>
+      <span>{{ '当前列表未更新。' }}</span>
+      <n-button type="primary" data-testid="rooms-retry" @click="loadInitialData">
+        <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+        {{ '重新读取' }}
+      </n-button>
+    </section>
+    <section v-else-if="!items.length" class="basedata-state" data-testid="rooms-empty" role="status">
+      <n-empty :description="'暂无教室/场地'" />
+    </section>
+    <div v-else class="basedata-table-scroll" data-testid="rooms-table-scroll" tabindex="0" aria-label="教室/场地列表，可横向滚动">
+      <table class="basedata-data-table basedata-data-table--rooms" data-testid="rooms-table">
+        <thead>
+          <tr>
+            <th>{{ '名称' }}</th>
+            <th>{{ '类型' }}</th>
+            <th>{{ '容量' }}</th>
+            <th>{{ '适用科目' }}</th>
+            <th v-if="canEdit">{{ '操作' }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="room in items" :key="room.id">
+            <td>{{ room.name }}</td>
+            <td>{{ roomTypeLabel(room.room_type) }}</td>
+            <td>{{ room.capacity ?? '—' }}</td>
+            <td>
+              <div class="basedata-command-group">
+                <n-tag v-for="subject in room.subjects" :key="subject.id" size="small">{{ subject.name }}</n-tag>
+                <span v-if="room.subjects.length === 0">—</span>
+              </div>
+            </td>
+            <td v-if="canEdit">
+              <div class="basedata-command-group">
+                <n-button size="small" :data-testid="`room-edit-${room.id}`" @click="openEdit(room)">
+                  <template #icon><Pencil :size="14" aria-hidden="true" /></template>
+                  {{ '编辑' }}
+                </n-button>
+                <n-popconfirm :disabled="deletingId !== null" @positive-click="remove(room)">
+                  <template #trigger>
+                    <n-button
+                      size="small"
+                      type="error"
+                      ghost
+                      :data-testid="`room-delete-${room.id}`"
+                      :loading="deletingId === room.id"
+                      :disabled="deletingId !== null"
+                    >
+                      <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
+                      {{ '删除' }}
+                    </n-button>
+                  </template>
+                  {{ '确定删除此教室/场地吗？' }}
+                </n-popconfirm>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <n-modal v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑教室/场地' : '新增教室/场地'">
+      <div class="basedata-form">
+        <div class="basedata-field">
+          <label for="room-name">{{ '名称' }}</label>
+          <n-input id="room-name" v-model:value="form.name" data-testid="room-name" :placeholder="'如：物理实验室'" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '类型' }}</span>
+          <n-select v-model:value="form.room_type" :options="roomTypeOptions" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '容量（可选）' }}</span>
+          <n-input-number v-model:value="form.capacity" :min="0" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '适用科目（可选）' }}</span>
+          <n-select v-model:value="form.subject_ids" multiple :options="subjectOptions" :placeholder="'可多选'" />
+        </div>
+        <div class="basedata-modal-actions">
+          <n-button quaternary :disabled="saving" @click="closeModal">
+            <template #icon><X :size="15" aria-hidden="true" /></template>
+            {{ '取消' }}
+          </n-button>
+          <n-button type="primary" data-testid="room-save" :loading="saving" :disabled="saving" @click="save">
+            <template #icon><Save :size="15" aria-hidden="true" /></template>
+            {{ '保存' }}
+          </n-button>
+        </div>
+      </div>
     </n-modal>
-  </n-space>
+  </div>
 </template>
-
-<style scoped>
-.data-table { border-collapse: collapse; width: 100%; }
-.data-table th, .data-table td { border: 1px solid var(--n-border-color, #e0e0e0); padding: 8px 10px; text-align: left; }
-.data-table th { background: rgba(128,128,128,0.08); font-weight: 600; }
-</style>

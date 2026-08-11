@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import { AlertTriangle, Pencil, Plus, RefreshCw, Save, Trash2, X } from '@lucide/vue'
 import {
-  NButton, NCheckbox, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpace, NTag, NText,
-  useMessage,
+  NAlert, NButton, NCheckbox, NEmpty, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpin,
+  NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import type { ApiError } from '@/api/client'
@@ -9,12 +10,17 @@ import {
   ROOM_TYPE_LABELS, createSubject, deleteSubject, listSubjects, updateSubject,
 } from '@/api/basedata'
 import type { RoomType, Subject } from '@/api/basedata'
+import './basedata-workspace.css'
 
-const props = defineProps<{ semesterId: number }>()
+const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
 const message = useMessage()
 
 const items = ref<Subject[]>([])
 const search = ref('')
+const loading = ref(true)
+const loadError = ref<string | null>(null)
+const saving = ref(false)
+const deletingId = ref<number | null>(null)
 
 const roomTypeLabels: Record<RoomType, string> = {
   normal: '普通教室', special: '专用教室', workshop: '实训场地', outdoor: '户外',
@@ -26,8 +32,20 @@ const roomTypeOptions = computed(() => (Object.keys(ROOM_TYPE_LABELS) as RoomTyp
   label: roomTypeLabel(type), value: type,
 })))
 
+function errorMessage(error: unknown, fallback: string) {
+  return (error as Partial<ApiError> | null)?.detail || fallback
+}
+
 async function reload() {
-  items.value = await listSubjects(props.semesterId, search.value || undefined)
+  loading.value = true
+  loadError.value = null
+  try {
+    items.value = await listSubjects(props.semesterId, search.value.trim() || undefined)
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取科目，请重试。')
+  } finally {
+    loading.value = false
+  }
 }
 onMounted(reload)
 
@@ -46,24 +64,31 @@ function openCreate() {
   form.value = { name: '', domain: '', required_room_type: null, default_block_size: 1, is_major: false }
   show.value = true
 }
-function openEdit(s: Subject) {
-  editingId.value = s.id
+function openEdit(subject: Subject) {
+  editingId.value = subject.id
   form.value = {
-    name: s.name, domain: s.domain ?? '',
-    required_room_type: s.required_room_type, default_block_size: s.default_block_size,
-    is_major: s.is_major,
+    name: subject.name,
+    domain: subject.domain ?? '',
+    required_room_type: subject.required_room_type,
+    default_block_size: subject.default_block_size,
+    is_major: subject.is_major,
   }
   show.value = true
 }
+function closeModal() {
+  if (!saving.value) show.value = false
+}
 
 async function save() {
-  if (!form.value.name) {
+  if (saving.value) return
+  if (!form.value.name.trim()) {
     message.warning('请输入科目名称')
     return
   }
+  saving.value = true
   const body = {
-    name: form.value.name,
-    domain: form.value.domain || null,
+    name: form.value.name.trim(),
+    domain: form.value.domain.trim() || null,
     required_room_type: form.value.required_room_type,
     default_block_size: form.value.default_block_size,
     is_major: form.value.is_major,
@@ -74,78 +99,155 @@ async function save() {
     show.value = false
     message.success('已保存')
     await reload()
-  } catch (e) {
-    message.error((e as ApiError).detail || '保存失败')
+  } catch (error) {
+    message.error(errorMessage(error, '保存失败'))
+  } finally {
+    saving.value = false
   }
 }
 
-async function remove(s: Subject) {
+async function remove(subject: Subject) {
+  if (deletingId.value !== null) return
+  deletingId.value = subject.id
   try {
-    await deleteSubject(s.id)
+    await deleteSubject(subject.id)
     message.success('已删除')
     await reload()
-  } catch (e) {
-    message.error((e as ApiError).detail || '删除失败')
+  } catch (error) {
+    message.error(errorMessage(error, '删除失败'))
+  } finally {
+    deletingId.value = null
   }
 }
 </script>
 
 <template>
-  <n-space vertical>
-    <n-space>
-      <n-input v-model:value="search" :placeholder="'搜索科目名称'" clearable style="width: 200px" @input="reload" />
-      <n-button type="primary" @click="openCreate">{{ '新增科目' }}</n-button>
-    </n-space>
+  <div class="basedata-tab-content" :aria-busy="loading">
+    <div class="basedata-toolbar">
+      <div class="basedata-toolbar-main">
+        <n-input
+          v-model:value="search"
+          class="basedata-search"
+          :placeholder="'搜索科目名称'"
+          clearable
+          aria-label="搜索科目名称"
+          @input="reload"
+        />
+      </div>
+      <div v-if="canEdit" class="basedata-toolbar-actions">
+        <n-button type="primary" data-testid="subject-add" @click="openCreate">
+          <template #icon><Plus :size="16" aria-hidden="true" /></template>
+          {{ '新增科目' }}
+        </n-button>
+      </div>
+    </div>
 
-    <table class="data-table">
-      <thead>
-        <tr><th>{{ '名称' }}</th><th>{{ '领域/类别' }}</th><th>{{ '所需教室/场地' }}</th><th>{{ '默认连堂' }}</th><th>{{ '主科' }}</th><th>{{ '操作' }}</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="s in items" :key="s.id">
-          <td>{{ s.name }}</td>
-          <td>{{ s.domain || '—' }}</td>
-          <td>{{ s.required_room_type ? roomTypeLabel(s.required_room_type) : '不限' }}</td>
-          <td>{{ s.default_block_size > 1 ? `${s.default_block_size} 连堂` : '普通' }}</td>
-          <td>
-            <n-tag v-if="s.is_major" size="small" type="info" :data-testid="`sub-major-${s.name}`">{{ '主科' }}</n-tag>
-            <span v-else>—</span>
-          </td>
-          <td>
-            <n-space>
-              <n-button size="tiny" @click="openEdit(s)">{{ '编辑' }}</n-button>
-              <n-popconfirm @positive-click="remove(s)">
-                <template #trigger><n-button size="tiny" type="error" ghost>{{ '删除' }}</n-button></template>
-                {{ '确定删除此科目吗？' }}
-              </n-popconfirm>
-            </n-space>
-          </td>
-        </tr>
-        <tr v-if="items.length === 0"><td colspan="6"><n-text depth="3">{{ '暂无科目' }}</n-text></td></tr>
-      </tbody>
-    </table>
+    <n-alert v-if="!canEdit" class="basedata-readonly" type="info" data-testid="subjects-readonly">
+      {{ '仅可查看科目，当前角色没有新增、编辑或删除权限。' }}
+    </n-alert>
 
-    <n-modal v-model:show="show" preset="card" :title="editingId ? '编辑科目' : '新增科目'" style="max-width: 420px">
-      <n-space vertical>
-        <n-text>{{ '名称' }}</n-text>
-        <n-input v-model:value="form.name" data-testid="sub-name" :placeholder="'如：数学'" />
-        <n-text>{{ '领域/类别（可选）' }}</n-text>
-        <n-input v-model:value="form.domain" :placeholder="'如：数学领域'" />
-        <n-text>{{ '所需教室/场地类型（可选）' }}</n-text>
-        <n-select v-model:value="form.required_room_type" :options="roomTypeOptions" clearable :placeholder="'不限'" />
-        <n-text>{{ '默认连堂长度' }}</n-text>
-        <n-input-number v-model:value="form.default_block_size" :min="1" :max="8" />
+    <section v-if="loading && !items.length" class="basedata-state" data-testid="subjects-loading" role="status" aria-live="polite">
+      <n-spin size="small" />
+      <strong>{{ '正在读取科目' }}</strong>
+      <span>{{ '科目列表加载完成后会显示在这里。' }}</span>
+    </section>
+    <section v-else-if="loadError" class="basedata-state basedata-state-error" data-testid="subjects-error" role="alert">
+      <AlertTriangle :size="22" aria-hidden="true" />
+      <strong>{{ loadError }}</strong>
+      <span>{{ '当前列表未更新。' }}</span>
+      <n-button type="primary" data-testid="subjects-retry" @click="reload">
+        <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+        {{ '重新读取' }}
+      </n-button>
+    </section>
+    <section v-else-if="!items.length" class="basedata-state" data-testid="subjects-empty" role="status">
+      <n-empty :description="'暂无科目'" />
+    </section>
+    <div v-else class="basedata-table-scroll" data-testid="subjects-table-scroll" tabindex="0" aria-label="科目列表，可横向滚动">
+      <table class="basedata-data-table" data-testid="subjects-table">
+        <thead>
+          <tr>
+            <th>{{ '名称' }}</th>
+            <th>{{ '领域/类别' }}</th>
+            <th>{{ '所需教室/场地' }}</th>
+            <th>{{ '默认连堂' }}</th>
+            <th>{{ '主科' }}</th>
+            <th v-if="canEdit">{{ '操作' }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="subject in items" :key="subject.id">
+            <td>{{ subject.name }}</td>
+            <td>{{ subject.domain || '—' }}</td>
+            <td>{{ subject.required_room_type ? roomTypeLabel(subject.required_room_type) : '不限' }}</td>
+            <td>{{ subject.default_block_size > 1 ? `${subject.default_block_size} 连堂` : '普通' }}</td>
+            <td>
+              <n-tag v-if="subject.is_major" size="small" type="info" :data-testid="`sub-major-${subject.name}`">
+                {{ '主科' }}
+              </n-tag>
+              <span v-else>—</span>
+            </td>
+            <td v-if="canEdit">
+              <div class="basedata-command-group">
+                <n-button size="small" :data-testid="`subject-edit-${subject.id}`" @click="openEdit(subject)">
+                  <template #icon><Pencil :size="14" aria-hidden="true" /></template>
+                  {{ '编辑' }}
+                </n-button>
+                <n-popconfirm :disabled="deletingId !== null" @positive-click="remove(subject)">
+                  <template #trigger>
+                    <n-button
+                      size="small"
+                      type="error"
+                      ghost
+                      :data-testid="`subject-delete-${subject.id}`"
+                      :loading="deletingId === subject.id"
+                      :disabled="deletingId !== null"
+                    >
+                      <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
+                      {{ '删除' }}
+                    </n-button>
+                  </template>
+                  {{ '确定删除此科目吗？' }}
+                </n-popconfirm>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <n-modal v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑科目' : '新增科目'">
+      <div class="basedata-form">
+        <div class="basedata-field">
+          <label for="subject-name">{{ '名称' }}</label>
+          <n-input id="subject-name" v-model:value="form.name" data-testid="sub-name" :placeholder="'如：数学'" />
+        </div>
+        <div class="basedata-field">
+          <label for="subject-domain">{{ '领域/类别（可选）' }}</label>
+          <n-input id="subject-domain" v-model:value="form.domain" :placeholder="'如：数学领域'" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '所需教室/场地类型（可选）' }}</span>
+          <n-select v-model:value="form.required_room_type" :options="roomTypeOptions" clearable :placeholder="'不限'" />
+        </div>
+        <div class="basedata-field">
+          <span class="basedata-field-label">{{ '默认连堂长度' }}</span>
+          <n-input-number v-model:value="form.default_block_size" :min="1" :max="8" />
+        </div>
         <n-checkbox v-model:checked="form.is_major" data-testid="sub-is-major">
           {{ '主科（自动排课会尽量安排在上午）' }}
         </n-checkbox>
-        <n-button type="primary" data-testid="sub-save" @click="save">{{ '保存' }}</n-button>
-      </n-space>
+        <div class="basedata-modal-actions">
+          <n-button quaternary :disabled="saving" @click="closeModal">
+            <template #icon><X :size="15" aria-hidden="true" /></template>
+            {{ '取消' }}
+          </n-button>
+          <n-button type="primary" data-testid="sub-save" :loading="saving" :disabled="saving" @click="save">
+            <template #icon><Save :size="15" aria-hidden="true" /></template>
+            {{ '保存' }}
+          </n-button>
+        </div>
+      </div>
     </n-modal>
-  </n-space>
+  </div>
 </template>
-
-<style scoped>
-.data-table { border-collapse: collapse; width: 100%; }
-.data-table th, .data-table td { border: 1px solid var(--n-border-color, #e0e0e0); padding: 8px 10px; text-align: left; }
-.data-table th { background: rgba(128,128,128,0.08); font-weight: 600; }
-</style>
