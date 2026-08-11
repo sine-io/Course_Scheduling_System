@@ -33,6 +33,21 @@ describe('TimetableGrid', () => {
     expect(cell(w, 1, 2).text()).toContain('午休')
   })
 
+  it('将高密度课表约束在带可访问名称的滚动工作面内', () => {
+    const w = mount(TimetableGrid, { props: { periods, entries } })
+    const scroll = w.get('[data-testid="timetable-scroll"]')
+    const grid = w.get('[role="grid"]')
+
+    expect(scroll.attributes('tabindex')).toBe('0')
+    expect(scroll.attributes('aria-label')).toContain('横向滚动')
+    expect(grid.attributes('aria-label')).toBe('课表')
+    expect(grid.findAll('[role="row"]')).toHaveLength(4)
+    expect(cell(w, 1, 1).attributes('role')).toBe('gridcell')
+    expect(cell(w, 1, 1).attributes('aria-label')).toContain('星期一，第一节，语文')
+    expect(cell(w, 1, 1).attributes('aria-label')).toContain('已锁定')
+    expect(cell(w, 1, 2).attributes('aria-label')).toContain('星期一，午休，不可排课')
+  })
+
   it('渲染单元格卡片;锁定卡显示锁图示且不可拖拽', () => {
     const w = mount(TimetableGrid, { props: { periods, entries } })
     const locked = cell(w, 1, 1)
@@ -82,11 +97,58 @@ describe('TimetableGrid', () => {
     expect(c.text()).toContain('王师此时段已有课')
   })
 
+  it('所选未排课程可通过键盘可达按钮排入空的一般课格', async () => {
+    const dragging = { source: 'tray' as const, assignmentId: 9 }
+    const w = mount(TimetableGrid, {
+      props: { periods, entries, dragging, placementLabel: '语文' },
+    })
+    const action = cell(w, 1, 3).get('button')
+
+    expect(action.attributes('aria-label')).toBe('将语文排入星期一第三节')
+    await action.trigger('click')
+    expect(w.emitted('activate')?.[0]?.[0]).toMatchObject({
+      weekday: 1, period_no: 3, data: dragging,
+    })
+    expect(cell(w, 1, 2).find('button').exists()).toBe(false)
+  })
+
+  it('已排课程提供键盘可达的移动和移除操作', async () => {
+    const moving = { source: 'grid' as const, entryId: 2 }
+    const w = mount(TimetableGrid, {
+      props: { periods, entries, dragging: moving, placementLabel: '数学' },
+    })
+    const source = cell(w, 2, 1)
+
+    await source.get('[aria-label="移动数学"]').trigger('click')
+    expect(w.emitted('move')?.[0]?.[0]).toMatchObject({ id: 2 })
+
+    await source.get('[aria-label="移除数学"]').trigger('click')
+    expect(w.emitted('remove')?.[0]?.[0]).toMatchObject({ id: 2 })
+
+    const target = cell(w, 1, 3).get('button')
+    expect(target.attributes('aria-label')).toBe('将数学移到星期一第三节')
+    await target.trigger('click')
+    expect(w.emitted('activate')?.[0]?.[0]).toMatchObject({
+      weekday: 1, period_no: 3, data: moving,
+    })
+  })
+
   it('readonly 模式下单元格不可放下', async () => {
     const w = mount(TimetableGrid, {
-      props: { periods, entries, readonly: true, dragging: { source: 'tray', assignmentId: 9 } },
+      props: {
+        periods,
+        entries,
+        readonly: true,
+        dragging: { source: 'tray', assignmentId: 9 },
+        placementLabel: '语文',
+      },
     })
     await cell(w, 1, 3).trigger('drop', { dataTransfer: { ...DT } })
     expect(w.emitted('drop')).toBeUndefined()
+    expect(cell(w, 1, 3).find('button').exists()).toBe(false)
+    expect(cell(w, 2, 1).attributes('aria-label')).toContain('只读')
+    expect(cell(w, 2, 1).attributes('aria-label')).not.toContain('可编辑')
+    expect(cell(w, 2, 1).find('[aria-label="移动数学"]').exists()).toBe(false)
+    expect(cell(w, 2, 1).find('[aria-label="移除数学"]').exists()).toBe(false)
   })
 })
