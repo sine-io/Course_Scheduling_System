@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import {
-  NAlert, NButton, NCard, NCheckbox, NCheckboxGroup, NEmpty, NInputNumber, NPopconfirm, NProgress,
-  NSelect, NSpace, NTag, NText, useMessage,
+  AlertTriangle, CheckCircle2, Clock3, FileWarning, Play, RefreshCw, ShieldCheck, SlidersHorizontal,
+  Square, XCircle,
+} from '@lucide/vue'
+import {
+  NAlert, NButton, NCheckbox, NCheckboxGroup, NInputNumber, NPopconfirm, NProgress,
+  NSelect, NSpin, NTag, NText, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -9,18 +13,23 @@ import type { ApiError } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
-  cancelSolveJob, getSolveJob, listRelaxable, preflight, startAutoSchedule, stopSolveJob,
+  cancelSolveJob, getConstraintConfig, getSolveJob, listRelaxable, preflight, startAutoSchedule, stopSolveJob,
 } from '@/api/solver'
 import type {
-  PreflightIssue, PreflightReport, RelaxableOption, SolveJob,
+  ConstraintConfig, PreflightIssue, PreflightReport, RelaxableOption, SolveJob,
 } from '@/api/solver'
 import { listTimetables } from '@/api/timetables'
 import type { TimetableBrief } from '@/api/timetables'
+import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { useAuthStore } from '@/stores/auth'
+import './scheduling-workspace.css'
 
 const message = useMessage()
 const router = useRouter()
+const auth = useAuthStore()
 
 const POLL_MS = 2000
+const LAST_JOB_KEY = 'scheduling:auto-schedule-last-job'
 
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
@@ -29,15 +38,23 @@ const sourceId = ref<number | null>(null)
 const minutes = ref(10) // timeout 默认 10 分钟
 
 const check = ref<PreflightReport | null>(null)
+const constraints = ref<ConstraintConfig | null>(null)
 const job = ref<SolveJob | null>(null)
 const blockingIssues = ref<PreflightIssue[]>([])
 const starting = ref(false)
+const loading = ref(true)
+const loadError = ref<string | null>(null)
+const restoringJob = ref(false)
 
 const relaxable = ref<RelaxableOption[]>([])
 const allowPartial = ref(false)
 const relax = ref<string[]>([])
 
 let timer: ReturnType<typeof setInterval> | null = null
+let pollGeneration = 0
+
+const canEdit = computed(() => auth.hasRole('admin') || auth.hasRole('scheduler'))
+const activeJobKey = computed(() => `${LAST_JOB_KEY}:${auth.user?.id ?? 'anonymous'}`)
 
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
 const draftOptions = computed(() =>
@@ -88,54 +105,174 @@ const elapsedText = computed(() => {
 })
 const unplacedPeriods = computed(() => unscheduled.value.reduce((n, u) => n + u.periods, 0))
 
+function errorMessage(error: unknown, fallback: string): string {
+  const value = error as Partial<ApiError> & { detail?: unknown }
+  if (typeof value.detail === 'string' && value.detail) return value.detail
+  if (value.detail && typeof value.detail === 'object' && 'message' in value.detail) {
+    const detailMessage = (value.detail as { message?: unknown }).message
+    if (typeof detailMessage === 'string' && detailMessage) return detailMessage
+  }
+  return value.message || fallback
+}
+
+function saveActiveJob(next: SolveJob | null) {
+  if (typeof sessionStorage === 'undefined') return
+  if (next) {
+    sessionStorage.setItem(activeJobKey.value, JSON.stringify({ jobId: next.job_id, semesterId: next.semester_id }))
+  } else {
+    sessionStorage.removeItem(activeJobKey.value)
+  }
+}
+
+function readActiveJob(): { jobId: string; semesterId: number } | null {
+  if (typeof sessionStorage === 'undefined') return null
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(activeJobKey.value) ?? 'null') as Partial<{
+      jobId: string
+      semesterId: number
+    }> | null
+    if (typeof parsed?.jobId === 'string' && typeof parsed.semesterId === 'number') return parsed as {
+      jobId: string
+      semesterId: number
+    }
+  } catch {
+    sessionStorage.removeItem(activeJobKey.value)
+  }
+  return null
+}
+
 function stopPolling() {
+  pollGeneration += 1
   if (timer) {
     clearInterval(timer)
     timer = null
   }
 }
-onUnmounted(stopPolling)
+onUnmounted(() => stopPolling())
 
 async function reload() {
   if (!sid.value) return
-  const all = await listTimetables(sid.value)
+  const [all, report, config] = await Promise.all([
+    listTimetables(sid.value),
+    preflight(sid.value),
+    getConstraintConfig(sid.value),
+  ])
   drafts.value = all.filter((t) => t.status === 'draft')
-  sourceId.value = drafts.value[0]?.id ?? null
-  check.value = await preflight(sid.value)
+  if (!drafts.value.some((draft) => draft.id === sourceId.value)) {
+    sourceId.value = drafts.value[0]?.id ?? null
+  }
+  check.value = report
+  constraints.value = config
 }
 
 async function onSemesterChange(id: number) {
+  if (running.value || starting.value || restoringJob.value) return
+  loading.value = true
+  loadError.value = null
+  if (sid.value !== id) {
+    job.value = null
+    saveActiveJob(null)
+  }
   sid.value = id
-  job.value = null
   blockingIssues.value = []
   stopPolling()
-  await reload()
+  try {
+    await reload()
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取自动排课设置，请重试。')
+  } finally {
+    loading.value = false
+  }
 }
 
-onMounted(async () => {
-  ;[semesters.value, relaxable.value] = await Promise.all([listSemesters(), listRelaxable()])
-  if (semesters.value.length) await onSemesterChange(semesters.value[0].id)
-})
+function startPolling() {
+  stopPolling()
+  const generation = pollGeneration
+  timer = setInterval(() => {
+    if (generation === pollGeneration) void poll(generation)
+  }, POLL_MS)
+}
 
-async function poll() {
+async function settleTerminalJob(announce = true) {
+  if (!job.value || running.value) return
+  stopPolling()
+  if (announce && job.value.status === 'finished') message.success(`已生成“${job.value.result_name}”`)
+  if (announce && job.value.status === 'cancelled') message.info('已取消排课')
+  if (announce && job.value.status === 'failed') message.error(job.value.error ?? '排课失败')
+  try {
+    await reload()
+  } catch (error) {
+    message.error(errorMessage(error, '结果已返回，但课表列表刷新失败。'))
+  }
+}
+
+async function restoreActiveJob() {
+  const saved = readActiveJob()
+  if (!saved || saved.semesterId !== sid.value) return
+  restoringJob.value = true
+  try {
+    const restored = await getSolveJob(saved.jobId)
+    job.value = restored
+    if (restored.status === 'queued' || restored.status === 'running') startPolling()
+    else {
+      saveActiveJob(restored)
+      await settleTerminalJob(false)
+    }
+  } catch {
+    saveActiveJob(null)
+  } finally {
+    restoringJob.value = false
+  }
+}
+
+async function loadPage() {
+  loading.value = true
+  loadError.value = null
+  try {
+    ;[semesters.value, relaxable.value] = await Promise.all([listSemesters(), listRelaxable()])
+    if (semesters.value.length) {
+      const saved = readActiveJob()
+      sid.value = semesters.value.find((semester) => semester.id === saved?.semesterId)?.id
+        ?? semesters.value[0].id
+      await reload()
+      await restoreActiveJob()
+    } else {
+      sid.value = null
+      drafts.value = []
+      check.value = null
+      constraints.value = null
+    }
+  } catch (error) {
+    loadError.value = errorMessage(error, '暂时无法读取自动排课设置，请重试。')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function retryLoad() {
+  await loadPage()
+}
+
+onMounted(loadPage)
+
+async function poll(generation = pollGeneration) {
   if (!job.value) return
   try {
-    job.value = await getSolveJob(job.value.job_id)
-  } catch {
+    const next = await getSolveJob(job.value.job_id)
+    if (generation !== pollGeneration) return
+    job.value = next
+    saveActiveJob(next)
+  } catch (error) {
+    if (generation !== pollGeneration) return
     stopPolling()
+    message.error(errorMessage(error, '排课进度读取失败，页面不会把任务标记为完成。'))
     return
   }
-  if (!running.value) {
-    stopPolling()
-    if (job.value.status === 'finished') message.success(`已生成“${job.value.result_name}”`)
-    if (job.value.status === 'cancelled') message.info('已取消排课')
-    if (job.value.status === 'failed') message.error(job.value.error ?? '排课失败')
-    await reload()
-  }
+  if (!running.value) await settleTerminalJob()
 }
 
 async function onStart() {
-  if (!sourceId.value) return
+  if (!canEdit.value || !sourceId.value || running.value || starting.value) return
   starting.value = true
   blockingIssues.value = []
   try {
@@ -144,15 +281,16 @@ async function onStart() {
       relax: allowPartial.value ? relax.value : [],
     })
     job.value = await getSolveJob(job_id)
-    stopPolling()
-    timer = setInterval(poll, POLL_MS)
+    saveActiveJob(job.value)
+    if (running.value) startPolling()
+    else await settleTerminalJob()
   } catch (e) {
     const detail = (e as ApiError).detail as unknown
     if (detail && typeof detail === 'object' && 'issues' in detail) {
       blockingIssues.value = (detail as { issues: PreflightIssue[] }).issues
       message.error('数据未通过排课前置检查')
     } else {
-      message.error((e as ApiError).message || '无法启动排课')
+      message.error(errorMessage(e, '无法启动排课'))
     }
   } finally {
     starting.value = false
@@ -161,21 +299,32 @@ async function onStart() {
 
 /** 照着冲突报告的建议重试:勾好可放宽的项目,直接再排一次。 */
 async function onRetryPartial() {
+  if (!canEdit.value) return
   allowPartial.value = true
   relax.value = conflict.value?.relaxable_codes ?? []
+  stopPolling()
+  saveActiveJob(null)
   job.value = null
   await onStart()
 }
 
 async function onStop() {
-  if (!job.value) return
-  await stopSolveJob(job.value.job_id)
-  message.info('已请求提前结束，将保留当前最佳解')
+  if (!canEdit.value || !job.value || !running.value) return
+  try {
+    await stopSolveJob(job.value.job_id)
+    message.info('已请求提前结束，将保留当前最佳解')
+  } catch (error) {
+    message.error(errorMessage(error, '提前结束请求失败，请稍后重试。'))
+  }
 }
 async function onCancel() {
-  if (!job.value) return
-  await cancelSolveJob(job.value.job_id)
-  message.info('已请求取消')
+  if (!canEdit.value || !job.value || !running.value) return
+  try {
+    await cancelSolveJob(job.value.job_id)
+    message.info('已请求取消')
+  } catch (error) {
+    message.error(errorMessage(error, '取消请求失败，请稍后重试。'))
+  }
 }
 
 function openResult() {
@@ -184,228 +333,277 @@ function openResult() {
 </script>
 
 <template>
-  <n-space vertical size="large">
-    <n-space align="center">
-      <h2 style="margin: 0">{{ '自动排课' }}</h2>
-      <n-select
-        :value="sid" :options="semesterOptions" style="width: 220px"
-        :placeholder="'选择学期'" @update:value="onSemesterChange"
-      />
-    </n-space>
+  <div class="scheduling-page auto-schedule-page" data-testid="auto-schedule-page">
+    <header class="scheduling-page-header">
+      <div>
+        <p class="scheduling-eyebrow">{{ '求解作业' }}</p>
+        <h1>{{ '自动排课' }}</h1>
+        <p>{{ '先核对数据准备度和约束，再启动可追踪、可取消的排课任务。' }}</p>
+      </div>
+      <div class="scheduling-header-actions">
+        <n-select
+          v-if="semesters.length"
+          v-accessible-select="'选择工作学期'"
+          :value="sid"
+          :options="semesterOptions"
+          :placeholder="'选择学期'"
+          data-testid="as-semester"
+          :disabled="running || starting || restoringJob"
+          @update:value="onSemesterChange"
+        />
+      </div>
+    </header>
 
-    <n-empty v-if="!sid" :description="'请先创建学期'" />
+    <section v-if="loading" class="scheduling-state" data-testid="as-loading" role="status" aria-live="polite">
+      <n-spin size="small" />
+      <strong>{{ '正在读取自动排课设置' }}</strong>
+      <span>{{ '前置检查、草稿和约束配置加载完成后会显示在这里。' }}</span>
+    </section>
+    <section v-else-if="loadError" class="scheduling-state scheduling-state-error" data-testid="as-load-error" role="alert">
+      <AlertTriangle :size="23" aria-hidden="true" />
+      <strong>{{ loadError }}</strong>
+      <span>{{ '当前页面没有启动任何排课任务。' }}</span>
+      <n-button type="primary" data-testid="as-retry-load" @click="retryLoad">
+        <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+        {{ '重新读取' }}
+      </n-button>
+    </section>
+    <section v-else-if="!sid" class="scheduling-state" data-testid="as-empty">
+      <Clock3 :size="24" aria-hidden="true" />
+      <strong>{{ '尚未创建可用学期' }}</strong>
+      <span>{{ '先创建学期和作息时间表，再启动自动排课。' }}</span>
+      <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+    </section>
 
     <template v-else>
-      <!-- 排课前置检查 -->
-      <n-card v-if="check" :title="'排课前置检查'" size="small">
-        <n-space vertical>
-          <n-text depth="3">
-            {{ check.class_count }} {{ '班' }} · {{ check.teacher_count }} {{ '位教师' }} ·
-            {{ check.assignment_count }} {{ '条教学任务' }} · {{ '共' }} {{ check.total_periods }} {{ '节' }}
-          </n-text>
-          <n-alert v-if="check.ok && check.warning_count === 0" type="success" :bordered="false">
-            {{ '数据检查通过，可以开始排课' }}
-          </n-alert>
-          <n-alert v-else :type="check.ok ? 'warning' : 'error'" :bordered="false">
-            {{ check.error_count }} {{ '项错误' }}、{{ check.warning_count }} {{ '项提醒' }}
-          </n-alert>
-          <div v-for="i in check.issues" :key="i.code + i.subject_id" data-testid="pf-issue">
-            <n-tag size="small" :type="i.level === 'error' ? 'error' : 'warning'">
-              {{ i.level === 'error' ? '错误' : '提醒' }}
-            </n-tag>
-            <n-text style="margin-left: 8px">{{ i.message }}</n-text>
-          </div>
-        </n-space>
-      </n-card>
+      <n-alert v-if="!canEdit" type="info" data-testid="as-restricted">
+        <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
+        {{ '当前角色仅可查看排课准备度和运行结果，启动、停止和取消任务仅对排课管理员开放。' }}
+      </n-alert>
 
-      <!-- 启动 -->
-      <n-card :title="'开始排课'" size="small">
-        <n-space vertical>
-          <n-space align="center">
-            <n-text>{{ '来源草稿' }}</n-text>
+      <section v-if="check" class="scheduling-panel auto-preflight-panel" data-testid="as-preflight">
+        <header class="scheduling-panel-heading compact-heading">
+          <div>
+            <p class="scheduling-eyebrow">{{ '启动前核对' }}</p>
+            <h2>{{ '排课前置检查' }}</h2>
+            <p>{{ check.class_count }} {{ '班' }} · {{ check.teacher_count }} {{ '位教师' }} · {{ check.assignment_count }} {{ '条教学任务' }} · {{ '共' }} {{ check.total_periods }} {{ '节' }}</p>
+          </div>
+          <FileWarning :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+        </header>
+        <n-alert v-if="check.ok && check.warning_count === 0" type="success" :bordered="false">
+          <template #icon><CheckCircle2 :size="17" aria-hidden="true" /></template>
+          {{ '数据检查通过，可以开始排课' }}
+        </n-alert>
+        <n-alert v-else :type="check.ok ? 'warning' : 'error'" :bordered="false">
+          <template #icon><AlertTriangle :size="17" aria-hidden="true" /></template>
+          {{ check.error_count }} {{ '项错误' }}、{{ check.warning_count }} {{ '项提醒' }}
+        </n-alert>
+        <div v-for="i in check.issues" :key="i.code + i.subject_id" class="auto-issue" data-testid="pf-issue">
+          <n-tag size="small" :type="i.level === 'error' ? 'error' : 'warning'">
+            {{ i.level === 'error' ? '错误' : '提醒' }}
+          </n-tag>
+          <n-text>{{ i.message }}</n-text>
+        </div>
+      </section>
+
+      <section class="scheduling-panel auto-constraints-panel" data-testid="as-constraints">
+        <header class="scheduling-panel-heading compact-heading">
+          <div>
+            <p class="scheduling-eyebrow">{{ '求解边界' }}</p>
+            <h2>{{ '当前约束配置' }}</h2>
+            <p>{{ '这些设置由学期配置维护，自动排课会按当前值求解。' }}</p>
+          </div>
+          <SlidersHorizontal :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+        </header>
+        <div v-if="constraints" class="auto-constraint-grid">
+          <div class="auto-constraint-item"><span>{{ '同科目每日上限' }}</span><strong>{{ constraints.daily_subject_cap }} {{ '节' }}</strong></div>
+          <div class="auto-constraint-item"><span>{{ '教师每日上限' }}</span><strong>{{ constraints.teacher_daily_max }} {{ '节' }}</strong></div>
+          <div class="auto-constraint-item"><span>{{ '教师连续上课上限' }}</span><strong>{{ constraints.teacher_consecutive_max }} {{ '节' }}</strong></div>
+          <div v-for="(weight, code) in constraints.weights" :key="code" class="auto-constraint-item">
+            <span>{{ constraints.weight_names[code] ?? code }}</span><strong>{{ weight === 0 ? '关闭' : weight }}</strong>
+          </div>
+        </div>
+        <div v-else class="scheduling-inline-empty" data-testid="as-constraints-loading">
+          <n-spin size="small" /><span>{{ '正在读取约束配置' }}</span>
+        </div>
+      </section>
+
+      <section class="scheduling-panel auto-start-panel">
+        <header class="scheduling-panel-heading compact-heading">
+          <div>
+            <p class="scheduling-eyebrow">{{ '任务控制' }}</p>
+            <h2>{{ '开始排课' }}</h2>
+            <p>{{ '结果会写成新草稿，来源草稿保持不变。' }}</p>
+          </div>
+          <Play :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+        </header>
+        <div class="auto-start-fields">
+          <label class="scheduling-field auto-source-field">
+            <span>{{ '来源草稿' }}</span>
             <n-select
-              v-model:value="sourceId" :options="draftOptions" style="width: 260px"
-              :placeholder="'选择草稿'" data-testid="as-source" :disabled="running"
+              v-model:value="sourceId" v-accessible-select="'选择来源草稿'" :options="draftOptions"
+              :placeholder="'选择草稿'" data-testid="as-source" :disabled="!canEdit || running || restoringJob"
             />
-            <n-text>{{ '排课时间上限' }}</n-text>
+          </label>
+          <label class="scheduling-field auto-minutes-field">
+            <span>{{ '排课时间上限' }}</span>
             <n-input-number
-              v-model:value="minutes" :min="1" :max="60" style="width: 120px"
-              :disabled="running" data-testid="as-minutes"
+              v-model:value="minutes" :min="1" :max="60" :disabled="!canEdit || running || restoringJob"
+              data-testid="as-minutes"
             >
               <template #suffix>{{ '分钟' }}</template>
             </n-input-number>
-            <n-button
-              type="primary" :loading="starting" :disabled="!sourceId || running"
-              data-testid="as-start" @click="onStart"
-            >
-              {{ '开始排课' }}
-            </n-button>
-          </n-space>
-          <n-text depth="3">
-            {{ '锁定的单元格会保持原位；其余已排课程作为求解起点，结果写成新草稿，来源草稿不变。' }}
-          </n-text>
-
-          <n-checkbox v-model:checked="allowPartial" :disabled="running" data-testid="as-partial">
-            {{ '允许部分排课（排不下的课程列成列表，不让整个任务失败）' }}
-          </n-checkbox>
-          <n-space v-if="allowPartial" align="center" style="padding-left: 24px">
-            <n-text depth="3">{{ '可放宽' }}：</n-text>
-            <n-checkbox-group v-model:value="relax" :disabled="running">
-              <n-checkbox
-                v-for="o in relaxable" :key="o.code" :value="o.code"
-                :label="o.name" :data-testid="`as-relax-${o.code}`"
-              />
-            </n-checkbox-group>
-          </n-space>
-          <n-text v-if="allowPartial" depth="3" style="padding-left: 24px">
-            {{ '班级、教师、教室/场地的“同一时段只能有一门课”不可放宽，这是物理限制，不是政策。' }}
-          </n-text>
-
-          <n-alert v-if="blockingIssues.length" type="error" :title="'请先修正这些问题'">
-            <div v-for="i in blockingIssues" :key="i.code + i.subject_id" data-testid="as-blocking">
-              {{ i.message }}
-            </div>
-          </n-alert>
-        </n-space>
-      </n-card>
-
-      <!-- 进度 -->
-      <n-card v-if="job" :title="'排课进度'" size="small" data-testid="as-job">
-        <n-space vertical>
-          <n-space align="center">
-            <n-tag :type="statusTagType" data-testid="as-status">{{ statusLabel }}</n-tag>
-            <n-text>{{ '已耗时' }} {{ elapsedText }} / {{ '上限' }} {{ job.max_seconds }} {{ '秒' }}</n-text>
-            <n-text v-if="running || job.solutions" data-testid="as-solutions">
-              {{ '已找到' }} {{ job.solutions }} {{ '个解' }}
-            </n-text>
-            <!-- 部分排课的目标值被「未排入」的高额惩罚灌爆(一节 = 10000),
-                 拿给人看只会以为排坏了;真正该看的是未排几节。 -->
-            <n-text v-if="job.partial && !running">{{ '未排' }} {{ unplacedPeriods }} {{ '节' }}</n-text>
-            <n-text v-else-if="job.objective !== null">{{ '当前目标值' }} {{ Math.round(job.objective) }}</n-text>
-          </n-space>
-
-          <n-progress
-            type="line" :percentage="progressPercent"
-            :status="job.status === 'failed' ? 'error'
-              : job.status === 'cancelled' ? 'warning'
-                : running ? 'default' : 'success'"
-            :processing="running"
-          />
-
-          <n-space v-if="running && !explaining">
-            <n-button
-              type="primary" ghost :disabled="job.solutions === 0"
-              data-testid="as-stop" @click="onStop"
-            >
-              {{ '提前结束（取当前最佳解）' }}
-            </n-button>
-            <n-popconfirm @positive-click="onCancel">
-              <template #trigger>
-                <n-button type="error" ghost data-testid="as-cancel">{{ '取消排课' }}</n-button>
-              </template>
-              {{ '取消后不会生成结果草稿，确定吗？' }}
-            </n-popconfirm>
-          </n-space>
-
-          <n-text v-if="explaining" depth="3" data-testid="as-explaining">
-            {{ '无法排出。正在逐项试解，找出是哪几项组合造成的……' }}
-          </n-text>
-
-          <!-- 定位不出具体原因时(例如硬约束其实可解、只是软约束最佳化太慢),仍要给一句易懂说明 -->
-          <n-alert
-            v-if="job.status === 'failed' && !conflictCauses.length"
-            type="error" data-testid="as-error"
+          </label>
+          <n-button
+            type="primary" :loading="starting || restoringJob" :disabled="!canEdit || !sourceId || running || restoringJob"
+            data-testid="as-start" @click="onStart"
           >
-            {{ job.error }}
-          </n-alert>
+            <template #icon><Play :size="16" aria-hidden="true" /></template>
+            {{ '开始排课' }}
+          </n-button>
+        </div>
+        <p class="auto-start-note">{{ '锁定的单元格会保持原位；其余已排课程作为求解起点，结果写成新草稿。' }}</p>
+        <label class="auto-partial-option">
+          <n-checkbox v-model:checked="allowPartial" :disabled="!canEdit || running" data-testid="as-partial" />
+          <span>{{ '允许部分排课（排不下的课程列成列表，不让整个任务失败）' }}</span>
+        </label>
+        <div v-if="allowPartial" class="auto-relax-options">
+          <span class="auto-relax-label">{{ '可放宽' }}：</span>
+          <n-checkbox-group v-model:value="relax" :disabled="!canEdit || running">
+            <n-checkbox
+              v-for="o in relaxable" :key="o.code" :value="o.code"
+              :label="o.name" :data-testid="`as-relax-${o.code}`"
+            />
+          </n-checkbox-group>
+        </div>
+        <p v-if="allowPartial" class="auto-start-note auto-relax-note">{{ '班级、教师、教室/场地的“同一时段只能有一门课”不可放宽，这是物理限制，不是政策。' }}</p>
+        <n-alert v-if="blockingIssues.length" type="error" :title="'请先修正这些问题'" data-testid="as-blocking-alert">
+          <div v-for="i in blockingIssues" :key="i.code + i.subject_id" data-testid="as-blocking">{{ i.message }}</div>
+        </n-alert>
+      </section>
 
-          <!-- 无解冲突定位:不只说「排不出来」,说是谁、差几节、松开哪一个就好 -->
-          <n-alert
-            v-if="conflict && conflictCauses.length" type="error"
-            :title="conflict.headline" data-testid="as-conflict"
+      <section v-if="job" class="scheduling-panel auto-progress-panel" data-testid="as-job">
+        <header class="scheduling-panel-heading compact-heading">
+          <div>
+            <p class="scheduling-eyebrow">{{ '实时反馈' }}</p>
+            <h2>{{ '排课进度' }}</h2>
+            <p>{{ running ? '任务仍在服务端运行，离开页面不会把它标记为完成。' : '任务已返回最终状态，可继续查看报告或处理未排课程。' }}</p>
+          </div>
+          <Clock3 :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+        </header>
+        <div class="auto-job-summary">
+          <n-tag :type="statusTagType" data-testid="as-status">{{ statusLabel }}</n-tag>
+          <span>{{ '已耗时' }} {{ elapsedText }} / {{ '上限' }} {{ job.max_seconds }} {{ '秒' }}</span>
+          <span v-if="running || job.solutions" data-testid="as-solutions">{{ '已找到' }} {{ job.solutions }} {{ '个解' }}</span>
+          <span v-if="job.partial && !running">{{ '未排' }} {{ unplacedPeriods }} {{ '节' }}</span>
+          <span v-else-if="job.objective !== null">{{ '当前目标值' }} {{ Math.round(job.objective) }}</span>
+        </div>
+        <n-progress
+          type="line" :percentage="progressPercent"
+          :status="job.status === 'failed' ? 'error' : job.status === 'cancelled' ? 'warning' : running ? 'default' : 'success'"
+          :processing="running"
+        />
+        <div v-if="running && !explaining" class="scheduling-actions">
+          <n-button
+            type="primary" ghost :disabled="!canEdit || job.solutions === 0"
+            data-testid="as-stop" @click="onStop"
           >
-            <n-space vertical size="small">
-              <div v-for="(c, k) in conflictCauses" :key="k" data-testid="as-cause">
-                <n-tag size="small" :bordered="false" :type="c.relaxable ? 'warning' : 'error'">
-                  {{ c.scope_name }}
-                </n-tag>
-                <n-text style="margin-left: 8px">{{ c.message }}</n-text>
-                <div style="padding-left: 8px">
-                  <n-text depth="3">{{ '建议' }}：{{ c.suggestion }}</n-text>
-                </div>
-              </div>
-              <n-text v-if="!conflict.complete" depth="3">{{ incompleteNote }}</n-text>
-              <n-button
-                v-if="conflict.relaxable_codes.length" type="primary" ghost size="small"
-                data-testid="as-retry-partial" @click="onRetryPartial"
-              >
-                {{ '改用部分排课' }}（{{ '放宽' }} {{ conflict.relaxable_codes.map(codeName).join('、') }}）
+            <template #icon><Square :size="15" aria-hidden="true" /></template>
+            {{ '提前结束（取当前最佳解）' }}
+          </n-button>
+          <n-popconfirm @positive-click="onCancel">
+            <template #trigger>
+              <n-button type="error" ghost :disabled="!canEdit" data-testid="as-cancel">
+                <template #icon><XCircle :size="15" aria-hidden="true" /></template>{{ '取消排课' }}
               </n-button>
-            </n-space>
-          </n-alert>
-
-          <n-alert v-if="job.status === 'finished'" type="success" data-testid="as-done">
-            {{ '已生成新草稿' }}「{{ job.result_name }}」
-            <n-button text type="primary" style="margin-left: 8px" @click="openResult">
-              {{ '前往版本与发布' }}
-            </n-button>
-          </n-alert>
-
-          <!-- 未排列表:部分排课的另一半交付物 -->
-          <n-alert
-            v-if="unscheduled.length" type="warning" :title="'以下教学任务未能排入，请人工处理'"
-            data-testid="as-unscheduled"
+            </template>
+            {{ '取消后不会生成结果草稿，确定吗？' }}
+          </n-popconfirm>
+        </div>
+        <p v-if="explaining" class="auto-explaining" data-testid="as-explaining">{{ '无法排出。正在逐项试解，找出是哪几项组合造成的……' }}</p>
+        <n-alert v-if="job.status === 'failed' && !conflictCauses.length" type="error" data-testid="as-error">
+          <template #icon><AlertTriangle :size="17" aria-hidden="true" /></template>{{ job.error || '排课失败，请查看服务端日志或调整约束后重试。' }}
+        </n-alert>
+        <n-alert v-if="conflict && conflictCauses.length" type="error" :title="conflict.headline" data-testid="as-conflict">
+          <div class="auto-conflict-list">
+            <div v-for="(c, k) in conflictCauses" :key="k" class="auto-conflict-item" data-testid="as-cause">
+              <div><n-tag size="small" :bordered="false" :type="c.relaxable ? 'warning' : 'error'">{{ c.scope_name }}</n-tag><span>{{ c.message }}</span></div>
+              <p>{{ '建议' }}：{{ c.suggestion }}</p>
+            </div>
+          </div>
+          <p v-if="!conflict.complete" class="auto-start-note">{{ incompleteNote }}</p>
+          <n-button
+            v-if="conflict.relaxable_codes.length" type="primary" ghost size="small"
+            :disabled="!canEdit" data-testid="as-retry-partial" @click="onRetryPartial"
           >
-            <table class="data-table">
-              <thead>
-                <tr><th>{{ '科目' }}</th><th>{{ '班级' }}</th><th>{{ '未排节数' }}</th><th>{{ '原因' }}</th></tr>
-              </thead>
+            {{ '改用部分排课' }}（{{ '放宽' }} {{ conflict.relaxable_codes.map(codeName).join('、') }}）
+          </n-button>
+        </n-alert>
+        <n-alert v-if="job.status === 'finished'" type="success" data-testid="as-done">
+          <template #icon><CheckCircle2 :size="17" aria-hidden="true" /></template>
+          {{ '已生成新草稿' }}「{{ job.result_name }}」
+          <n-button text type="primary" @click="openResult">{{ '前往版本与发布' }}</n-button>
+        </n-alert>
+        <n-alert v-if="unscheduled.length" type="warning" :title="'以下教学任务未能排入，请人工处理'" data-testid="as-unscheduled">
+          <div class="scheduling-table-scroll auto-report-scroll" tabindex="0" aria-label="未排课程列表，可横向滚动">
+            <table class="scheduling-data-table">
+              <thead><tr><th>{{ '科目' }}</th><th>{{ '班级' }}</th><th>{{ '未排节数' }}</th><th>{{ '原因' }}</th></tr></thead>
               <tbody>
                 <tr v-for="u in unscheduled" :key="u.assignment_ids.join('-')">
-                  <td>{{ u.subject_name }}</td>
-                  <td>{{ u.class_names.join('、') }}</td>
-                  <td>{{ u.periods }} {{ '节' }}</td>
-                  <!-- 完全排不下的课会说明原因;其余是 solver 权衡后的取舍 -->
-                  <td>{{ u.reason || '排课时权衡取舍' }}</td>
+                  <td>{{ u.subject_name }}</td><td>{{ u.class_names.join('、') }}</td><td>{{ u.periods }} {{ '节' }}</td><td>{{ u.reason || '排课时权衡取舍' }}</td>
                 </tr>
               </tbody>
             </table>
-          </n-alert>
-
-          <!-- 软约束达成度 -->
-          <table v-if="job.report" class="data-table" data-testid="as-report">
-            <thead>
-              <tr><th>{{ '软约束' }}</th><th>{{ '权重' }}</th><th>{{ '达成' }}</th><th>{{ '未达成明细' }}</th></tr>
-            </thead>
+          </div>
+        </n-alert>
+        <div v-if="job.report" class="scheduling-table-scroll auto-report-scroll" tabindex="0" aria-label="软约束报告，可横向滚动">
+          <table class="scheduling-data-table" data-testid="as-report">
+            <thead><tr><th>{{ '软约束' }}</th><th>{{ '权重' }}</th><th>{{ '达成' }}</th><th>{{ '未达成明细' }}</th></tr></thead>
             <tbody>
               <tr v-for="i in job.report.items" :key="i.code">
-                <td>{{ i.code }} {{ i.name }}</td>
-                <td>{{ i.weight === 0 ? '关闭' : i.weight }}</td>
-                <td>
-                  {{ i.satisfied }} / {{ i.opportunities }}
-                  <n-text :depth="3">({{ Math.round(i.rate * 100) }}%)</n-text>
-                </td>
-                <td>
-                  <n-text v-if="!i.details.length" depth="3">—</n-text>
-                  <div v-for="(d, k) in i.details.slice(0, 3)" v-else :key="k">{{ d }}</div>
-                  <n-text v-if="i.details.length > 3" depth="3">
-                    …{{ '等' }} {{ i.violations }} {{ '项' }}
-                  </n-text>
-                </td>
+                <td>{{ i.code }} {{ i.name }}</td><td>{{ i.weight === 0 ? '关闭' : i.weight }}</td>
+                <td>{{ i.satisfied }} / {{ i.opportunities }} <n-text :depth="3">({{ Math.round(i.rate * 100) }}%)</n-text></td>
+                <td><n-text v-if="!i.details.length" depth="3">—</n-text><template v-else><div v-for="(d, k) in i.details.slice(0, 3)" :key="k">{{ d }}</div></template><n-text v-if="i.details.length > 3" depth="3">…{{ '等' }} {{ i.violations }} {{ '项' }}</n-text></td>
               </tr>
             </tbody>
           </table>
-        </n-space>
-      </n-card>
+        </div>
+      </section>
     </template>
-  </n-space>
+  </div>
 </template>
 
 <style scoped>
-.data-table { border-collapse: collapse; width: 100%; }
-.data-table th, .data-table td {
-  border: 1px solid var(--n-border-color, #e0e0e0); padding: 6px 10px; text-align: left;
-  vertical-align: top;
+.auto-schedule-page { max-width: 1440px; }
+.auto-start-fields { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(140px, 190px) auto; align-items: end; gap: 14px; }
+.auto-start-fields > .n-button { min-height: 40px; }
+.auto-start-note { margin: 12px 0 0; color: var(--app-text-muted); font-size: 13px; line-height: 1.55; }
+.auto-partial-option { display: flex; align-items: flex-start; gap: 8px; margin-top: 17px; color: var(--app-text); font-size: 13px; line-height: 1.5; }
+.auto-relax-options { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin: 10px 0 0 28px; }
+.auto-relax-label { color: var(--app-text-muted); font-size: 13px; }
+.auto-relax-note { margin-left: 28px; }
+.auto-issue { display: flex; align-items: flex-start; gap: 9px; margin-top: 10px; font-size: 13px; line-height: 1.5; }
+.auto-constraint-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 16px; }
+.auto-constraint-item { display: grid; gap: 4px; min-width: 0; padding: 12px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface-muted); }
+.auto-constraint-item span { overflow-wrap: anywhere; color: var(--app-text-muted); font-size: 12px; }
+.auto-constraint-item strong { color: var(--app-text); font-size: 16px; }
+.auto-job-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 16px 0 12px; color: var(--app-text-muted); font-size: 13px; }
+.auto-explaining { margin: 12px 0; color: var(--app-text-muted); font-size: 13px; }
+.auto-conflict-list { display: grid; gap: 12px; }
+.auto-conflict-item > div { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+.auto-conflict-item p { margin: 5px 0 0 8px; color: var(--app-text-muted); font-size: 13px; }
+.auto-report-scroll { margin-top: 12px; }
+.auto-report-scroll table { min-width: 620px; }
+
+@media (max-width: 820px) {
+  .auto-start-fields { grid-template-columns: minmax(0, 1fr) minmax(120px, 0.6fr); }
+  .auto-start-fields > .n-button { grid-column: 1 / -1; justify-self: start; }
 }
-.data-table th { background: rgba(128, 128, 128, 0.08); font-weight: 600; }
+
+@media (max-width: 560px) {
+  .auto-start-fields { grid-template-columns: 1fr; }
+  .auto-start-fields > .n-button { width: 100%; }
+  .auto-relax-options, .auto-relax-note { margin-left: 0; }
+  .auto-job-summary { align-items: flex-start; flex-direction: column; gap: 7px; }
+}
 </style>

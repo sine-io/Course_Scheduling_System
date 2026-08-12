@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { NAlert, NCard, NRadioButton, NRadioGroup, NSpace, NTag, NText, useMessage } from 'naive-ui'
+import { Clock3, Layers3 } from '@lucide/vue'
+import { NEmpty, NRadioButton, NRadioGroup, NTag, useMessage } from 'naive-ui'
 import { computed, reactive, ref } from 'vue'
 import TimetableGrid from '@/components/timetable/TimetableGrid.vue'
 import type { DragData, DropFeedback, GridEntry, PeriodCell } from '@/components/timetable/types'
+import './scheduling-workspace.css'
 
 const message = useMessage()
 
@@ -171,19 +173,41 @@ function clearDrag() {
 </script>
 
 <template>
-  <n-space vertical size="large">
-    <h1 style="margin: 0">{{ '课表组件演示（TimetableGrid）' }}</h1>
-    <n-alert type="info" :show-icon="true">
-      {{ '把右侧未排课程拖到单元格：绿框可放，红框表示冲突（模拟王老师周一第2节、张老师周二第3节已有课）。点击卡片可切换锁定；把卡片拖回右侧列表可移除。连堂课以较高卡片显示。' }}
-    </n-alert>
+  <div class="scheduling-page timetable-demo-page" data-testid="timetable-demo-page">
+    <header class="scheduling-page-header">
+      <div>
+        <p class="scheduling-eyebrow">{{ '交互样例' }}</p>
+        <h1>{{ '课表组件演示（TimetableGrid）' }}</h1>
+        <p>{{ '小学与中职两套作息样例，包含锁定、连堂和冲突状态。' }}</p>
+      </div>
+    </header>
 
-    <n-radio-group v-model:value="sample">
-      <n-radio-button value="elementary" data-testid="demo-elementary">{{ '小学（40 分钟/节）' }}</n-radio-button>
-      <n-radio-button value="vocational" data-testid="demo-vocational">{{ '中职（50 分钟/节）' }}</n-radio-button>
-    </n-radio-group>
+    <section class="scheduling-panel demo-toolbar" aria-label="演示设置">
+      <div>
+        <p class="scheduling-eyebrow">{{ '样例作息' }}</p>
+        <div role="radiogroup" aria-label="演示学段">
+          <n-radio-group v-model:value="sample">
+            <n-radio-button value="elementary" data-testid="demo-elementary">{{ '小学（40 分钟/节）' }}</n-radio-button>
+            <n-radio-button value="vocational" data-testid="demo-vocational">{{ '中职（50 分钟/节）' }}</n-radio-button>
+          </n-radio-group>
+        </div>
+      </div>
+      <div class="demo-summary" aria-label="当前样例概况">
+        <n-tag size="small">{{ current.entries.length }} {{ '格已排' }}</n-tag>
+        <n-tag size="small" type="warning">{{ current.tray.length }} {{ '项待排' }}</n-tag>
+      </div>
+    </section>
 
     <div class="demo-layout">
-      <n-card :title="sample === 'elementary' ? '小学周课表' : '中职周课表'" size="small" style="flex: 1; min-width: 0">
+      <section class="scheduling-panel demo-grid-panel">
+        <header class="scheduling-panel-heading compact-heading">
+          <div>
+            <p class="scheduling-eyebrow">{{ '课表工作面' }}</p>
+            <h2>{{ sample === 'elementary' ? '小学周课表' : '中职周课表' }}</h2>
+            <p>{{ sample === 'elementary' ? '40 分钟标准节次' : '50 分钟标准节次' }}</p>
+          </div>
+          <Clock3 :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+        </header>
         <TimetableGrid
           :key="sample"
           :periods="periods" :entries="current.entries"
@@ -191,17 +215,26 @@ function clearDrag() {
           @dragstart="onGridDragStart" @dragend="clearDrag"
           @check="onCheck" @drop="onDrop" @select="onSelect"
         />
-      </n-card>
+      </section>
 
-      <n-card
-        :title="'未排课程'" size="small" class="tray"
+      <aside
+        class="scheduling-panel demo-tray"
+        aria-label="未排课程"
         @dragover.prevent @drop="onTrayDrop"
       >
-        <n-space vertical size="small">
-          <n-text v-if="current.tray.length === 0" depth="3">{{ '已全部排入' }}</n-text>
+        <header class="scheduling-panel-heading compact-heading">
+          <div>
+            <p class="scheduling-eyebrow">{{ '待排托盘' }}</p>
+            <h2>{{ '未排课程' }}</h2>
+          </div>
+          <Layers3 :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+        </header>
+        <div class="demo-tray-content">
+          <n-empty v-if="current.tray.length === 0" size="small" :description="'已全部排入'" />
           <div
             v-for="item in current.tray" :key="item.assignmentId"
             class="tray-item" :data-testid="`tray-${item.subject}`" draggable="true"
+            :aria-label="`${item.subject}，${item.teacher}${item.room ? `，${item.room}` : ''}`"
             @dragstart="onTrayDragStart(item, $event)" @dragend="clearDrag"
           >
             <div class="tray-subject">
@@ -210,21 +243,40 @@ function clearDrag() {
             </div>
             <div class="tray-teacher">{{ item.teacher }}<span v-if="item.room"> · {{ item.room }}</span></div>
           </div>
-          <n-text depth="3" style="font-size: 12px">{{ '（拖到左侧课表单元格）' }}</n-text>
-        </n-space>
-      </n-card>
+        </div>
+      </aside>
     </div>
-  </n-space>
+  </div>
 </template>
 
 <style scoped>
-.demo-layout { display: flex; gap: 20px; align-items: flex-start; }
-.tray { width: 240px; flex-shrink: 0; }
+.timetable-demo-page { max-width: 1600px; }
+.demo-toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.demo-toolbar .scheduling-eyebrow { margin-bottom: 8px; }
+.demo-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.demo-layout { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) 250px; align-items: start; gap: 20px; }
+.demo-grid-panel { display: grid; min-width: 0; gap: 16px; overflow: hidden; }
+.demo-tray { display: grid; min-width: 0; gap: 14px; }
+.demo-tray-content { display: grid; gap: 9px; min-height: 160px; align-content: start; }
 .tray-item {
-  border: 1px solid var(--n-border-color, #e2e2e2); border-radius: 6px; padding: 8px 10px;
-  cursor: grab; background: rgba(24, 160, 88, 0.08);
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--app-primary-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary-soft);
+  cursor: grab;
 }
 .tray-subject { font-weight: 600; display: flex; align-items: center; gap: 6px; }
-.tray-teacher { font-size: 12px; opacity: 0.75; }
-@media (max-width: 900px) { .demo-layout { flex-direction: column; } .tray { width: 100%; } }
+.tray-teacher { margin-top: 3px; color: var(--app-text-muted); font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .demo-layout { grid-template-columns: 1fr; }
+  .demo-tray-content { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); min-height: 0; }
+}
+
+@media (max-width: 560px) {
+  .demo-toolbar { align-items: stretch; flex-direction: column; }
+  .demo-toolbar :deep(.n-radio-group) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .demo-toolbar :deep(.n-radio-button) { justify-content: center; min-width: 0; }
+  .demo-tray-content { grid-template-columns: 1fr; }
+}
 </style>
