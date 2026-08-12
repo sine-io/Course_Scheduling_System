@@ -8,17 +8,8 @@ import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard, LogEntry } from '@/api/substitutionLog'
 import { listSemesters } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { formatDateWithWeekday, toLocalISODate } from './reportDate'
 import './operations-workspace.css'
-
-const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-
-// NDatePicker 给的是毫秒时间戳;以本机日期组出 YYYY-MM-DD,避免 toISOString 的 UTC 倒退
-function toISODate(ts: number): string {
-  const date = new Date(ts)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}-${month}-${day}`
-}
 
 function todayTs(): number {
   const date = new Date()
@@ -45,7 +36,7 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
   value: semester.id,
 })))
 const dateLabel = computed(() =>
-  board.value ? `${board.value.date}（${WEEKDAYS[board.value.weekday % 7]}）` : '')
+  board.value ? formatDateWithWeekday(board.value.date, board.value.weekday) : '')
 const pendingCount = computed(() =>
   (board.value?.entries ?? []).filter((entry) => !entry.disposed).length)
 const handledCount = computed(() =>
@@ -56,7 +47,7 @@ async function reload() {
   loading.value = true
   loadError.value = null
   try {
-    board.value = await getDailyBoard(sid.value, toISODate(dateTs.value))
+    board.value = await getDailyBoard(sid.value, toLocalISODate(dateTs.value))
   } catch (error) {
     board.value = null
     loadError.value = apiErrorMessage(error, '暂时无法读取当日变动，请重试。')
@@ -83,7 +74,7 @@ async function loadPage() {
     const querySemesterId = Number(route.query.semester_id)
     sid.value = semesters.value.find((semester) => semester.id === querySemesterId)?.id
       ?? semesters.value[0].id
-    board.value = await getDailyBoard(sid.value, toISODate(dateTs.value))
+    board.value = await getDailyBoard(sid.value, toLocalISODate(dateTs.value))
   } catch (error) {
     board.value = null
     loadError.value = apiErrorMessage(error, '暂时无法读取今日调课与代课，请重试。')
@@ -96,7 +87,7 @@ onMounted(loadPage)
 
 function openPrint() {
   if (sid.value === null) return
-  const url = `/daily-board/print?semester_id=${sid.value}&date=${toISODate(dateTs.value)}`
+  const url = `/daily-board/print?semester_id=${sid.value}&date=${toLocalISODate(dateTs.value)}`
   window.open(url, '_blank')
 }
 

@@ -9,22 +9,10 @@ import { listSemesters } from '@/api/semesters'
 import { getSubstitutionLog } from '@/api/substitutionLog'
 import type { LogEntry } from '@/api/substitutionLog'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { formatDateWithWeekday, toLocalISODate } from './reportDate'
 import './operations-workspace.css'
 
-const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 const MAX_ROWS = 1000
-
-function toISODate(ts: number): string {
-  const date = new Date(ts)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}-${month}-${day}`
-}
-
-function withWeekday(iso: string): string {
-  const [year, month, day] = iso.split('-').map(Number)
-  return `${iso}（${WEEKDAYS[new Date(year, month - 1, day).getDay()]}）`
-}
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
@@ -54,8 +42,8 @@ async function reload() {
   try {
     entries.value = await getSubstitutionLog(sid.value, {
       teacherId: teacherId.value,
-      dateFrom: range.value ? toISODate(range.value[0]) : null,
-      dateTo: range.value ? toISODate(range.value[1]) : null,
+      dateFrom: range.value ? toLocalISODate(range.value[0]) : null,
+      dateTo: range.value ? toLocalISODate(range.value[1]) : null,
       leaveType: leaveType.value,
     })
   } catch (error) {
@@ -263,7 +251,7 @@ function statusType(entry: LogEntry): string {
             </thead>
             <tbody>
               <tr v-for="entry in entries" :key="entry.affected_period_id" data-testid="log-row">
-                <td data-label="日期"><strong>{{ withWeekday(entry.date) }}</strong></td>
+                <td data-label="日期"><strong>{{ formatDateWithWeekday(entry.date) }}</strong></td>
                 <td data-label="节次">{{ entry.period_name }}</td>
                 <td data-label="班级">{{ entry.class_names }}</td>
                 <td data-label="科目">{{ entry.subject_name }}</td>

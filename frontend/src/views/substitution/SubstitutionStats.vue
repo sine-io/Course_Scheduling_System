@@ -11,19 +11,13 @@ import { getMyStats, getStats, statsExportUrl } from '@/api/substitutionStats'
 import type { MonthlyReport } from '@/api/substitutionStats'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { formatDateWithWeekday } from './reportDate'
 import './operations-workspace.css'
 
 const auth = useAuthStore()
 const route = useRoute()
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
-
-const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-
-function withWeekday(iso: string): string {
-  const [year, month, day] = iso.split('-').map(Number)
-  return `${iso}（${WEEKDAYS[new Date(year, month - 1, day).getDay()]}）`
-}
 
 function monthTs(): number {
   const date = new Date()
@@ -304,7 +298,7 @@ onMounted(loadPage)
                 <tbody>
                   <tr v-for="(detail, index) in report.details" :key="index" data-testid="stats-detail-row">
                     <td v-if="canManage" data-label="教师"><strong>{{ detail.handler_name }}</strong></td>
-                    <td data-label="日期">{{ withWeekday(detail.date) }}</td>
+                    <td data-label="日期">{{ formatDateWithWeekday(detail.date) }}</td>
                     <td data-label="节次">{{ detail.period_name }}</td>
                     <td data-label="班级">{{ detail.class_names }}</td>
                     <td data-label="科目">{{ detail.subject_name }}</td>
