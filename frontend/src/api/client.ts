@@ -2,12 +2,17 @@
 
 export interface ApiError extends Error {
   status: number
-  detail?: string
+  detail?: unknown
 }
 
 export function apiErrorMessage(error: unknown, fallback: string): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return detail || fallback
+  const value = error as Partial<ApiError> & { message?: unknown; detail?: unknown } | null
+  if (typeof value?.detail === 'string' && value.detail) return value.detail
+  if (value?.detail && typeof value.detail === 'object' && 'message' in value.detail) {
+    const detailMessage = (value.detail as { message?: unknown }).message
+    if (typeof detailMessage === 'string' && detailMessage) return detailMessage
+  }
+  return typeof value?.message === 'string' && value.message ? value.message : fallback
 }
 
 // 全域 401 处理器(由 main.ts 注册):session 过期/被撤销时清除登录状态并导回登录页。

@@ -9,7 +9,7 @@ import {
 } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import { demoDataStatus, loadDemoData } from '@/api/assignments'
 import { createSemester, getSemester, listTemplates } from '@/api/semesters'
 import type { Semester, Template } from '@/api/semesters'
@@ -52,11 +52,6 @@ const periodTable = computed(() => (
   ?? null
 ))
 
-function errorMessage(error: unknown, fallback: string): string {
-  const apiError = error as Partial<ApiError> | null
-  return apiError?.detail || apiError?.message || fallback
-}
-
 async function loadSummary(id: number) {
   summaryLoading.value = true
   summaryError.value = null
@@ -65,7 +60,7 @@ async function loadSummary(id: number) {
     summary.value = await getSemesterSummary(id)
   } catch (error) {
     summary.value = null
-    summaryError.value = errorMessage(error, '无法读取当前学期的数据摘要')
+    summaryError.value = apiErrorMessage(error, '无法读取当前学期的数据摘要')
     throw error
   } finally {
     summaryLoading.value = false
@@ -119,7 +114,7 @@ async function loadWizardData() {
       demoAvailable.value = false
     }
   } catch (error) {
-    initialError.value = errorMessage(error, '无法读取设置向导，请稍后重试。')
+    initialError.value = apiErrorMessage(error, '无法读取设置向导，请稍后重试。')
   } finally {
     initialLoading.value = false
   }
@@ -130,7 +125,7 @@ async function persistStep(nextStep: number): Promise<boolean> {
     await wizard.patch({ current_step: nextStep })
     return true
   } catch (error) {
-    actionError.value = errorMessage(error, '无法保存向导进度，请重试。')
+    actionError.value = apiErrorMessage(error, '无法保存向导进度，请重试。')
     return false
   }
 }
@@ -191,7 +186,7 @@ async function goNext() {
   } catch (error) {
     step.value = previousStep
     if (!actionError.value) {
-      actionError.value = errorMessage(error, step.value === 1 ? '创建学期失败，请检查输入后重试。' : '无法进入下一步，请稍后重试。')
+      actionError.value = apiErrorMessage(error, step.value === 1 ? '创建学期失败，请检查输入后重试。' : '无法进入下一步，请稍后重试。')
     }
   } finally {
     busy.value = false
@@ -218,7 +213,7 @@ async function finish() {
     message.success('初始设置完成')
     await router.push({ name: 'assignments' })
   } catch (error) {
-    actionError.value = errorMessage(error, '无法完成设置，请稍后重试。')
+    actionError.value = apiErrorMessage(error, '无法完成设置，请稍后重试。')
   } finally {
     busy.value = false
   }
@@ -238,7 +233,7 @@ async function onLoadDemo() {
     )
     router.push({ name: 'dashboard' })
   } catch (e) {
-    actionError.value = errorMessage(e, '示例数据加载失败，请稍后重试。')
+    actionError.value = apiErrorMessage(e, '示例数据加载失败，请稍后重试。')
   } finally {
     loadingDemo.value = false
   }
@@ -252,7 +247,7 @@ async function skip() {
     await wizard.patch({ completed: true })
     await router.push({ name: 'dashboard' })
   } catch (error) {
-    actionError.value = errorMessage(error, '无法跳过设置，请稍后重试。')
+    actionError.value = apiErrorMessage(error, '无法跳过设置，请稍后重试。')
   } finally {
     busy.value = false
   }

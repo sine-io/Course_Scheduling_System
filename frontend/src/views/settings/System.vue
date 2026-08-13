@@ -9,7 +9,7 @@ import {
 import type { UploadCustomRequestOptions, UploadSettledFileInfo } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import {
   createBackup, deleteBackup, downloadBackup, listBackups, restoreBackup, restoreUpload,
 } from '@/api/backups'
@@ -65,11 +65,6 @@ const loadingDemo = ref(false)
 const resettingWizard = ref(false)
 let redirectingAfterRestore = false
 
-function errorMessage(error: unknown, fallback: string): string {
-  const value = error as Partial<ApiError> & { message?: string }
-  return value?.detail || value?.message || fallback
-}
-
 function humanSize(size: number): string {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`
@@ -107,7 +102,7 @@ async function loadAdminSettings() {
     demoSchool.value = demo.school_name
     backups.value = backupRows
   } catch (error) {
-    adminError.value = errorMessage(error, '暂时无法读取系统设置，请重试。')
+    adminError.value = apiErrorMessage(error, '暂时无法读取系统设置，请重试。')
   } finally {
     adminLoading.value = false
   }
@@ -120,7 +115,7 @@ async function reloadBackups() {
   try {
     backups.value = await listBackups()
   } catch (error) {
-    message.error(errorMessage(error, '备份列表读取失败，请重试。'))
+    message.error(apiErrorMessage(error, '备份列表读取失败，请重试。'))
   }
 }
 
@@ -132,7 +127,7 @@ async function onCreateBackup() {
     message.success('备份已创建')
     await reloadBackups()
   } catch (error) {
-    message.error(errorMessage(error, '备份失败，请重试。'))
+    message.error(apiErrorMessage(error, '备份失败，请重试。'))
   } finally {
     creatingBackup.value = false
   }
@@ -146,7 +141,7 @@ async function onDeleteBackup(name: string) {
     message.success('备份已删除')
     await reloadBackups()
   } catch (error) {
-    message.error(errorMessage(error, '备份删除失败，请重试。'))
+    message.error(apiErrorMessage(error, '备份删除失败，请重试。'))
   } finally {
     deletingBackup.value = null
   }
@@ -158,7 +153,7 @@ async function onDownloadBackup(name: string) {
   try {
     await downloadBackup(name)
   } catch (error) {
-    message.error(errorMessage(error, '备份下载失败，请重试。'))
+    message.error(apiErrorMessage(error, '备份下载失败，请重试。'))
   } finally {
     downloadingBackup.value = null
   }
@@ -197,7 +192,7 @@ async function onRestore(name: string) {
     const result = await restoreBackup(name)
     await afterRestore(result)
   } catch (error) {
-    message.error(errorMessage(error, '恢复失败，请重试。'))
+    message.error(apiErrorMessage(error, '恢复失败，请重试。'))
   } finally {
     restoringBackup.value = null
   }
@@ -253,7 +248,7 @@ async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestO
     await afterRestore(result)
   } catch (error) {
     onError()
-    message.error(errorMessage(error, '上传恢复失败，请重试。'))
+    message.error(apiErrorMessage(error, '上传恢复失败，请重试。'))
   } finally {
     uploadingRestore.value = false
   }
@@ -270,7 +265,7 @@ async function onSaveSchool() {
     schoolName.value = (await saveSchoolSettings({ school_name: schoolName.value.trim() })).school_name
     message.success('学校名称已更新')
   } catch (error) {
-    message.error(errorMessage(error, '学校名称保存失败，请重试。'))
+    message.error(apiErrorMessage(error, '学校名称保存失败，请重试。'))
   } finally {
     savingSchool.value = false
   }
@@ -289,7 +284,7 @@ async function onLoadDemo() {
       { duration: 8000 },
     )
   } catch (error) {
-    message.error(errorMessage(error, '示例数据加载失败，请重试。'))
+    message.error(apiErrorMessage(error, '示例数据加载失败，请重试。'))
   } finally {
     loadingDemo.value = false
   }
@@ -303,7 +298,7 @@ async function onSaveScheduling() {
     maxOvertime.value = result.max_overtime
     message.success('排课设置已保存')
   } catch (error) {
-    message.error(errorMessage(error, '排课设置保存失败，请重试。'))
+    message.error(apiErrorMessage(error, '排课设置保存失败，请重试。'))
   } finally {
     savingScheduling.value = false
   }
@@ -319,7 +314,7 @@ async function onSaveSmtp() {
     smtp.value.password = ''
     message.success('SMTP 设置已保存')
   } catch (error) {
-    message.error(errorMessage(error, 'SMTP 设置保存失败，请重试。'))
+    message.error(apiErrorMessage(error, 'SMTP 设置保存失败，请重试。'))
   } finally {
     savingSmtp.value = false
   }
@@ -334,7 +329,7 @@ async function onResetWizard() {
     message.success('设置向导已重新启动')
     await router.push({ name: 'wizard' })
   } catch (error) {
-    message.error(errorMessage(error, '设置向导重启失败，请重试。'))
+    message.error(apiErrorMessage(error, '设置向导重启失败，请重试。'))
   } finally {
     resettingWizard.value = false
   }

@@ -8,7 +8,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage, type ApiError } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
@@ -42,16 +42,6 @@ const timetableStatusLabels: Record<string, string> = {
   draft: '草稿', published: '已发布', archived: '已归档',
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  const value = error as Partial<ApiError> & { detail?: unknown }
-  if (typeof value.detail === 'string' && value.detail) return value.detail
-  if (value.detail && typeof value.detail === 'object' && 'message' in value.detail) {
-    const detailMessage = (value.detail as { message?: unknown }).message
-    if (typeof detailMessage === 'string' && detailMessage) return detailMessage
-  }
-  return value.message || fallback
-}
-
 function isPending(kind: ActionKind, id: number | null = null) {
   return pending.value?.kind === kind && pending.value.id === id
 }
@@ -72,7 +62,7 @@ async function loadPage() {
     sid.value = semesters.value[0]?.id ?? null
     await reload()
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取课表版本，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取课表版本，请重试。')
   } finally {
     loading.value = false
   }
@@ -88,7 +78,7 @@ async function onSemesterChange(id: number) {
   try {
     await reload()
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取课表版本，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取课表版本，请重试。')
   } finally {
     loading.value = false
   }
@@ -108,7 +98,7 @@ async function runAction(
   try {
     await action()
   } catch (error) {
-    actionError.value = errorMessage(error, fallback)
+    actionError.value = apiErrorMessage(error, fallback)
     message.error(actionError.value)
   } finally {
     pending.value = null
@@ -195,7 +185,7 @@ async function onPublish(timetable: TimetableBrief) {
       report.value = completeness
       warnShow.value = true
     } else {
-      actionError.value = errorMessage(error, '发布失败，请稍后重试。')
+      actionError.value = apiErrorMessage(error, '发布失败，请稍后重试。')
       message.error(actionError.value)
     }
   } finally {

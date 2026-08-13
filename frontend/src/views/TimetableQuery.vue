@@ -9,6 +9,7 @@ import {
 import { computed, onMounted, ref } from 'vue'
 import TimetableGrid from '@/components/timetable/TimetableGrid.vue'
 import type { GridEntry, PeriodCell } from '@/components/timetable/types'
+import { apiErrorMessage } from '@/api/client'
 import { getMyTeacher, getPublishedTimetable, publishedSemesters } from '@/api/timetables'
 import type { NamedBrief, PublicSemester, PublishedTimetable } from '@/api/timetables'
 import { exportBatchZip, exportSchoolWorkbook, exportTimetable } from '@/api/exports'
@@ -45,10 +46,6 @@ const targetId = computed(() => (
 ))
 const exportDisabled = computed(() => loading.value || exporting.value !== null || targetId.value === null)
 
-function errorMessage(error: unknown, fallback: string) {
-  return (error as Error | null)?.message || fallback
-}
-
 async function onExport(format: ExportFmt) {
   if (sid.value === null || targetId.value === null || exporting.value !== null) return
   exporting.value = format
@@ -56,7 +53,7 @@ async function onExport(format: ExportFmt) {
     await exportTimetable(sid.value, view.value, targetId.value, format)
     message.success('导出任务已完成')
   } catch (error) {
-    message.error(errorMessage(error, '导出失败'))
+    message.error(apiErrorMessage(error, '导出失败'))
   } finally {
     exporting.value = null
   }
@@ -69,7 +66,7 @@ async function onExportAll(kind: 'school' | 'batch') {
     await (kind === 'school' ? exportSchoolWorkbook(sid.value) : exportBatchZip(sid.value))
     message.success('导出任务已完成')
   } catch (error) {
-    message.error(errorMessage(error, '导出失败'))
+    message.error(apiErrorMessage(error, '导出失败'))
   } finally {
     exporting.value = null
   }
@@ -121,7 +118,7 @@ async function load(id: number) {
     data.value = null
     me.value = null
     resetTargets()
-    loadError.value = errorMessage(error, '暂时无法读取已发布课表，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取已发布课表，请重试。')
   } finally {
     loading.value = false
   }
@@ -140,7 +137,7 @@ async function loadPage() {
       loading.value = false
     }
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取已发布课表，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取已发布课表，请重试。')
     loading.value = false
   }
 }

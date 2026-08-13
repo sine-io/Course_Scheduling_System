@@ -9,7 +9,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import {
   createAssignment, createGroup, deleteAssignment, deleteGroup, listAssignments, listGroups,
   updateAssignment, teacherLoad, classLoad,
@@ -76,15 +76,10 @@ async function onSemesterChange(id: number) {
   try {
     await Promise.all([loadBase(id), reloadAll(id)])
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取教学任务，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取教学任务，请重试。')
   } finally {
     loading.value = false
   }
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return typeof detail === 'string' && detail ? detail : fallback
 }
 
 async function loadPage() {
@@ -99,7 +94,7 @@ async function loadPage() {
       sid.value = null
     }
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取教学任务，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取教学任务，请重试。')
   } finally {
     loading.value = false
   }
@@ -218,7 +213,7 @@ async function save() {
     message.success('教学任务已保存')
     await reloadAll(sid.value!)
   } catch (e) {
-    message.error((e as ApiError).detail || '保存失败')
+    message.error(apiErrorMessage(e, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -232,7 +227,7 @@ async function removeAssignment(a: Assignment) {
     message.success('已删除')
     await reloadAll(sid.value!)
   } catch (error) {
-    message.error(errorMessage(error, '删除教学任务失败'))
+    message.error(apiErrorMessage(error, '删除教学任务失败'))
   } finally {
     deletingAssignmentId.value = null
   }
@@ -259,7 +254,7 @@ async function saveGroup() {
     message.success('走班分组已创建')
     await reloadAll(sid.value!)
   } catch (e) {
-    message.error((e as ApiError).detail || '创建失败')
+    message.error(apiErrorMessage(e, '创建失败'))
   } finally {
     groupSaving.value = false
   }
@@ -272,7 +267,7 @@ async function removeGroup(g: SchedulingUnit) {
     message.success('分组已删除')
     await reloadAll(sid.value!)
   } catch (e) {
-    message.error((e as ApiError).detail || '删除失败（分组可能仍有教学任务）')
+    message.error(apiErrorMessage(e, '删除失败（分组可能仍有教学任务）'))
   } finally {
     deletingGroupId.value = null
   }

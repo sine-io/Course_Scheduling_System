@@ -7,7 +7,7 @@ import {
   NSwitch, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import {
   createTeacher, deleteTeacher, listBindableAccounts, listSubjects, listTeachers, updateTeacher,
 } from '@/api/basedata'
@@ -36,17 +36,13 @@ const accountOptions = computed(() =>
   })),
 )
 
-function errorMessage(error: unknown, fallback: string) {
-  return (error as Partial<ApiError> | null)?.detail || fallback
-}
-
 async function reload() {
   loading.value = true
   loadError.value = null
   try {
     items.value = await listTeachers(props.semesterId, search.value || undefined)
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取教师，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取教师，请重试。')
   } finally {
     loading.value = false
   }
@@ -63,7 +59,7 @@ async function loadInitialData() {
     items.value = teacherItems
     subjects.value = subjectItems
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取教师，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取教师，请重试。')
   } finally {
     loading.value = false
   }
@@ -108,7 +104,7 @@ async function loadAccounts(currentTeacherId?: number) {
   try {
     accounts.value = await listBindableAccounts(props.semesterId, currentTeacherId)
   } catch (error) {
-    message.error(errorMessage(error, '账号列表加载失败'))
+    message.error(apiErrorMessage(error, '账号列表加载失败'))
     throw error
   } finally {
     loadingAccounts.value = false
@@ -172,7 +168,7 @@ async function save() {
     message.success('已保存')
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '保存失败'))
+    message.error(apiErrorMessage(error, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -186,7 +182,7 @@ async function remove(teacher: Teacher) {
     message.success('已删除')
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '删除失败'))
+    message.error(apiErrorMessage(error, '删除失败'))
   } finally {
     deletingId.value = null
   }

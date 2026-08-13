@@ -2,7 +2,7 @@
 import { AlertTriangle, RefreshCw, Save } from '@lucide/vue'
 import { NButton, NSpin, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import { getTimeRules, replaceTimeRules } from '@/api/basedata'
 import type { TeacherRuleType } from '@/api/basedata'
 import { getAvailableSlots, getSemester } from '@/api/semesters'
@@ -71,10 +71,6 @@ function cellLabel(weekday: number, periodNo: number) {
   const action = props.canEdit ? '按下切换' : '只读'
   return `周${WEEKDAY_NAMES[weekday - 1]}，${periodName}，当前${rule ? ruleLabel(rule) : '无规则'}，${action}`
 }
-function errorMessage(error: unknown, fallback: string) {
-  return (error as Partial<ApiError> | null)?.detail || fallback
-}
-
 async function loadData() {
   loading.value = true
   loadError.value = null
@@ -97,7 +93,7 @@ async function loadData() {
       ruleMap.value[key(rule.weekday, rule.period_no)] = rule.rule_type
     }
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取时段规则，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取时段规则，请重试。')
   } finally {
     loading.value = false
   }
@@ -117,7 +113,7 @@ async function save() {
     message.success('时段规则已保存')
     emit('saved')
   } catch (error) {
-    message.error(errorMessage(error, '保存失败'))
+    message.error(apiErrorMessage(error, '保存失败'))
   } finally {
     saving.value = false
   }

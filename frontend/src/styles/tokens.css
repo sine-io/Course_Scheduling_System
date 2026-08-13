@@ -22,6 +22,7 @@
   --app-danger-hover: #aa2d34;
   --app-danger-pressed: #8d242a;
   --app-danger-soft: #fff0f1;
+  --app-danger-border: #e8c6c8;
 
   --app-background: #f3f6fa;
   --app-surface: #ffffff;
@@ -48,6 +49,8 @@
   --app-space-4: 16px;
   --app-space-5: 24px;
   --app-space-6: 32px;
+  --app-space-panel: 20px;
+  --app-space-state: 28px;
 
   --app-motion-duration: 150ms;
   --app-motion-ease: cubic-bezier(0.2, 0, 0, 1);

@@ -43,6 +43,7 @@ test('开新学期:复制到新学期,带起止日与排课偏好设置', async 
   const end = page.getByTestId('copy-end').locator('input')
   await expect(start).toHaveValue(EXPECT_START)
   await expect(end).toHaveValue(EXPECT_END)
+  await expect(page.getByTestId('copy-config')).toBeChecked()
   await page.screenshot({ path: `${SHOTS}/copy-1-dialog.png` })
 
   await page.getByTestId('copy-confirm').click()

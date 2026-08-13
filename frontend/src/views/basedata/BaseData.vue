@@ -3,7 +3,7 @@ import { Database, RefreshCw, ShieldCheck } from '@lucide/vue'
 import { NAlert, NButton, NSelect, NSpin, NTabPane, NTabs } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
@@ -29,10 +29,6 @@ const semesterOptions = computed(() =>
   semesters.value.map((s) => ({ label: s.label, value: s.id })),
 )
 
-function errorMessage(error: unknown): string {
-  return (error as Partial<ApiError> | null)?.detail || '暂时无法读取基础数据，请重试。'
-}
-
 async function loadSemesters() {
   loading.value = true
   loadError.value = null
@@ -40,7 +36,7 @@ async function loadSemesters() {
     semesters.value = await listSemesters()
     currentId.value = semesters.value[0]?.id ?? null
   } catch (error) {
-    loadError.value = errorMessage(error)
+    loadError.value = apiErrorMessage(error, '暂时无法读取基础数据，请重试。')
   } finally {
     loading.value = false
   }

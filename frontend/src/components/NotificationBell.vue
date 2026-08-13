@@ -106,23 +106,23 @@ const typeTag = computed<Record<string, string>>(() => ({
     </template>
 
     <div class="notification-panel">
-      <n-empty v-if="!items.length" :description="'没有通知'" style="padding: 24px 0" />
+      <n-empty v-if="!items.length" :description="'没有通知'" class="notification-empty" />
       <div v-else class="notification-scroll">
-        <n-space vertical size="small" style="padding-right: 8px">
+        <n-space vertical size="small" class="notification-list">
           <div
             v-for="n in items" :key="n.id" data-testid="notif-item"
-            style="border-bottom: 1px solid var(--n-border-color, #eee); padding-bottom: 8px"
+            class="notification-item"
             @mouseenter="onRead(n)"
           >
             <n-space align="center" size="small">
               <n-tag size="tiny" :type="n.acknowledged_at ? 'success' : 'warning'">
                 {{ typeTag[n.type] ?? '通知' }}
               </n-tag>
-              <n-text v-if="!n.read_at" type="error" style="font-size: 12px">● {{ '未读' }}</n-text>
+              <n-text v-if="!n.read_at" type="error" class="notification-unread">● {{ '未读' }}</n-text>
             </n-space>
-            <div style="font-weight: 600; margin: 2px 0">{{ n.title }}</div>
-            <n-text depth="3" style="font-size: 13px; white-space: pre-wrap">{{ n.body }}</n-text>
-            <div style="margin-top: 6px">
+            <div class="notification-title">{{ n.title }}</div>
+            <n-text depth="3" class="notification-body">{{ n.body }}</n-text>
+            <div class="notification-actions">
               <n-tag v-if="n.acknowledged_at" size="small" type="success">{{ '已确认收到' }}</n-tag>
               <n-button
                 v-else size="tiny" type="primary" data-testid="notif-ack"
@@ -148,8 +148,21 @@ const typeTag = computed<Record<string, string>>(() => ({
   max-height: min(360px, calc(100dvh - 88px));
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-right: 4px;
+  padding-right: var(--app-space-1);
 }
+
+.notification-empty { padding: var(--app-space-5) 0; }
+.notification-list { padding-right: var(--app-space-2); }
+
+.notification-item {
+  border-bottom: 1px solid var(--app-border);
+  padding-bottom: var(--app-space-2);
+}
+
+.notification-unread { font-size: 12px; }
+.notification-title { margin: var(--app-space-1) 0; font-weight: 600; }
+.notification-body { font-size: 13px; white-space: pre-wrap; }
+.notification-actions { margin-top: var(--app-space-2); }
 
 @media (max-width: 767px) {
   .notification-panel {

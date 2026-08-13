@@ -8,7 +8,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import {
   copySemester, createPeriodTable, createSemester, deletePeriodTable,
   deleteSemester, getSemester, listSemesters, listTemplates,
@@ -68,11 +68,6 @@ async function fetchSemesters() {
       : (semesters.value[0]?.id ?? null))
 }
 
-function errorMessage(error: unknown): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return detail || '暂时无法读取学期与作息数据，请重试。'
-}
-
 async function loadPage() {
   initialLoading.value = true
   loadError.value = null
@@ -80,7 +75,7 @@ async function loadPage() {
     templates.value = await listTemplates()
     await fetchSemesters()
   } catch (error) {
-    loadError.value = errorMessage(error)
+    loadError.value = apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。')
   } finally {
     initialLoading.value = false
   }
@@ -92,7 +87,7 @@ async function refreshData() {
   try {
     await fetchSemesters()
   } catch (error) {
-    message.error(errorMessage(error))
+    message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。'))
   } finally {
     refreshing.value = false
   }
@@ -112,7 +107,7 @@ async function onCreateSemester() {
     message.success('学期已创建')
     await refreshData()
   } catch (error) {
-    message.error(errorMessage(error).replace('学期与作息数据', '学期'))
+    message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
     creating.value = false
   }
@@ -126,7 +121,7 @@ async function onDeleteSemester(id: number) {
     message.success('学期已删除')
     await refreshData()
   } catch (error) {
-    message.error(errorMessage(error).replace('学期与作息数据', '学期'))
+    message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
     deletingSemesterId.value = null
   }
@@ -159,7 +154,7 @@ async function onAddTable() {
     message.success('作息时间表已新增')
     await refreshData()
   } catch (error) {
-    message.error(errorMessage(error).replace('学期与作息数据', '作息时间表'))
+    message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '作息时间表'))
   } finally {
     addingTable.value = false
   }
@@ -173,7 +168,7 @@ async function onDeleteTable(id: number) {
     message.success('作息时间表已删除')
     await refreshData()
   } catch (error) {
-    message.error(errorMessage(error).replace('学期与作息数据', '作息时间表'))
+    message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '作息时间表'))
   } finally {
     deletingTableId.value = null
   }
@@ -240,7 +235,7 @@ async function onCopy() {
     message.success('已复制到新学期')
     await refreshData()
   } catch (error) {
-    message.error(errorMessage(error).replace('学期与作息数据', '学期'))
+    message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
     copying.value = false
   }
@@ -485,7 +480,9 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
               <n-checkbox v-model:checked="copyForm.teachers">{{ '教师' }}</n-checkbox>
               <n-checkbox v-model:checked="copyForm.rooms">{{ '教室/场地' }}</n-checkbox>
               <n-checkbox v-model:checked="copyForm.classes">{{ '班级' }}</n-checkbox>
-              <n-checkbox v-model:checked="copyForm.constraint_config">{{ '排课偏好设置' }}</n-checkbox>
+              <n-checkbox v-model:checked="copyForm.constraint_config" data-testid="copy-config">
+                {{ '排课偏好设置' }}
+              </n-checkbox>
             </n-space>
           </div>
           <n-switch v-model:value="copyForm.grade_promotion">

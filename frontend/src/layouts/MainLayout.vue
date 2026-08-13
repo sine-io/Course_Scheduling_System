@@ -115,7 +115,7 @@ const navGroups = computed<NavGroup[]>(() => {
       ],
     },
     {
-      label: '系统',
+      label: '系统管理',
       items: [navItem('system', '系统管理', Settings2)],
     },
   ]

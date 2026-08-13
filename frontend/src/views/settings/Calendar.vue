@@ -7,7 +7,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
@@ -52,11 +52,6 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
   value: semester.id,
 })))
 
-function errorMessage(error: unknown, fallback = '暂时无法读取校历数据，请重试。'): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return detail || fallback
-}
-
 function resetForm() {
   editingExceptionId.value = null
   form.value = { date: null, kind: 'no_instruction', makeup_weekday: null, note: '' }
@@ -83,7 +78,7 @@ async function loadSemesterData(id = selectedSemesterId.value) {
     readiness.value = state
   } catch (error) {
     if (sequence === loadSequence) {
-      dataError.value = errorMessage(error)
+      dataError.value = apiErrorMessage(error, '暂时无法读取校历数据，请重试。')
       exceptions.value = []
       readiness.value = null
     }
@@ -104,7 +99,7 @@ async function loadPage() {
       : (semesters.value[0]?.id ?? null)
     await loadSemesterData()
   } catch (error) {
-    loadError.value = errorMessage(error)
+    loadError.value = apiErrorMessage(error, '暂时无法读取校历数据，请重试。')
     semesters.value = []
     selectedSemesterId.value = null
   } finally {
@@ -161,7 +156,7 @@ async function saveException() {
     await loadSemesterData()
     message.success(wasEditing ? '特殊日期已更新' : '特殊日期已保存')
   } catch (error) {
-    message.error(errorMessage(error, '特殊日期保存失败，请重试。'))
+    message.error(apiErrorMessage(error, '特殊日期保存失败，请重试。'))
   } finally {
     saving.value = false
   }
@@ -175,7 +170,7 @@ async function removeException(id: number) {
     await loadSemesterData()
     message.success('特殊日期已删除')
   } catch (error) {
-    message.error(errorMessage(error, '特殊日期删除失败，请重试。'))
+    message.error(apiErrorMessage(error, '特殊日期删除失败，请重试。'))
   } finally {
     deletingExceptionId.value = null
   }
@@ -188,7 +183,7 @@ async function confirmReady() {
     readiness.value = await confirmSemesterReadiness(selectedSemesterId.value)
     message.success('排课准备已确认完成')
   } catch (error) {
-    message.error(errorMessage(error, '尚未满足排课准备条件'))
+    message.error(apiErrorMessage(error, '尚未满足排课准备条件'))
     await loadSemesterData()
   } finally {
     confirmingReady.value = false

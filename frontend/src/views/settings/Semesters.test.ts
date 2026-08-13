@@ -128,4 +128,27 @@ describe('Semesters', () => {
     deletion.resolve()
     await flushPromises()
   })
+
+  it('复制学期对话框保留排课偏好设置的兼容选择器', async () => {
+    mocks.listSemesters.mockResolvedValue([semester])
+    mocks.getSemester.mockResolvedValue(semester)
+
+    const wrapper = await mountSemesters({
+      stubs: {
+        Modal: {
+          props: ['show'],
+          template: '<div v-if="show"><slot /></div>',
+        },
+      },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="copy-semester"]').trigger('click')
+    await flushPromises()
+
+    const preference = wrapper.get('[data-testid="copy-config"]')
+    expect(preference.text()).toContain('排课偏好设置')
+    expect(preference.attributes('role')).toBe('checkbox')
+    expect(preference.attributes('aria-checked')).toBe('true')
+  })
 })

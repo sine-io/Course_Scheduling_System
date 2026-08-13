@@ -9,7 +9,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage, type ApiError } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
@@ -105,16 +105,6 @@ const elapsedText = computed(() => {
 })
 const unplacedPeriods = computed(() => unscheduled.value.reduce((n, u) => n + u.periods, 0))
 
-function errorMessage(error: unknown, fallback: string): string {
-  const value = error as Partial<ApiError> & { detail?: unknown }
-  if (typeof value.detail === 'string' && value.detail) return value.detail
-  if (value.detail && typeof value.detail === 'object' && 'message' in value.detail) {
-    const detailMessage = (value.detail as { message?: unknown }).message
-    if (typeof detailMessage === 'string' && detailMessage) return detailMessage
-  }
-  return value.message || fallback
-}
-
 function saveActiveJob(next: SolveJob | null) {
   if (typeof sessionStorage === 'undefined') return
   if (next) {
@@ -179,7 +169,7 @@ async function onSemesterChange(id: number) {
   try {
     await reload()
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取自动排课设置，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取自动排课设置，请重试。')
   } finally {
     loading.value = false
   }
@@ -202,7 +192,7 @@ async function settleTerminalJob(announce = true) {
   try {
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '结果已返回，但课表列表刷新失败。'))
+    message.error(apiErrorMessage(error, '结果已返回，但课表列表刷新失败。'))
   }
 }
 
@@ -243,7 +233,7 @@ async function loadPage() {
       constraints.value = null
     }
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取自动排课设置，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取自动排课设置，请重试。')
   } finally {
     loading.value = false
   }
@@ -265,7 +255,7 @@ async function poll(generation = pollGeneration) {
   } catch (error) {
     if (generation !== pollGeneration) return
     stopPolling()
-    message.error(errorMessage(error, '排课进度读取失败，页面不会把任务标记为完成。'))
+    message.error(apiErrorMessage(error, '排课进度读取失败，页面不会把任务标记为完成。'))
     return
   }
   if (!running.value) await settleTerminalJob()
@@ -290,7 +280,7 @@ async function onStart() {
       blockingIssues.value = (detail as { issues: PreflightIssue[] }).issues
       message.error('数据未通过排课前置检查')
     } else {
-      message.error(errorMessage(e, '无法启动排课'))
+      message.error(apiErrorMessage(e, '无法启动排课'))
     }
   } finally {
     starting.value = false
@@ -314,7 +304,7 @@ async function onStop() {
     await stopSolveJob(job.value.job_id)
     message.info('已请求提前结束，将保留当前最佳解')
   } catch (error) {
-    message.error(errorMessage(error, '提前结束请求失败，请稍后重试。'))
+    message.error(apiErrorMessage(error, '提前结束请求失败，请稍后重试。'))
   }
 }
 async function onCancel() {
@@ -323,7 +313,7 @@ async function onCancel() {
     await cancelSolveJob(job.value.job_id)
     message.info('已请求取消')
   } catch (error) {
-    message.error(errorMessage(error, '取消请求失败，请稍后重试。'))
+    message.error(apiErrorMessage(error, '取消请求失败，请稍后重试。'))
   }
 }
 

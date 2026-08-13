@@ -4,6 +4,7 @@ import { createApp } from 'vue'
 
 import App from './App.vue'
 import './styles/tokens.css'
+import './styles/workspace-primitives.css'
 import { setUnauthorizedHandler } from './api/client'
 import { router } from './router'
 import { useAuthStore } from './stores/auth'

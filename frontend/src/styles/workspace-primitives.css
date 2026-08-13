@@ -1,0 +1,166 @@
+/* Shared layout primitives used by each domain workspace. Domain styles keep
+   their page-specific grids and responsive exceptions around this foundation. */
+:is(.scheduling-page, .basedata-page, .settings-page, .operations-page) {
+  display: grid;
+  min-width: 0;
+  gap: var(--app-space-5);
+}
+
+:is(.scheduling-page-header, .basedata-page-header, .settings-page-header, .operations-page-header) {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--app-space-5);
+}
+
+:is(.scheduling-page-header, .basedata-page-header, .settings-page-header, .operations-page-header) h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+:is(.scheduling-page-header, .basedata-page-header, .settings-page-header, .operations-page-header) > div > p:last-child {
+  max-width: 760px;
+  margin: var(--app-space-2) 0 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+:is(.scheduling-eyebrow, .basedata-eyebrow, .settings-eyebrow, .operations-eyebrow) {
+  margin: 0 0 var(--app-space-2);
+  color: var(--app-primary-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+:is(.scheduling-header-actions, .basedata-header-actions, .settings-header-actions, .operations-header-actions) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+}
+
+:is(.scheduling-header-actions, .basedata-header-actions, .settings-header-actions, .operations-header-actions) .n-select {
+  width: 240px;
+  max-width: 100%;
+}
+
+:is(.scheduling-panel, .basedata-panel, .settings-panel, .settings-item, .operations-panel) {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
+}
+
+:is(.scheduling-panel-heading, .operations-panel-heading,
+    .settings-panel-heading, .settings-item-header, .settings-subsection-header) {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-4);
+}
+
+:is(.scheduling-panel-heading, .operations-panel-heading,
+    .settings-panel-heading, .settings-item-header, .settings-subsection-header) h2,
+:is(.settings-subsection-header) h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+:is(.scheduling-panel-heading, .operations-panel-heading,
+    .settings-panel-heading, .settings-item-header) h2 {
+  font-size: 17px;
+}
+
+:is(.scheduling-panel-heading, .operations-panel-heading,
+    .settings-panel-heading, .settings-item-header, .settings-subsection-header) p:last-child {
+  margin: var(--app-space-1) 0 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+:is(.scheduling-state, .basedata-state, .settings-state, .operations-state) {
+  display: grid;
+  min-height: 230px;
+  place-items: center;
+  align-content: center;
+  gap: var(--app-space-3);
+  padding: var(--app-space-state);
+  border: 1px dashed var(--app-border-strong);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+  text-align: center;
+}
+
+:is(.scheduling-state, .basedata-state, .settings-state, .operations-state) > svg {
+  color: var(--app-primary-strong);
+}
+
+:is(.scheduling-state-error, .settings-error, .operations-state-error,
+    .basedata-state-error) {
+  border-style: solid;
+}
+
+:is(.scheduling-state-error, .settings-error, .operations-state-error,
+    .basedata-state-error) > svg {
+  color: var(--app-danger);
+}
+
+:is(.scheduling-state, .basedata-state, .settings-state, .operations-state) strong {
+  color: var(--app-text);
+}
+
+:is(.scheduling-state, .basedata-state, .settings-state, .operations-state) span {
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+:is(.scheduling-table-scroll, .basedata-table-scroll, .settings-table-scroll, .operations-table-scroll) {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  -webkit-overflow-scrolling: touch;
+}
+
+:is(.scheduling-data-table, .basedata-data-table, .settings-data-table, .operations-data-table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+:is(.scheduling-data-table, .basedata-data-table, .settings-data-table, .operations-data-table) th,
+:is(.scheduling-data-table, .basedata-data-table, .settings-data-table, .operations-data-table) td {
+  padding: var(--app-space-2) var(--app-space-3);
+  border-bottom: 1px solid var(--app-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+:is(.scheduling-data-table, .basedata-data-table, .settings-data-table, .operations-data-table) th {
+  background: var(--app-surface-muted);
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+:is(.scheduling-data-table, .basedata-data-table, .settings-data-table, .operations-data-table) tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+:is(.scheduling-data-table, .basedata-data-table, .settings-data-table, .operations-data-table) td {
+  color: var(--app-text);
+  font-size: 13px;
+}

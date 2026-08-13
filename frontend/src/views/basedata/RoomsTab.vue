@@ -5,7 +5,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import {
   ROOM_TYPE_LABELS, createRoom, deleteRoom, listRooms, listSubjects, updateRoom,
 } from '@/api/basedata'
@@ -39,17 +39,13 @@ const roomTypeOptions = computed(() => (Object.keys(ROOM_TYPE_LABELS) as RoomTyp
 })))
 const subjectOptions = computed(() => subjects.value.map((subject) => ({ label: subject.name, value: subject.id })))
 
-function errorMessage(error: unknown, fallback: string) {
-  return (error as Partial<ApiError> | null)?.detail || fallback
-}
-
 async function reload() {
   loading.value = true
   loadError.value = null
   try {
     items.value = await listRooms(props.semesterId, search.value || undefined)
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取教室/场地，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取教室/场地，请重试。')
   } finally {
     loading.value = false
   }
@@ -66,7 +62,7 @@ async function loadInitialData() {
     items.value = roomItems
     subjects.value = subjectItems
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取教室/场地，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取教室/场地，请重试。')
   } finally {
     loading.value = false
   }
@@ -116,7 +112,7 @@ async function save() {
     message.success('已保存')
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '保存失败'))
+    message.error(apiErrorMessage(error, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -130,7 +126,7 @@ async function remove(room: Room) {
     message.success('已删除')
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '删除失败'))
+    message.error(apiErrorMessage(error, '删除失败'))
   } finally {
     deletingId.value = null
   }

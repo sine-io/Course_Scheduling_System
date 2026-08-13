@@ -4,7 +4,7 @@ import {
   NAlert, NButton, NEmpty, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpin, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import {
   TRACK_LABELS, createClassUnit, deleteClassUnit, listClassUnits, listTeachers, updateClassUnit,
 } from '@/api/basedata'
@@ -52,17 +52,13 @@ function tableName(id: number | null): string {
   if (id === null) return '默认'
   return periodTables.value.find((table) => table.id === id)?.name ?? '—'
 }
-function errorMessage(error: unknown, fallback: string) {
-  return (error as Partial<ApiError> | null)?.detail || fallback
-}
-
 async function reload() {
   loading.value = true
   loadError.value = null
   try {
     items.value = await listClassUnits(props.semesterId, search.value || undefined)
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取班级，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取班级，请重试。')
   } finally {
     loading.value = false
   }
@@ -81,7 +77,7 @@ async function loadInitialData() {
     teachers.value = teacherItems
     periodTables.value = semester.period_tables
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取班级，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取班级，请重试。')
   } finally {
     loading.value = false
   }
@@ -164,7 +160,7 @@ async function save() {
     message.success('已保存')
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '保存失败'))
+    message.error(apiErrorMessage(error, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -178,7 +174,7 @@ async function remove(classUnit: ClassUnit) {
     message.success('已删除')
     await reload()
   } catch (error) {
-    message.error(errorMessage(error, '删除失败'))
+    message.error(apiErrorMessage(error, '删除失败'))
   } finally {
     deletingId.value = null
   }

@@ -11,7 +11,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import TimetableGrid from '@/components/timetable/TimetableGrid.vue'
 import type { DragData, DropFeedback, GridEntry, PeriodCell } from '@/components/timetable/types'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage, type ApiError } from '@/api/client'
 import { listAssignments } from '@/api/assignments'
 import type { Assignment } from '@/api/assignments'
 import { listClassUnits, listRooms, listTeachers } from '@/api/basedata'
@@ -73,11 +73,6 @@ const readonlyReason = computed(() => {
   return ''
 })
 
-function errorMessage(error: unknown, fallback: string): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return typeof detail === 'string' && detail ? detail : fallback
-}
-
 async function refreshTimetable() {
   tt.value = ttId.value ? await getTimetable(ttId.value) : null
 }
@@ -131,7 +126,7 @@ async function loadSemester(id: number) {
   try {
     await loadSemesterData(id)
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取排课工作台，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取排课工作台，请重试。')
   } finally {
     loading.value = false
   }
@@ -145,7 +140,7 @@ async function loadPage() {
     if (semesters.value.length) await loadSemesterData(semesters.value[0].id)
     else sid.value = null
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取排课工作台，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取排课工作台，请重试。')
   } finally {
     loading.value = false
   }
@@ -182,7 +177,7 @@ async function onDraftChange(id: number) {
   try {
     await refreshTimetable()
   } catch (error) {
-    loadError.value = errorMessage(error, '暂时无法读取所选课表草稿，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取所选课表草稿，请重试。')
   } finally {
     loading.value = false
   }
@@ -571,7 +566,7 @@ async function onSelect(gridEntry: GridEntry) {
     message.info(next ? `已锁定“${entry.subject}”` : `已解锁“${entry.subject}”`)
   } catch (error) {
     saveState.value = 'error'
-    message.error(errorMessage(error, '锁定状态保存失败'))
+    message.error(apiErrorMessage(error, '锁定状态保存失败'))
   } finally {
     busy.value = false
   }

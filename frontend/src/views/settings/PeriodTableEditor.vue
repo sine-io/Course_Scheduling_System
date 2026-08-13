@@ -5,7 +5,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import { PERIOD_TYPE_LABELS, getPeriodTable, replacePeriods } from '@/api/semesters'
 import type { Period, PeriodType } from '@/api/semesters'
 import './settings-workspace.css'
@@ -46,11 +46,6 @@ const typeOptions = computed(() => (Object.keys(PERIOD_TYPE_LABELS) as PeriodTyp
   value: type,
 })))
 
-function errorMessage(error: unknown): string {
-  const detail = (error as Partial<ApiError> | null)?.detail
-  return detail || '暂时无法读取作息时间表，请重试。'
-}
-
 function buildRows(periods: Period[], nWeekdays: number) {
   const byNumber = new Map<number, Row>()
   for (const period of periods) {
@@ -86,7 +81,7 @@ async function load() {
     numWeekdays.value = table.num_weekdays
     rows.value = buildRows(table.periods, table.num_weekdays)
   } catch (error) {
-    loadError.value = errorMessage(error)
+    loadError.value = apiErrorMessage(error, '暂时无法读取作息时间表，请重试。')
   } finally {
     loading.value = false
   }
@@ -141,7 +136,7 @@ async function save() {
     await replacePeriods(tableId, periods)
     message.success('作息时间表已保存')
   } catch (error) {
-    message.error((error as Partial<ApiError> | null)?.detail || '保存失败，请重试。')
+    message.error(apiErrorMessage(error, '保存失败，请重试。'))
   } finally {
     saving.value = false
   }
