@@ -13,11 +13,7 @@ async function bootstrap() {
   const app = createApp(App)
   const pinia = createPinia()
   app.use(pinia)
-  // 原型是完全内存化的静态评审面；没有后端时跳过启动配置请求。
-  // 其他路径仍在首次渲染前加载真实的界面配置。
-  if (!window.location.pathname.startsWith('/prototype/')) {
-    await useAppConfigStore(pinia).load()
-  }
+  await useAppConfigStore(pinia).load()
   app.use(router)
   app.use(naive)
 
