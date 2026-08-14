@@ -7,11 +7,11 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import core_editor, core_viewer
 from app.models.semester import Semester
 from app.models.timetable import Timetable, TimetableStatus
-from app.models.user import Role, User
+from app.models.user import User
 from app.schemas.solver import (
     AutoScheduleAccepted,
     AutoScheduleRequest,
@@ -43,8 +43,8 @@ from app.workers.progress import (
 
 router = APIRouter(tags=["solver"])
 
-viewer = require_roles(Role.scheduler, Role.director)
-editor = require_roles(Role.scheduler)
+viewer = core_viewer
+editor = core_editor
 
 
 def _require_writable(db: Session, semester_id: int) -> Semester:

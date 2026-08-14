@@ -7,8 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_active_user, require_roles
+from app.core.auth import get_active_user
 from app.core.db import get_db
+from app.core.permissions import core_editor, core_viewer
 from app.models.basedata import ClassUnit, Room, Subject, Teacher
 from app.models.period import Period, PeriodTable
 from app.models.semester import Semester
@@ -38,8 +39,8 @@ from app.services.semester_copy import CopyOptions, copy_semester
 
 router = APIRouter(tags=["semesters"])
 
-viewer = require_roles(Role.scheduler, Role.director)
-editor = require_roles(Role.scheduler)
+viewer = core_viewer
+editor = core_editor
 
 
 # ── 内部工具 ──────────────────────────

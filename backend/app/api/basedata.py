@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import core_editor, core_viewer
 from app.models.basedata import (
     ClassUnit,
     Room,
@@ -40,8 +40,8 @@ from app.services import semester_context
 
 router = APIRouter(tags=["basedata"])
 
-viewer = require_roles(Role.scheduler, Role.director)
-editor = require_roles(Role.scheduler)
+viewer = core_viewer
+editor = core_editor
 
 
 def _require_writable(db: Session, semester_id: int) -> None:

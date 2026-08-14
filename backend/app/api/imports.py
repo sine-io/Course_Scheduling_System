@@ -3,14 +3,14 @@
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
-from app.models.user import Role
+from app.core.permissions import core_editor, core_viewer
 from app.services import importer, semester_context
 
 router = APIRouter(tags=["import"])
 
-editor = require_roles(Role.scheduler)
+viewer = core_viewer
+editor = core_editor
 
 VALID_ENTITIES = {"subjects", "teachers", "classes", "assignments"}
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -26,7 +26,7 @@ def _check_entity(entity: str) -> None:
 
 
 @router.get("/import/templates/{entity}")
-def download_template(entity: str, _: object = Depends(editor)) -> Response:
+def download_template(entity: str, _: object = Depends(viewer)) -> Response:
     _check_entity(entity)
     data = importer.build_template(entity)
     filename = f"{_FILENAMES[entity]}_template.xlsx"

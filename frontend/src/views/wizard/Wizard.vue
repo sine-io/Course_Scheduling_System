@@ -17,6 +17,8 @@ import { createSemester, getSemester, listTemplates } from '@/api/semesters'
 import type { Semester, Template } from '@/api/semesters'
 import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
+import { canEditCore as canEditCoreRole } from '@/permissions'
+import { useAuthStore } from '@/stores/auth'
 import { useWizardStore } from '@/stores/wizard'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
@@ -25,6 +27,7 @@ import OnboardingChecklist from '@/components/OnboardingChecklist.vue'
 
 const router = useRouter()
 const message = useMessage()
+const auth = useAuthStore()
 const wizard = useWizardStore()
 const appConfig = useAppConfigStore()
 const semesterContext = useSemesterContextStore()
@@ -57,8 +60,13 @@ const periodTable = computed(() => (
   ?? semester.value?.period_tables[0]
   ?? null
 ))
+const canEditCore = computed(() => (
+  // Isolated component tests mount without the router guard; the API remains the final boundary.
+  !auth.user || canEditCoreRole(auth.user.roles)
+))
 const canEditSemester = computed(() => (
-  !semesterContext.authoritative || semesterContext.isCurrent(semesterId.value)
+  canEditCore.value
+  && (!semesterContext.authoritative || semesterContext.isCurrent(semesterId.value))
 ))
 
 async function loadSummary(id: number) {
@@ -150,7 +158,7 @@ async function persistStep(nextStep: number): Promise<boolean> {
 }
 
 async function goNext() {
-  if (busy.value) return
+  if (!canEditCore.value || busy.value) return
   actionError.value = null
 
   if (step.value === 0 && !templateKey.value) {
@@ -216,7 +224,7 @@ async function goNext() {
 }
 
 async function goPrev() {
-  if (busy.value || step.value === 0) return
+  if (!canEditCore.value || busy.value || step.value === 0) return
   actionError.value = null
   const previousStep = step.value
   const nextStep = Math.max(step.value - 1, 0)
@@ -227,7 +235,7 @@ async function goPrev() {
 }
 
 async function finish() {
-  if (busy.value) return
+  if (!canEditCore.value || busy.value) return
   busy.value = true
   actionError.value = null
   try {
@@ -242,7 +250,7 @@ async function finish() {
 }
 
 async function onLoadDemo() {
-  if (loadingDemo.value) return
+  if (!canEditCore.value || loadingDemo.value) return
   actionError.value = null
   loadingDemo.value = true
   try {
@@ -262,7 +270,7 @@ async function onLoadDemo() {
 }
 
 async function skip() {
-  if (busy.value) return
+  if (!canEditCore.value || busy.value) return
   busy.value = true
   actionError.value = null
   try {
@@ -276,7 +284,7 @@ async function skip() {
 }
 
 function openPeriodEditor() {
-  if (!periodTable.value) {
+  if (!canEditCore.value || !periodTable.value) {
     actionError.value = '当前学期没有可编辑的作息时间表，请返回上一步重试。'
     return
   }
@@ -295,6 +303,7 @@ onMounted(loadWizardData)
         <p>{{ '按顺序准备学期、作息时间表和基础数据，之后即可开始排课。' }}</p>
       </div>
       <n-button
+        v-if="canEditCore"
         quaternary
         class="wizard-skip"
         :disabled="initialLoading || busy"
@@ -321,6 +330,9 @@ onMounted(loadWizardData)
     </section>
 
     <template v-else>
+      <n-alert v-if="!canEditCore" type="info" data-testid="wizard-readonly">
+        当前角色只能查看设置向导，创建、导入和保存操作仅对排课管理员开放。
+      </n-alert>
       <OnboardingChecklist v-if="onboarding" :status="onboarding" />
 
       <nav class="wizard-progress" aria-label="设置步骤">
@@ -401,6 +413,7 @@ onMounted(loadWizardData)
                 type="radio"
                 name="wizard-template"
                 :value="t.key"
+                :disabled="!canEditCore"
                 :data-testid="`tpl-${t.key}`"
               >
               <span class="wizard-template-mark" aria-hidden="true"><LayoutTemplate :size="19" /></span>
@@ -424,13 +437,13 @@ onMounted(loadWizardData)
                 data-testid="wizard-year"
                 :min="appConfig.config.academic_year.min"
                 :max="appConfig.config.academic_year.max"
-                :disabled="!!semesterId"
+                :disabled="!!semesterId || !canEditCore"
                 button-placement="both"
               />
             </label>
             <label class="wizard-field">
               <span>{{ '学期' }}</span>
-              <n-select v-model:value="term" :options="termOptions" :disabled="!!semesterId" />
+              <n-select v-model:value="term" :options="termOptions" :disabled="!!semesterId || !canEditCore" />
             </label>
           </div>
           <p v-if="semesterId" class="wizard-success-note">
@@ -499,7 +512,7 @@ onMounted(loadWizardData)
       </section>
 
       <footer class="wizard-actions">
-        <n-button data-testid="wizard-prev" :disabled="step === 0 || busy" @click="goPrev">
+        <n-button data-testid="wizard-prev" :disabled="step === 0 || busy || !canEditCore" @click="goPrev">
           <template #icon><ChevronLeft :size="16" aria-hidden="true" /></template>
           {{ '上一步' }}
         </n-button>
@@ -508,7 +521,7 @@ onMounted(loadWizardData)
           data-testid="wizard-next"
           type="primary"
           :loading="busy"
-          :disabled="!templates.length && step === 0"
+          :disabled="(!templates.length && step === 0) || !canEditCore"
           @click="goNext"
         >
           {{ '下一步' }}
@@ -516,7 +529,7 @@ onMounted(loadWizardData)
         </n-button>
         <n-button
           v-else data-testid="wizard-finish" type="primary" :loading="busy"
-          :disabled="busy || !!summaryError || !summary" @click="finish"
+          :disabled="busy || !!summaryError || !summary || !canEditCore" @click="finish"
         >
           {{ '完成，前往教学任务管理' }}
           <template #icon><ChevronRight :size="16" aria-hidden="true" /></template>

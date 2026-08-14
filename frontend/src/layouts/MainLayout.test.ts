@@ -15,6 +15,22 @@ const scheduler = {
   must_change_password: false,
 }
 
+const admin = {
+  id: 3,
+  username: 'admin',
+  display_name: '系统管理员',
+  roles: ['admin'],
+  must_change_password: false,
+}
+
+const director = {
+  id: 4,
+  username: 'director',
+  display_name: '教务主任',
+  roles: ['director'],
+  must_change_password: false,
+}
+
 const teacher = {
   id: 2,
   username: 'teacher',
@@ -97,9 +113,17 @@ describe('MainLayout', () => {
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
     expect(wrapper.get('[data-testid="shell-breadcrumb"]').text()).toContain('仪表盘')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
-    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('系统管理')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('系统管理')
     expect(wrapper.get('[data-testid="shell-logout"]').text()).toContain('退出登录')
     expect(wrapper.find('input[placeholder*="搜索"]').exists()).toBe(false)
+
+    const adminLayout = await mountLayout(admin)
+    expect(adminLayout.wrapper.get('[data-testid="shell-nav"]').text()).toContain('系统管理')
+
+    const directorLayout = await mountLayout(director)
+    const directorNav = directorLayout.wrapper.get('[data-testid="shell-nav"]').text()
+    expect(directorNav).toContain('版本与发布')
+    expect(directorNav).not.toContain('系统管理')
 
     const teacherLayout = await mountLayout(teacher)
     const teacherNav = teacherLayout.wrapper.get('[data-testid="shell-nav"]').text()

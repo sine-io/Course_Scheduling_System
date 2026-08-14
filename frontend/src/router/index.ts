@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { canViewCore, hasAnyRole } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useWizardStore } from '@/stores/wizard'
 
@@ -18,6 +19,7 @@ const routes = [
     path: '/wizard',
     name: 'wizard',
     component: () => import('@/views/wizard/Wizard.vue'),
+    meta: { allowedRoles: ['admin', 'scheduler', 'director'] },
   },
   {
     // 独立 A4 通知单打印页,不套用侧边栏版面(干净一页供打印)
@@ -118,6 +120,7 @@ const routes = [
         path: 'settings/system',
         name: 'system',
         component: () => import('@/views/settings/System.vue'),
+        meta: { allowedRoles: ['admin'] },
       },
     ],
   },
@@ -158,9 +161,14 @@ router.beforeEach(async (to) => {
   }
 
   // 纯教师账号:只开放课表查询与请假登记(其余页面的后端 API 均需排课管理员以上权限)
-  const canManage = auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director')
+  const canManage = canViewCore(auth.user?.roles)
   if (!canManage && auth.hasRole('teacher') && !TEACHER_PAGES.has(to.name as string)) {
     return { name: 'timetable-query' }
+  }
+
+  const allowedRoles = to.meta.allowedRoles as string[] | undefined
+  if (allowedRoles && !hasAnyRole(auth.user?.roles, allowedRoles)) {
+    return { name: canManage ? 'dashboard' : 'timetable-query' }
   }
 
   // 首次登录引导:排课管理员/管理员在尚未完成初始设置时,自动进入向导(向导内可跳过)

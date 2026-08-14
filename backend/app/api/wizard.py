@@ -4,18 +4,17 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import core_editor, core_viewer
 from app.models.semester import Semester
-from app.models.user import Role
 from app.models.wizard import SINGLETON_ID, TOTAL_STEPS, WizardState
 from app.schemas.wizard import WizardStateOut, WizardStateUpdate
 from app.services import semester_context
 
 router = APIRouter(tags=["wizard"])
 
-viewer = require_roles(Role.scheduler, Role.director)
-editor = require_roles(Role.scheduler)
+viewer = core_viewer
+editor = core_editor
 
 
 def _get_or_create(db: Session) -> WizardState:

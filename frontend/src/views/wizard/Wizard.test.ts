@@ -6,6 +6,7 @@ import { h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { OnboardingStatus } from '@/api/onboarding'
 import type { WizardState } from '@/api/wizard'
+import { useAuthStore } from '@/stores/auth'
 import Wizard from './Wizard.vue'
 
 const mocks = vi.hoisted(() => ({
@@ -120,9 +121,18 @@ function makeRouter() {
   })
 }
 
-async function mountWizard(state: WizardState = baseState) {
+async function mountWizard(state: WizardState = baseState, roles = ['scheduler']) {
   mocks.getWizardState.mockResolvedValue({ ...state })
   const pinia = createPinia()
+  const auth = useAuthStore(pinia)
+  auth.user = {
+    id: 1,
+    username: roles.includes('director') ? 'director' : 'scheduler',
+    display_name: roles.includes('director') ? '教务主任' : '排课管理员',
+    roles,
+    must_change_password: false,
+  }
+  auth.loaded = true
   const router = makeRouter()
   await router.push('/wizard')
   await router.isReady()
@@ -180,6 +190,18 @@ describe('Wizard', () => {
 
     expect(wrapper.get('[data-testid="wizard-empty"]').text()).toContain('暂无可用的学制模板')
     expect(wrapper.get('[data-testid="wizard-next"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('教务主任进入向导时只读，不能保存或跳过设置', async () => {
+    const { wrapper } = await mountWizard(baseState, ['director'])
+
+    expect(wrapper.get('[data-testid="wizard-readonly"]').text()).toContain('只能查看')
+    expect(wrapper.find('[data-testid="wizard-skip"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="wizard-next"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('input[type="radio"][name="wizard-template"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    expect(mocks.updateWizardState).not.toHaveBeenCalled()
   })
 
   it('模板使用原生单选组以支持标准键盘操作', async () => {

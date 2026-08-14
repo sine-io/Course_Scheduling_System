@@ -15,6 +15,7 @@ import type { NamedBrief, PublicSemester, PublishedTimetable } from '@/api/timet
 import { exportBatchZip, exportSchoolWorkbook, exportTimetable } from '@/api/exports'
 import type { ExportFmt } from '@/api/exports'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { canBatchExport } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling/scheduling-workspace.css'
@@ -32,9 +33,7 @@ const loadError = ref<string | null>(null)
 const message = useMessage()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
-const canManage = computed(() => (
-  auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director')
-))
+const canManage = computed(() => canBatchExport(auth.user?.roles))
 
 const view = ref<ViewKind>('class')
 const classId = ref<number | null>(null)

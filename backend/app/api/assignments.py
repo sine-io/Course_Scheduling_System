@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import core_editor, core_viewer
 from app.models.assignment import (
     AssignmentTeacher,
     BlockRule,
@@ -18,7 +18,6 @@ from app.models.assignment import (
     SchedulingUnitType,
 )
 from app.models.basedata import ClassUnit, Room, Subject, Teacher
-from app.models.user import Role
 from app.schemas.assignment import (
     AssignmentIn,
     AssignmentOut,
@@ -32,8 +31,8 @@ from app.services import semester_context
 
 router = APIRouter(tags=["assignments"])
 
-viewer = require_roles(Role.scheduler, Role.director)
-editor = require_roles(Role.scheduler)
+viewer = core_viewer
+editor = core_editor
 
 
 def _require_semester(db: Session, semester_id: int) -> None:

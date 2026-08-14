@@ -23,6 +23,7 @@ import type { Component } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import NotificationBell from '@/components/NotificationBell.vue'
+import { canViewCore } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
@@ -63,7 +64,7 @@ const semesterOptions = computed(() => semesterContext.semesters.map((semester) 
 
 // This predicate mirrors the router guard. Navigation visibility and direct-route access stay aligned.
 const canManage = computed(() => (
-  auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director')
+  canViewCore(auth.user?.roles)
 ))
 
 function navItem(key: string, label: string, icon: Component): NavItem {
@@ -83,7 +84,7 @@ const navGroups = computed<NavGroup[]>(() => {
     return [{ label: '常用', items: [query, leaves, stats] }]
   }
 
-  return [
+  const groups: NavGroup[] = [
     {
       label: '概览',
       items: [
@@ -120,11 +121,14 @@ const navGroups = computed<NavGroup[]>(() => {
         navItem('notification-board', '通知确认看板', Bell),
       ],
     },
-    {
+  ]
+  if (auth.hasRole('admin')) {
+    groups.push({
       label: '系统管理',
       items: [navItem('system', '系统管理', Settings2)],
-    },
-  ]
+    })
+  }
+  return groups
 })
 
 const routeNavKey = computed(() => (

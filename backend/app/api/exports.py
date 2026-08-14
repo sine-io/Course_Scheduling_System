@@ -9,16 +9,17 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_active_user, require_roles
+from app.core.auth import get_active_user
 from app.core.db import get_db
-from app.models.user import Role, User
+from app.core.permissions import batch_exporter
+from app.models.user import User
 from app.services import school_rules
 from app.services import timetable_export as tex
 from app.workers import queue as job_queue
 
 router = APIRouter(tags=["exports"])
 
-manager = require_roles(Role.scheduler, Role.director)
+manager = batch_exporter
 
 _MIME = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
