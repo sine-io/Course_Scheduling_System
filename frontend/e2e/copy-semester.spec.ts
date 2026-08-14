@@ -49,7 +49,9 @@ test('开新学期:复制到新学期,带起止日与排课偏好设置', async 
   await page.getByTestId('copy-confirm').click()
 
   // 新学期出现于列表
-  await expect(page.getByText(semesterLabel(DST))).toBeVisible()
+  await expect(page.getByRole('heading', {
+    name: semesterLabel(DST), level: 2, exact: true,
+  })).toBeVisible()
   await page.screenshot({ path: `${SHOTS}/copy-2-list.png` })
 
   const list = await (await page.request.get('/api/semesters')).json()

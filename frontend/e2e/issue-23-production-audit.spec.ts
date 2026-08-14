@@ -61,6 +61,7 @@ const RESTRICTED_TEACHER_ROUTES = [
 const ALLOWED_TEACHER_API_PATHS = new Set([
   '/api/app-config',
   '/api/auth/me',
+  '/api/semester-context',
   '/api/published/semesters',
   '/api/published/timetable',
   '/api/published/my-teacher',

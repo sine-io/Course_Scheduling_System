@@ -16,6 +16,20 @@ const FORCED_PASSWORD_USER = {
   roles: ['scheduler'],
   must_change_password: true,
 }
+const DASHBOARD_USER = {
+  ...FORCED_PASSWORD_USER,
+  must_change_password: false,
+}
+const DASHBOARD_SEMESTER = {
+  id: 12,
+  academic_year: 2042,
+  term: 1,
+  label: '2042-2043学年第一学期',
+  status: 'active',
+  readiness: 'ready',
+  start_date: null,
+  end_date: null,
+}
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({
@@ -46,13 +60,28 @@ async function mockSurfaceData(page: Page, surface: 'change-password' | 'wizard'
   }
 
   if (surface === 'dashboard') {
+    await page.route('**/api/auth/login', (route) => fulfillJson(route, DASHBOARD_USER))
+    await page.route('**/api/app-config', (route) => fulfillJson(route, {
+      school_name: '响应式验收学校',
+      timezone: 'Asia/Shanghai',
+      role_display_names: {
+        admin: '系统管理员', director: '教务主任', scheduler: '排课管理员', teacher: '教师',
+      },
+      academic_year: {
+        storage: 'start_year', min: 1900, max: 2100,
+        label_format: '{year}-{next_year}学年{term_label}',
+        term_labels: { '1': '第一学期', '2': '第二学期' },
+      },
+    }))
     await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
       current_step: 4, completed: true, semester_id: 12, total_steps: 5, has_semesters: true,
     }))
-    await page.route('**/api/semesters', (route) => fulfillJson(route, [{
-      id: 12, academic_year: 2042, term: 1, label: '2042-2043学年第一学期',
-      status: 'active', readiness: 'ready', start_date: null, end_date: null,
-    }]))
+    await page.route('**/api/semester-context', (route) => fulfillJson(route, {
+      current_semester: { ...DASHBOARD_SEMESTER, is_current: true },
+      revision: 1,
+      can_switch: true,
+    }))
+    await page.route('**/api/semesters', (route) => fulfillJson(route, [DASHBOARD_SEMESTER]))
     await page.route('**/api/semesters/12/summary', (route) => fulfillJson(route, {
       subjects: 13, teachers: 42, classes: 18, rooms: 9,
     }))

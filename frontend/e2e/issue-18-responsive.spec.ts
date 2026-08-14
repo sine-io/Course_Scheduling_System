@@ -121,7 +121,12 @@ function tab(page: Page, label: string) {
   return page.locator('.n-tabs-tab', { hasText: label })
 }
 
-async function mockSession(page: Page, roles: string[], state: MockState) {
+async function mockSession(
+  page: Page,
+  roles: string[],
+  state: MockState,
+  currentSemester: typeof SEMESTER | null = SEMESTER,
+) {
   const user = {
     id: 18,
     username: 'issue-18-user',
@@ -156,6 +161,11 @@ async function mockSession(page: Page, roles: string[], state: MockState) {
   }))
   await page.route('**/api/notifications/mine**', (route) => fulfillJson(route, { items: [], unread: 0 }))
   await page.route('**/api/notifications/mine/unread-count**', (route) => fulfillJson(route, { unread: 0 }))
+  await page.route('**/api/semester-context', (route) => fulfillJson(route, {
+    current_semester: currentSemester ? { ...currentSemester, is_current: true } : null,
+    revision: 1,
+    can_switch: roles.some((role) => role === 'admin' || role === 'scheduler'),
+  }))
 
   await page.route('**/api/semesters', (route) => fulfillJson(route, [SEMESTER]))
   await page.route('**/api/semesters/44', (route) => fulfillJson(route, {
@@ -329,7 +339,7 @@ test('基础数据在学期请求期间显示加载状态', async ({ page }) => 
 
 test('基础数据在没有学期时显示明确空状态', async ({ page }) => {
   const state: MockState = { uploadAttempts: 0, savedRules: null }
-  await mockSession(page, ['scheduler'], state)
+  await mockSession(page, ['scheduler'], state, null)
   await page.route('**/api/semesters', (route) => fulfillJson(route, []))
 
   await page.goto('/basedata')

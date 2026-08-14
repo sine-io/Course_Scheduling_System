@@ -53,7 +53,7 @@ async function expectNoRootOverflow(page: Page) {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth)
 }
 
-async function mockSession(page: Page) {
+async function mockSession(page: Page, currentSemester: () => typeof SEMESTER | null) {
   await page.route('**/api/auth/login', (route) => fulfillJson(route, USER))
   await page.route('**/api/auth/me', (route) => fulfillJson(route, USER))
   await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
@@ -77,15 +77,23 @@ async function mockSession(page: Page) {
   }))
   await page.route('**/api/notifications/mine**', (route) => fulfillJson(route, { items: [], unread: 0 }))
   await page.route('**/api/notifications/mine/unread-count**', (route) => fulfillJson(route, { unread: 0 }))
+  await page.route('**/api/semester-context', (route) => {
+    const semester = currentSemester()
+    return fulfillJson(route, {
+      current_semester: semester ? { ...semester, is_current: true } : null,
+      revision: semester ? 1 : 0,
+      can_switch: true,
+    })
+  })
 }
 
 for (const viewport of VIEWPORTS) {
   test(`设置工作面 ${viewport.width}x${viewport.height} 覆盖空态、失败、加载与受限状态`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await mockSession(page)
-
     let semesterMode: 'empty' | 'calendar' = 'empty'
+    await mockSession(page, () => semesterMode === 'empty' ? null : SEMESTER)
+
     let pendingPeriodRoute: Route | null = null
     const requestedAdminPaths: string[] = []
     page.on('request', (request) => {
@@ -132,7 +140,7 @@ for (const viewport of VIEWPORTS) {
     await page.goto('/settings/period-tables/77')
     await expect(page.getByTestId('period-table-loading')).toBeVisible()
     await expectNoRootOverflow(page)
-    expect(pendingPeriodRoute).not.toBeNull()
+    await expect.poll(() => pendingPeriodRoute).not.toBeNull()
     await (pendingPeriodRoute as Route).fulfill({
       status: 200,
       contentType: 'application/json',
