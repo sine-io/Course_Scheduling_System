@@ -15,6 +15,7 @@ from app.schemas.notification import (
     UnreadCountOut,
 )
 from app.services import notifications as notif_service
+from app.services import semester_context
 from app.services.teachers import current_teacher
 
 router = APIRouter(tags=["notifications"])
@@ -63,11 +64,19 @@ def _get_own_notification(db: Session, notification_id: int, user: User) -> Noti
     return n
 
 
+def _require_writable(db: Session, semester_id: int) -> None:
+    try:
+        semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
+
+
 @router.post("/notifications/{notification_id}/read", response_model=NotificationOut)
 def mark_read(
     notification_id: int, db: Session = Depends(get_db), user: User = Depends(get_active_user)
 ):
     n = _get_own_notification(db, notification_id, user)
+    _require_writable(db, n.semester_id)
     notif_service.mark_read(n)
     db.commit()
     return NotificationOut.model_validate(n)
@@ -79,6 +88,7 @@ def acknowledge(
 ):
     """「确认收到」——通知层的已读确认,不影响教学任务状态(指派即生效)。"""
     n = _get_own_notification(db, notification_id, user)
+    _require_writable(db, n.semester_id)
     notif_service.acknowledge(n)
     db.commit()
     return NotificationOut.model_validate(n)
@@ -118,6 +128,7 @@ def remind(
     original = db.get(Notification, notification_id)
     if original is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到通知")
+    _require_writable(db, original.semester_id)
     if original.acknowledged_at is not None:
         raise HTTPException(status.HTTP_409_CONFLICT, "此通知已被确认,无需再提醒")
 

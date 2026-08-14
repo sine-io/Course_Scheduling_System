@@ -13,8 +13,9 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_roles
 from app.core.db import get_db
 from app.models.audit import AuditLog
+from app.models.semester import Semester
 from app.models.user import Role, User
-from app.services import demo_data
+from app.services import demo_data, semester_context
 
 router = APIRouter(tags=["demo"])
 
@@ -62,6 +63,9 @@ def create_demo_data(db: Session = Depends(get_db), user: User = Depends(admin_o
             "如需重新体验，请先删除现有学期或使用一套全新部署。",
         )
     summary = demo_data.generate(db)
+    semester = db.get(Semester, summary.semester_id)
+    if semester is not None:
+        semester_context.set_initial_current(db, semester)
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="create_demo_data",
         target_type="semester", target_id=summary.semester_id,

@@ -1,11 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { NMessageProvider } from 'naive-ui'
+import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import PeriodTableEditor from './PeriodTableEditor.vue'
 
 const mocks = vi.hoisted(() => ({
+  getSemesterContext: vi.fn(),
+  listSemesters: vi.fn(),
   getPeriodTable: vi.fn(),
   replacePeriods: vi.fn(),
 }))
@@ -23,6 +26,7 @@ function deferred<T>() {
 
 const fakeTable = {
   id: 1,
+  semester_id: 1,
   name: '测试作息时间表',
   num_weekdays: 3,
   is_default: true,
@@ -45,12 +49,16 @@ async function mountEditor() {
   await router.push('/settings/period-tables/1')
   await router.isReady()
   const Host = { render: () => h(NMessageProvider, null, { default: () => h(PeriodTableEditor) }) }
-  return mount(Host, { global: { plugins: [router] } })
+  return mount(Host, { global: { plugins: [createPinia(), router] } })
 }
 
 describe('PeriodTableEditor', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    mocks.getSemesterContext.mockResolvedValue({
+      current_semester: { id: 1, label: '当前学期' }, revision: 1, can_switch: false,
+    })
+    mocks.listSemesters.mockResolvedValue([fakeTable])
     mocks.getPeriodTable.mockResolvedValue(fakeTable)
     mocks.replacePeriods.mockResolvedValue(fakeTable)
   })
@@ -87,5 +95,19 @@ describe('PeriodTableEditor', () => {
 
     expect(wrapper.get('[data-testid="period-grid-scroll"]').classes()).toContain('settings-table-scroll')
     expect(wrapper.get('[data-testid="period-add-row"]').text()).toContain('新增节次行')
+  })
+
+  it('旧链接指向历史学期时显示只读并禁用保存入口', async () => {
+    mocks.getSemesterContext.mockResolvedValue({
+      current_semester: { id: 2, label: '当前学期' }, revision: 3, can_switch: false,
+    })
+
+    const wrapper = await mountEditor()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="period-table-readonly"]').text()).toContain('历史学期')
+    expect(wrapper.get('[data-testid="period-table-save"]').classes()).toContain('n-button--disabled')
+    expect(wrapper.get('[data-testid="period-add-row"]').classes()).toContain('n-button--disabled')
+    expect(mocks.replacePeriods).not.toHaveBeenCalled()
   })
 })

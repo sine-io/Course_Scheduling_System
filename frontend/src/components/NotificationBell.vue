@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { Bell } from '@lucide/vue'
 import { NBadge, NButton, NEmpty, NPopover, NSpace, NTag, NText, useMessage } from 'naive-ui'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { acknowledge, markRead, myNotifications } from '@/api/notifications'
 import type { Notification } from '@/api/notifications'
 import { publishedSemesters } from '@/api/timetables'
 import { listSemesters } from '@/api/semesters'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const message = useMessage()
 
 const POLL_MS = 20000 // 站内通知轮询;铃铛不需要实时更新,20 秒足够
@@ -25,11 +27,14 @@ const popoverPlacement = computed(() => compactViewport.value ? 'bottom' : 'bott
 
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
+const canWrite = computed(() =>
+  !semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 
 async function resolveSemester() {
-  // 教师看已发布课表的学期;管理者看全部学期。取最近一个。
+  await semesterContext.load()
+  // 所有角色都以服务端当前上下文为通知写入边界；没有当前学期时才兼容旧部署。
   const list = canManage.value ? await listSemesters() : await publishedSemesters()
-  sid.value = list[0]?.id ?? null
+  sid.value = semesterContext.currentSemesterId ?? list[0]?.id ?? null
 }
 
 async function refresh() {
@@ -69,16 +74,23 @@ async function onOpen(show: boolean) {
 }
 
 async function onAcknowledge(n: Notification) {
+  if (!canWrite.value) return
   await acknowledge(n.id)
   message.success('已提交确认回复')
   await refresh()
 }
 
 async function onRead(n: Notification) {
-  if (n.read_at) return
+  if (n.read_at || !canWrite.value) return
   await markRead(n.id)
   await refresh()
 }
+
+watch(() => semesterContext.revision, async () => {
+  if (!semesterContext.loaded) return
+  await resolveSemester()
+  await refresh()
+})
 
 const typeTag = computed<Record<string, string>>(() => ({
   substitution_assigned: '代课通知',

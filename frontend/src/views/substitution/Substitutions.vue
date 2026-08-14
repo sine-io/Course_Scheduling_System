@@ -16,9 +16,11 @@ import {
 } from '@/api/substitutions'
 import type { Candidate, Recommendation } from '@/api/substitutions'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './operations-workspace.css'
 
 const message = useMessage()
+const semesterContext = useSemesterContextStore()
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
@@ -36,6 +38,9 @@ const countsHours = ref(true)
 
 const actingKey = ref<string | null>(null)
 const actionError = ref<{ periodId: number; message: string } | null>(null)
+const canEdit = computed(() => (
+  !semesterContext.authoritative || semesterContext.isCurrent(sid.value)
+))
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
@@ -93,13 +98,15 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     // 保持既有请求顺序：学期和处理类型并发读取，随后读取首个学期的请假单。
     ;[semesters.value, types.value] = await Promise.all([
       listSemesters(),
       listSubstitutionTypes(),
     ])
     if (semesters.value.length) {
-      sid.value = semesters.value[0].id
+      sid.value = semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+        ?? semesters.value[0].id
       await refreshLeaves()
     } else {
       sid.value = null
@@ -154,7 +161,7 @@ async function openPeriod(period: AffectedPeriod) {
 }
 
 async function assign(period: AffectedPeriod, type: string, candidate?: Candidate) {
-  if (actingKey.value !== null) return
+  if (!canEdit.value || actingKey.value !== null) return
   const key = `${period.id}:${type}:${candidate?.teacher_id ?? 'none'}`
   actingKey.value = key
   actionError.value = null
@@ -186,7 +193,7 @@ async function assign(period: AffectedPeriod, type: string, candidate?: Candidat
 }
 
 async function undo(period: AffectedPeriod) {
-  if (actingKey.value !== null) return
+  if (!canEdit.value || actingKey.value !== null) return
   const key = `${period.id}:undo`
   actingKey.value = key
   actionError.value = null
@@ -300,6 +307,9 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
       </section>
 
       <section class="substitution-queue" data-testid="substitution-queue">
+        <n-alert v-if="!canEdit" type="info" data-testid="substitution-readonly">
+          所选学期不是当前工作学期，历史代课记录只允许查看。
+        </n-alert>
         <header class="operations-panel-heading">
           <div>
             <p class="operations-eyebrow">{{ '处理队列' }}</p>
@@ -361,7 +371,7 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
                   v-if="period.status === 'pending'"
                   size="small"
                   type="primary"
-                  :disabled="actingKey !== null"
+                  :disabled="actingKey !== null || !canEdit"
                   :aria-expanded="openId === period.id"
                   :aria-controls="`sub-panel-${period.id}`"
                   data-testid="sub-handle"
@@ -378,7 +388,7 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
                   v-else-if="period.status === 'resolved'"
                   size="small"
                   :loading="actingKey === `${period.id}:undo`"
-                  :disabled="actingKey !== null"
+                  :disabled="actingKey !== null || !canEdit"
                   data-testid="sub-undo"
                   @click="undo(period)"
                 >
@@ -466,7 +476,7 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
                             size="small"
                             type="primary"
                             :loading="isActing(period, 'substitute', candidate)"
-                            :disabled="actingKey !== null"
+                            :disabled="actingKey !== null || !canEdit"
                             data-testid="sub-pick"
                             @click="assign(period, 'substitute', candidate)"
                           >
@@ -475,7 +485,7 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
                           <n-button
                             size="small"
                             :loading="isActing(period, 'merge', candidate)"
-                            :disabled="actingKey !== null"
+                            :disabled="actingKey !== null || !canEdit"
                             data-testid="sub-merge"
                             @click="assign(period, 'merge', candidate)"
                           >
@@ -509,7 +519,7 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
                     <n-button
                       size="small"
                       :loading="isActing(period, 'self_study')"
-                      :disabled="actingKey !== null"
+                      :disabled="actingKey !== null || !canEdit"
                       data-testid="sub-selfstudy"
                       @click="assign(period, 'self_study')"
                     >
@@ -521,7 +531,7 @@ function isActing(period: AffectedPeriod, type: string, candidate?: Candidate): 
                       type="error"
                       ghost
                       :loading="isActing(period, 'cancel')"
-                      :disabled="actingKey !== null"
+                      :disabled="actingKey !== null || !canEdit"
                       data-testid="sub-cancel"
                       @click="assign(period, 'cancel')"
                     >

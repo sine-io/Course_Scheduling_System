@@ -30,7 +30,7 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (!resp.ok) {
-    let detail: string | undefined
+    let detail: unknown
     try {
       detail = (await resp.json())?.detail
     } catch {
@@ -39,7 +39,12 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     if (resp.status === 401 && !path.startsWith('/auth/')) {
       unauthorizedHandler?.()
     }
-    const err = new Error(detail || `API 错误 ${resp.status}`) as ApiError
+    const detailMessage = typeof detail === 'string'
+      ? detail
+      : detail && typeof detail === 'object' && 'message' in detail
+        ? String((detail as { message?: unknown }).message ?? '')
+        : ''
+    const err = new Error(detailMessage || `API 错误 ${resp.status}`) as ApiError
     err.status = resp.status
     err.detail = detail
     throw err

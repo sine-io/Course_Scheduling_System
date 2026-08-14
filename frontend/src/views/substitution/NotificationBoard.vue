@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { Bell, BellRing, Inbox, RefreshCw } from '@lucide/vue'
-import { NButton, NCheckbox, NEmpty, NSelect, NSpin, NTag, NText, useMessage } from 'naive-ui'
+import { NAlert, NButton, NCheckbox, NEmpty, NSelect, NSpin, NTag, NText, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { apiErrorMessage } from '@/api/client'
 import { notificationBoard, remind } from '@/api/notifications'
 import type { BoardEntry } from '@/api/notifications'
 import { listSemesters } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './operations-workspace.css'
 
 const message = useMessage()
+const semesterContext = useSemesterContextStore()
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
@@ -25,6 +27,9 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
 })))
 const unconfirmedCount = computed(() =>
   entries.value.filter((entry) => !entry.acknowledged_at).length)
+const canEdit = computed(() => (
+  !semesterContext.authoritative || semesterContext.isCurrent(sid.value)
+))
 
 const TYPE_LABEL: Record<string, string> = {
   substitution_assigned: '代课通知',
@@ -59,13 +64,16 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
     if (!semesters.value.length) {
       sid.value = null
       entries.value = []
       return
     }
-    sid.value = semesters.value[0].id
+    sid.value = semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+      ?? semesterContext.currentSemesterId
+      ?? semesters.value[0].id
     entries.value = await notificationBoard(sid.value, {
       unacknowledgedOnly: unackOnly.value,
     })
@@ -80,7 +88,7 @@ async function loadPage() {
 onMounted(loadPage)
 
 async function onRemind(entry: BoardEntry) {
-  if (remindingId.value !== null) return
+  if (!canEdit.value || remindingId.value !== null) return
   remindingId.value = entry.id
   try {
     await remind(entry.id)
@@ -169,6 +177,10 @@ function ackTag(entry: BoardEntry): { type: string; label: string } {
         </div>
       </section>
 
+      <n-alert v-if="!canEdit" type="info" data-testid="notification-readonly">
+        所选学期不是当前工作学期，历史通知只允许查看，不能再次提醒。
+      </n-alert>
+
       <section class="operations-panel report-results-panel" data-testid="notification-results">
         <header class="operations-panel-heading">
           <div>
@@ -213,7 +225,7 @@ function ackTag(entry: BoardEntry): { type: string; label: string } {
                     v-if="!entry.acknowledged_at"
                     size="small"
                     :loading="remindingId === entry.id"
-                    :disabled="remindingId !== null"
+                    :disabled="remindingId !== null || !canEdit"
                     data-testid="board-remind"
                     @click="onRemind(entry)"
                   >

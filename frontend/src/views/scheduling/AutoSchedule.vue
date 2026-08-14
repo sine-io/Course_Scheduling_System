@@ -22,11 +22,13 @@ import { listTimetables } from '@/api/timetables'
 import type { TimetableBrief } from '@/api/timetables'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling-workspace.css'
 
 const message = useMessage()
 const router = useRouter()
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 
 const POLL_MS = 2000
 const LAST_JOB_KEY = 'scheduling:auto-schedule-last-job'
@@ -53,7 +55,10 @@ const relax = ref<string[]>([])
 let timer: ReturnType<typeof setInterval> | null = null
 let pollGeneration = 0
 
-const canEdit = computed(() => auth.hasRole('admin') || auth.hasRole('scheduler'))
+const canEdit = computed(() => (
+  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
+))
 const activeJobKey = computed(() => `${LAST_JOB_KEY}:${auth.user?.id ?? 'anonymous'}`)
 
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
@@ -219,10 +224,13 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     ;[semesters.value, relaxable.value] = await Promise.all([listSemesters(), listRelaxable()])
     if (semesters.value.length) {
       const saved = readActiveJob()
       sid.value = semesters.value.find((semester) => semester.id === saved?.semesterId)?.id
+        ?? semesters.value.find((semester) => semester.is_current)?.id
+        ?? semesterContext.currentSemesterId
         ?? semesters.value[0].id
       await reload()
       await restoreActiveJob()

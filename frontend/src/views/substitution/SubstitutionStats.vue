@@ -11,10 +11,12 @@ import { getMyStats, getStats, statsExportUrl } from '@/api/substitutionStats'
 import type { MonthlyReport } from '@/api/substitutionStats'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import { formatDateWithWeekday } from './reportDate'
 import './operations-workspace.css'
 
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const route = useRoute()
 const canManage = computed(() =>
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
@@ -108,6 +110,7 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = canManage.value ? await listSemesters() : await publishedSemesters()
     if (!semesters.value.length) {
       sid.value = null
@@ -117,6 +120,8 @@ async function loadPage() {
     }
     const querySemesterId = Number(route.query.semester_id)
     const initialSemesterId = semesters.value.find((semester) => semester.id === querySemesterId)?.id
+      ?? semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+      ?? semesterContext.currentSemesterId
       ?? semesters.value[0].id
     await onSemesterChange(initialSemesterId)
   } catch (error) {

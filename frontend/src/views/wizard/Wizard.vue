@@ -17,12 +17,14 @@ import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
 import { useWizardStore } from '@/stores/wizard'
 import { useAppConfigStore } from '@/stores/appConfig'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import ImportTab from '@/views/basedata/ImportTab.vue'
 
 const router = useRouter()
 const message = useMessage()
 const wizard = useWizardStore()
 const appConfig = useAppConfigStore()
+const semesterContext = useSemesterContextStore()
 
 const step = ref(0)
 const templates = ref<Template[]>([])
@@ -50,6 +52,9 @@ const periodTable = computed(() => (
   semester.value?.period_tables.find((table) => table.is_default)
   ?? semester.value?.period_tables[0]
   ?? null
+))
+const canEditSemester = computed(() => (
+  !semesterContext.authoritative || semesterContext.isCurrent(semesterId.value)
 ))
 
 async function loadSummary(id: number) {
@@ -85,6 +90,7 @@ async function loadWizardData() {
   initialError.value = null
   actionError.value = null
   try {
+    await semesterContext.load()
     templates.value = await listTemplates()
     templateKey.value ??= templates.value[0]?.key ?? null
 
@@ -441,7 +447,7 @@ onMounted(loadWizardData)
         <!-- 步骤 3：导入数据 -->
         <div v-else-if="step === 3" class="wizard-step-content">
           <p class="wizard-step-intro">{{ '下载模板填写后上传，批量创建教师、班级和科目（可跳过，稍后在基础数据中补充）。' }}</p>
-          <ImportTab v-if="semesterId" :semester-id="semesterId" />
+          <ImportTab v-if="semesterId" :semester-id="semesterId" :can-edit="canEditSemester" />
           <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-import-empty" />
         </div>
 

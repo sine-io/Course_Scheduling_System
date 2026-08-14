@@ -18,16 +18,21 @@ import {
 import type { Completeness, TimetableBrief } from '@/api/timetables'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling-workspace.css'
 
 type ActionKind = 'create' | 'check' | 'publish' | 'duplicate' | 'rename' | 'delete' | 'force-publish'
 
 const message = useMessage()
 const auth = useAuthStore()
-const canEdit = computed(() => auth.hasRole('admin') || auth.hasRole('scheduler'))
+const semesterContext = useSemesterContextStore()
 
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
+const canEdit = computed(() => (
+  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
+))
 const items = ref<TimetableBrief[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -58,8 +63,12 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
-    sid.value = semesters.value[0]?.id ?? null
+    sid.value = semesters.value.find((semester) => semester.is_current)?.id
+      ?? semesterContext.currentSemesterId
+      ?? semesters.value[0]?.id
+      ?? null
     await reload()
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取课表版本，请重试。')
@@ -385,7 +394,7 @@ async function onCheck(timetable: TimetableBrief) {
       </section>
     </template>
 
-    <n-modal v-model:show="renameShow" preset="card" :title="'课表改名'" class="versions-modal">
+    <n-modal v-if="canEdit" v-model:show="renameShow" preset="card" :title="'课表改名'" class="versions-modal">
       <div class="scheduling-form">
         <label class="scheduling-field">
           <span>{{ '课表名称' }}</span>
@@ -397,7 +406,7 @@ async function onCheck(timetable: TimetableBrief) {
             type="primary"
             data-testid="v-rename-save"
             :loading="isPending('rename', renameTarget?.id ?? null)"
-            :disabled="!renameValue.trim() || pending !== null"
+            :disabled="!canEdit || !renameValue.trim() || pending !== null"
             @click="onRename"
           >
             {{ '保存' }}
@@ -406,7 +415,7 @@ async function onCheck(timetable: TimetableBrief) {
       </div>
     </n-modal>
 
-    <n-modal v-model:show="warnShow" preset="card" :title="'尚有教学任务未排完'" class="versions-publish-modal">
+    <n-modal v-if="canEdit" v-model:show="warnShow" preset="card" :title="'尚有教学任务未排完'" class="versions-publish-modal">
       <div class="versions-warning-content">
         <n-alert type="warning">
           {{ '共' }} {{ report?.remaining }} {{ '节未排入（已排' }} {{ report?.placed }} / {{ '应排' }} {{ report?.required }} {{ '节）。仍可强制发布，未排教学任务将不出现在课表上。' }}
@@ -424,12 +433,12 @@ async function onCheck(timetable: TimetableBrief) {
           </table>
         </div>
         <div class="scheduling-modal-actions">
-          <n-button :disabled="pending !== null" @click="warnShow = false">{{ '取消' }}</n-button>
+          <n-button :disabled="!canEdit || pending !== null" @click="warnShow = false">{{ '取消' }}</n-button>
           <n-button
             type="warning"
             data-testid="v-force-publish"
             :loading="isPending('force-publish', publishTarget?.id ?? null)"
-            :disabled="pending !== null"
+            :disabled="!canEdit || pending !== null"
             @click="onForcePublish"
           >
             {{ '仍要发布' }}

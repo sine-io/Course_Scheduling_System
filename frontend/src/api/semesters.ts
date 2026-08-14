@@ -1,6 +1,6 @@
 // 学期与作息时间表 API 类型与调用封装。
 
-import { apiGet, apiPost, request } from '@/api/client'
+import { apiGet, apiPost, apiPut, request } from '@/api/client'
 
 export type PeriodType = 'regular' | 'morning' | 'lunch' | 'homeroom' | 'reserved'
 
@@ -16,6 +16,7 @@ export interface Period {
 
 export interface PeriodTable {
   id: number
+  semester_id?: number
   name: string
   num_weekdays: number
   is_default: boolean
@@ -31,6 +32,7 @@ export interface SemesterListItem {
   readiness: 'draft' | 'ready'
   start_date: string | null
   end_date: string | null
+  is_current?: boolean
 }
 
 export interface Semester extends SemesterListItem {
@@ -62,6 +64,19 @@ export const STATUS_LABELS: Record<SemesterListItem['status'], string> = {
 export const listTemplates = () => apiGet<Template[]>('/school-templates')
 export const listSemesters = () => apiGet<SemesterListItem[]>('/semesters')
 export const getSemester = (id: number) => apiGet<Semester>(`/semesters/${id}`)
+
+export interface SemesterContext {
+  current_semester: SemesterListItem | null
+  revision: number
+  can_switch: boolean
+}
+
+export const getSemesterContext = () => apiGet<SemesterContext>('/semester-context')
+export const switchSemesterContext = (semesterId: number, expectedRevision: number) =>
+  apiPut<SemesterContext>('/semester-context', {
+    semester_id: semesterId,
+    expected_revision: expectedRevision,
+  })
 export const createSemester = (body: {
   academic_year: number
   term: number

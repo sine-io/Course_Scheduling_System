@@ -3,12 +3,14 @@ import {
   AlertTriangle, CalendarCheck2, CheckCircle2, Pencil, Plus, RefreshCw, Trash2,
 } from '@lucide/vue'
 import {
-  NButton, NDatePicker, NEmpty, NInput, NPopconfirm, NSelect, NSpin, NTag, useMessage,
+  NAlert, NButton, NDatePicker, NEmpty, NInput, NPopconfirm, NSelect, NSpin, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
+import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import type { SemesterListItem } from '@/api/semesters'
 import {
   confirmSemesterReadiness, createCalendarException, deleteCalendarException,
@@ -18,6 +20,8 @@ import type { CalendarException, CalendarExceptionKind, SemesterReadiness } from
 import './settings-workspace.css'
 
 const message = useMessage()
+const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const route = useRoute()
 const router = useRouter()
 const semesters = ref<SemesterListItem[]>([])
@@ -58,6 +62,10 @@ function resetForm() {
 }
 
 const editingExceptionId = ref<number | null>(null)
+const canEdit = computed(() => (
+  (!auth.user || auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(selectedSemesterId.value))
+))
 
 async function loadSemesterData(id = selectedSemesterId.value) {
   if (!id) {
@@ -92,11 +100,15 @@ async function loadPage() {
   loadError.value = null
   dataError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
     const queryId = Number(route.query.semester)
     selectedSemesterId.value = semesters.value.some((semester) => semester.id === queryId)
       ? queryId
-      : (semesters.value[0]?.id ?? null)
+      : (semesters.value.find((semester) => semester.is_current)?.id
+        ?? semesterContext.currentSemesterId
+        ?? semesters.value[0]?.id
+        ?? null)
     await loadSemesterData()
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取校历数据，请重试。')
@@ -119,6 +131,7 @@ async function selectSemester(value: number | null) {
 }
 
 function beginEdit(item: CalendarException) {
+  if (!canEdit.value) return
   editingExceptionId.value = item.id
   form.value = {
     date: item.date,
@@ -129,7 +142,7 @@ function beginEdit(item: CalendarException) {
 }
 
 async function saveException() {
-  if (saving.value) return
+  if (!canEdit.value || saving.value) return
   if (!selectedSemesterId.value || !form.value.date) {
     message.warning('请选择日期')
     return
@@ -163,7 +176,7 @@ async function saveException() {
 }
 
 async function removeException(id: number) {
-  if (deletingExceptionId.value !== null) return
+  if (!canEdit.value || deletingExceptionId.value !== null) return
   deletingExceptionId.value = id
   try {
     await deleteCalendarException(id)
@@ -177,7 +190,7 @@ async function removeException(id: number) {
 }
 
 async function confirmReady() {
-  if (!selectedSemesterId.value || confirmingReady.value) return
+  if (!canEdit.value || !selectedSemesterId.value || confirmingReady.value) return
   confirmingReady.value = true
   try {
     readiness.value = await confirmSemesterReadiness(selectedSemesterId.value)
@@ -237,6 +250,9 @@ async function confirmReady() {
           data-testid="calendar-semester-select"
           @update:value="selectSemester"
         />
+        <n-alert v-if="selectedSemesterId && !canEdit" type="info" data-testid="calendar-readonly">
+          当前所选学期不是当前工作学期，校历修改仅限当前学期。
+        </n-alert>
       </section>
 
       <section v-if="!semesters.length" class="settings-panel settings-empty" data-testid="calendar-empty">
@@ -271,27 +287,27 @@ async function confirmReady() {
             <div class="settings-form-grid">
               <div class="settings-field">
                 <label for="calendar-date">{{ '日期' }}</label>
-                <n-date-picker id="calendar-date" v-model:formatted-value="form.date" value-format="yyyy-MM-dd" type="date" />
+                <n-date-picker id="calendar-date" v-model:formatted-value="form.date" value-format="yyyy-MM-dd" type="date" :disabled="!canEdit" />
               </div>
               <div class="settings-field">
                 <span class="settings-field-label">{{ '类型' }}</span>
-                <n-select v-model:value="form.kind" :options="kindOptions" />
+                <n-select v-model:value="form.kind" :options="kindOptions" :disabled="!canEdit" />
               </div>
               <div v-if="form.kind === 'makeup_instruction'" class="settings-field">
                 <span class="settings-field-label">{{ '按哪天课表上课' }}</span>
-                <n-select v-model:value="form.makeup_weekday" :options="weekdayOptions" placeholder="选择星期" />
+                <n-select v-model:value="form.makeup_weekday" :options="weekdayOptions" placeholder="选择星期" :disabled="!canEdit" />
               </div>
               <div class="settings-field">
                 <label for="calendar-note">{{ '备注' }}</label>
-                <n-input id="calendar-note" v-model:value="form.note" placeholder="可选" />
+                <n-input id="calendar-note" v-model:value="form.note" placeholder="可选" :disabled="!canEdit" />
               </div>
             </div>
             <div class="settings-actions">
-              <n-button type="primary" data-testid="calendar-save" :loading="saving" :disabled="saving" @click="saveException">
+              <n-button type="primary" data-testid="calendar-save" :loading="saving" :disabled="saving || !canEdit" @click="saveException">
                 <template #icon><Plus v-if="editingExceptionId === null" :size="15" aria-hidden="true" /><Pencil v-else :size="15" aria-hidden="true" /></template>
                 {{ editingExceptionId === null ? '添加特殊日期' : '保存修改' }}
               </n-button>
-              <n-button v-if="editingExceptionId !== null" data-testid="calendar-cancel-edit" :disabled="saving" @click="resetForm">{{ '取消编辑' }}</n-button>
+              <n-button v-if="editingExceptionId !== null" data-testid="calendar-cancel-edit" :disabled="saving || !canEdit" @click="resetForm">{{ '取消编辑' }}</n-button>
             </div>
 
             <div v-if="!exceptions.length" class="settings-empty" data-testid="calendar-exceptions-empty">
@@ -307,11 +323,11 @@ async function confirmReady() {
                   <n-tag :type="item.kind === 'no_instruction' ? 'error' : 'success'" size="small">
                     {{ item.kind === 'no_instruction' ? '停课' : `补课（按星期${item.makeup_weekday}课表）` }}
                   </n-tag>
-                  <n-button size="small" @click="beginEdit(item)">
+                  <n-button v-if="canEdit" size="small" @click="beginEdit(item)">
                     <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                     {{ '编辑' }}
                   </n-button>
-                  <n-popconfirm :disabled="deletingExceptionId !== null" @positive-click="removeException(item.id)">
+                  <n-popconfirm v-if="canEdit" :disabled="deletingExceptionId !== null" @positive-click="removeException(item.id)">
                     <template #trigger>
                       <n-button
                         :data-testid="`calendar-delete-${item.id}`"
@@ -344,7 +360,7 @@ async function confirmReady() {
                 {{ readiness?.ready ? '已确认' : '待完善' }}
               </n-tag>
               <span class="settings-field-hint">{{ `已维护 ${readiness?.calendar_exception_count ?? 0} 个特殊日期` }}</span>
-              <n-button v-if="!readiness?.ready" type="primary" data-testid="calendar-ready" :loading="confirmingReady" :disabled="confirmingReady" @click="confirmReady">
+              <n-button v-if="!readiness?.ready" type="primary" data-testid="calendar-ready" :loading="confirmingReady" :disabled="confirmingReady || !canEdit" @click="confirmReady">
                 <template #icon><CheckCircle2 :size="15" aria-hidden="true" /></template>
                 {{ '确认排课准备完成' }}
               </n-button>

@@ -28,7 +28,7 @@ from app.models.constraint import ConstraintConfig
 from app.models.leave import AffectedPeriod, AffectedStatus, LeaveRequest, LeaveStatus, LeaveType
 from app.models.notification import Notification, NotificationType
 from app.models.period import Period, PeriodTable, PeriodType
-from app.models.semester import Semester, SemesterReadiness, SemesterStatus
+from app.models.semester import Semester, SemesterContext, SemesterReadiness, SemesterStatus
 from app.models.substitution import Substitution, SubstitutionType
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
 from app.models.user import Role, User, UserRole
@@ -39,6 +39,7 @@ __all__ = [
     "User",
     "UserRole",
     "Semester",
+    "SemesterContext",
     "SemesterStatus",
     "SemesterReadiness",
     "PeriodTable",

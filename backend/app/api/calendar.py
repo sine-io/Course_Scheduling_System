@@ -18,6 +18,7 @@ from app.schemas.calendar import (
     SemesterReadinessOut,
 )
 from app.services import calendar as calendar_service
+from app.services import semester_context
 
 router = APIRouter(tags=["calendar"])
 
@@ -30,6 +31,13 @@ def _semester(db: Session, semester_id: int) -> Semester:
     if semester is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
     return semester
+
+
+def _writable_semester(db: Session, semester_id: int) -> Semester:
+    try:
+        return semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def _out(row: SemesterCalendarException) -> CalendarExceptionOut:
@@ -82,7 +90,7 @@ def create_exception(
     db: Session = Depends(get_db),
     user: User = Depends(editor),
 ) -> CalendarExceptionOut:
-    semester = _semester(db, semester_id)
+    semester = _writable_semester(db, semester_id)
     try:
         calendar_service.validate_exception_date(semester, body.date)
         calendar_service.validate_exception_fields(body.kind.value, body.makeup_weekday)
@@ -124,7 +132,7 @@ def update_exception(
     row = db.get(SemesterCalendarException, exception_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到该特殊日期")
-    semester = _semester(db, row.semester_id)
+    semester = _writable_semester(db, row.semester_id)
     data = body.model_dump(exclude_unset=True)
     kind = data.get("kind", row.kind)
     if hasattr(kind, "value"):
@@ -164,7 +172,7 @@ def delete_exception(
     row = db.get(SemesterCalendarException, exception_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到该特殊日期")
-    semester = _semester(db, row.semester_id)
+    semester = _writable_semester(db, row.semester_id)
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="delete_calendar_exception",
         target_type="semester_calendar_exception", target_id=row.id,
@@ -186,7 +194,7 @@ def get_readiness(
 def confirm_readiness(
     semester_id: int, db: Session = Depends(get_db), user: User = Depends(editor)
 ) -> SemesterReadinessOut:
-    semester = _semester(db, semester_id)
+    semester = _writable_semester(db, semester_id)
     issues = calendar_service.readiness_issues(db, semester)
     if issues:
         raise HTTPException(
@@ -219,7 +227,7 @@ def confirm_ready_alias(
 def revoke_readiness(
     semester_id: int, db: Session = Depends(get_db), user: User = Depends(editor)
 ) -> SemesterReadinessOut:
-    semester = _semester(db, semester_id)
+    semester = _writable_semester(db, semester_id)
     semester.readiness = SemesterReadiness.draft.value
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="revoke_semester_readiness",

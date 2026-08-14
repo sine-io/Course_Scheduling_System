@@ -15,9 +15,11 @@ import { listSemesters } from '@/api/semesters'
 import { publishedSemesters } from '@/api/timetables'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import '../substitution/operations-workspace.css'
 
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const message = useMessage()
 
 // 排课管理员/主任可代登、可看全校;教师只登记自己的假、只看自己的假单。
@@ -104,9 +106,13 @@ async function loadPage() {
   try {
     // 保持既有初始化顺序：类型 -> 学期 -> 请假单 -> 可代登记教师。
     leaveTypes.value = await listLeaveTypes()
+    await semesterContext.load()
     semesters.value = canManage.value ? await listSemesters() : await publishedSemesters()
     if (semesters.value.length) {
-      sid.value = semesters.value[0].id
+      sid.value = canManage.value
+        ? (semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+          ?? semesters.value[0].id)
+        : (semesterContext.currentSemesterId ?? semesters.value[0].id)
       await refreshRecords()
     } else {
       sid.value = null
@@ -129,7 +135,10 @@ onMounted(loadPage)
 
 const canSubmit = computed(() =>
   !!sid.value && !!form.value.startDate && !!form.value.endDate
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
   && (!canManage.value || !!form.value.teacherId))
+const canWriteSelectedSemester = computed(() =>
+  !!sid.value && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value)))
 
 async function onSubmit() {
   if (!sid.value || !canSubmit.value || saving.value) return
@@ -167,7 +176,7 @@ async function onSubmit() {
 }
 
 async function onCancel(leave: LeaveRequest) {
-  if (cancellingId.value !== null) return
+  if (!canWriteSelectedSemester.value || cancellingId.value !== null) return
   cancellingId.value = leave.id
   try {
     const result = await cancelLeave(leave.id)
@@ -421,7 +430,7 @@ function rangeText(leave: LeaveRequest): string {
                 </div>
               </div>
 
-              <n-popconfirm v-if="leave.status === 'registered'" @positive-click="onCancel(leave)">
+              <n-popconfirm v-if="leave.status === 'registered' && canWriteSelectedSemester" @positive-click="onCancel(leave)">
                 <template #trigger>
                   <n-button
                     size="small"

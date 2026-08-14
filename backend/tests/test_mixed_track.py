@@ -77,7 +77,19 @@ def test_assign_cross_semester_table_rejected(env2):
     client, sem = env2
     sid = sem["id"]
     other = client.post("/api/semesters", json={"academic_year": 2026, "term": 2}).json()
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": other["id"], "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     foreign = _add_table(client, other["id"], "外部作息时间表")["id"]
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": sid, "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     r = client.post(
         f"/api/class-units?semester_id={sid}",
         json={"grade": 1, "name": "X", "track": "junior_high", "period_table_id": foreign},

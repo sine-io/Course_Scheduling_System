@@ -18,7 +18,6 @@ from app.models.assignment import (
     SchedulingUnitType,
 )
 from app.models.basedata import ClassUnit, Room, Subject, Teacher
-from app.models.semester import Semester
 from app.models.user import Role
 from app.schemas.assignment import (
     AssignmentIn,
@@ -29,6 +28,7 @@ from app.schemas.assignment import (
     TeacherLoad,
 )
 from app.services import assignments as svc
+from app.services import semester_context
 
 router = APIRouter(tags=["assignments"])
 
@@ -37,8 +37,10 @@ editor = require_roles(Role.scheduler)
 
 
 def _require_semester(db: Session, semester_id: int) -> None:
-    if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    try:
+        semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def _domain(exc: svc.DomainError) -> HTTPException:
@@ -88,6 +90,7 @@ def delete_group(
     unit = db.get(SchedulingUnit, unit_id)
     if unit is None or unit.unit_type != SchedulingUnitType.group.value:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到走班群组")
+    _require_semester(db, unit.semester_id)
     db.delete(unit)  # 级联删除其教学任务
     db.commit()
 
@@ -234,6 +237,7 @@ def update_assignment(
     a = db.get(CourseAssignment, assignment_id)
     if a is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
+    _require_semester(db, a.semester_id)
     _validate_refs(db, a.semester_id, body)
     unit = _resolve_unit(db, a.semester_id, body)
     a.scheduling_unit_id = unit.id
@@ -251,5 +255,6 @@ def delete_assignment(
     a = db.get(CourseAssignment, assignment_id)
     if a is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
+    _require_semester(db, a.semester_id)
     db.delete(a)
     db.commit()

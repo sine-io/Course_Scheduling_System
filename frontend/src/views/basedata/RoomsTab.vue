@@ -80,11 +80,13 @@ const form = ref<{ name: string; room_type: RoomType; capacity: number | null; s
 })
 
 function openCreate() {
+  if (!props.canEdit) return
   editingId.value = null
   form.value = { name: '', room_type: 'normal', capacity: null, subject_ids: [] }
   show.value = true
 }
 function openEdit(room: Room) {
+  if (!props.canEdit) return
   editingId.value = room.id
   form.value = {
     name: room.name,
@@ -99,7 +101,7 @@ function closeModal() {
 }
 
 async function save() {
-  if (saving.value) return
+  if (!props.canEdit || saving.value) return
   if (!form.value.name) {
     message.warning('请输入教室/场地名称')
     return
@@ -119,7 +121,7 @@ async function save() {
 }
 
 async function remove(room: Room) {
-  if (deletingId.value !== null) return
+  if (!props.canEdit || deletingId.value !== null) return
   deletingId.value = room.id
   try {
     await deleteRoom(room.id)
@@ -226,7 +228,7 @@ async function remove(room: Room) {
       </table>
     </div>
 
-    <n-modal v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑教室/场地' : '新增教室/场地'">
+    <n-modal v-if="canEdit" v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑教室/场地' : '新增教室/场地'">
       <div class="basedata-form">
         <div class="basedata-field">
           <label for="room-name">{{ '名称' }}</label>
@@ -265,11 +267,11 @@ async function remove(room: Room) {
           />
         </div>
         <div class="basedata-modal-actions">
-          <n-button quaternary :disabled="saving" @click="closeModal">
+          <n-button quaternary :disabled="!canEdit || saving" @click="closeModal">
             <template #icon><X :size="15" aria-hidden="true" /></template>
             {{ '取消' }}
           </n-button>
-          <n-button type="primary" data-testid="room-save" :loading="saving" :disabled="saving" @click="save">
+          <n-button type="primary" data-testid="room-save" :loading="saving" :disabled="!canEdit || saving" @click="save">
             <template #icon><Save :size="15" aria-hidden="true" /></template>
             {{ '保存' }}
           </n-button>

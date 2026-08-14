@@ -7,7 +7,16 @@ import enum
 from datetime import date, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.db import Base
@@ -46,6 +55,12 @@ class Semester(Base):
         server_default=SemesterReadiness.draft.value,
     )
 
+    # 当前学期不是 Semester 的生命周期状态，而是单校工作上下文。
+    # 通过反向关系投影，避免在每张学期记录上复制一份可竞争的上下文状态。
+    current_context: Mapped["SemesterContext | None"] = relationship(
+        back_populates="current_semester", uselist=False, lazy="selectin"
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -58,3 +73,34 @@ class Semester(Base):
     @property
     def label(self) -> str:
         return format_semester_label(self.academic_year, self.term)
+
+    @property
+    def is_current(self) -> bool:
+        """该学期是否是学校唯一的当前工作上下文。"""
+        return self.current_context is not None
+
+
+class SemesterContext(Base):
+    """单校唯一的当前学期指针。
+
+    只允许 id=1 的一行记录。切换时锁定这行，普通学期写入持共享锁，
+    使切换和写入在数据库事务边界上有明确顺序。
+    """
+
+    __tablename__ = "semester_context"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="singleton"),
+        UniqueConstraint(
+            "current_semester_id", name="uq_semester_context_current_semester"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    current_semester_id: Mapped[int | None] = mapped_column(
+        ForeignKey("semesters.id", ondelete="SET NULL"), nullable=True
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+
+    current_semester: Mapped[Semester | None] = relationship(
+        back_populates="current_context", lazy="joined"
+    )

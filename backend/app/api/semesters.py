@@ -7,18 +7,20 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
+from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.models.basedata import ClassUnit, Room, Subject, Teacher
 from app.models.period import Period, PeriodTable
 from app.models.semester import Semester
-from app.models.user import Role
+from app.models.user import Role, User
 from app.schemas.semester import (
     AvailableSlot,
     PeriodIn,
     PeriodTableCreate,
     PeriodTableOut,
     PeriodTableUpdate,
+    SemesterContextOut,
+    SemesterContextSwitch,
     SemesterCopyRequest,
     SemesterCreate,
     SemesterListItem,
@@ -28,6 +30,7 @@ from app.schemas.semester import (
 )
 from app.schemas.wizard import SemesterSummary
 from app.services import period_tables as pt_service
+from app.services import semester_context
 from app.services import templates as tpl
 from app.services.calendar import readiness_issues
 from app.services.school_rules import validate_academic_year
@@ -45,6 +48,45 @@ def _get_semester(db: Session, semester_id: int) -> Semester:
     if semester is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
     return semester
+
+
+def _require_writable(db: Session, semester_id: int, *, lock: str = "share") -> Semester:
+    try:
+        return semester_context.require_writable(db, semester_id, lock=lock)  # type: ignore[arg-type]
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
+
+
+def _semester_list_item(
+    db: Session, semester: Semester, current_id: int | None = None
+) -> SemesterListItem:
+    if current_id is None:
+        current_id = semester_context.read_context(db)[0].current_semester_id
+    return SemesterListItem.model_validate(semester).model_copy(
+        update={"is_current": semester.id == current_id}
+    )
+
+
+def _semester_out(db: Session, semester: Semester, current_id: int | None = None) -> SemesterOut:
+    item = _semester_list_item(db, semester, current_id)
+    return SemesterOut.model_validate(semester).model_copy(
+        update={"is_current": item.is_current}
+    )
+
+
+def _context_out(db: Session, user: User) -> SemesterContextOut:
+    row, current = semester_context.read_context(db)
+    return SemesterContextOut(
+        current_semester=(
+            _semester_list_item(db, current, row.current_semester_id) if current else None
+        ),
+        revision=row.revision,
+        can_switch=bool(user.role_names & {Role.admin.value, Role.scheduler.value}),
+    )
+
+
+def _context_http_error(exc: semester_context.SemesterContextError) -> HTTPException:
+    return HTTPException(exc.status_code, {"code": exc.code, "message": exc.message})
 
 
 def _get_period_table(db: Session, table_id: int) -> PeriodTable:
@@ -81,17 +123,42 @@ def list_templates(_: object = Depends(viewer)) -> list[TemplateOut]:
 
 
 # ── 学期 ──────────────────────────────
+@router.get("/semester-context", response_model=SemesterContextOut)
+def get_semester_context(user: User = Depends(get_active_user), db: Session = Depends(get_db)):
+    """读取所有登录角色共享的当前学期工作边界。"""
+    return _context_out(db, user)
+
+
+@router.put("/semester-context", response_model=SemesterContextOut)
+def put_semester_context(
+    body: SemesterContextSwitch,
+    db: Session = Depends(get_db),
+    user: User = Depends(editor),
+):
+    """以版本号切换当前学期，防止并发页面静默覆盖选择。"""
+    try:
+        semester_context.switch_current(db, body.semester_id, body.expected_revision)
+    except semester_context.SemesterContextError as exc:
+        raise _context_http_error(exc) from exc
+    db.commit()
+    return _context_out(db, user)
+
+
 @router.get("/semesters", response_model=list[SemesterListItem])
 def list_semesters(db: Session = Depends(get_db), _: object = Depends(viewer)):
-    return db.scalars(
+    current_id = semester_context.read_context(db)[0].current_semester_id
+    return [
+        _semester_list_item(db, semester, current_id)
+        for semester in db.scalars(
         select(Semester).order_by(Semester.academic_year.desc(), Semester.term.desc())
-    ).all()
+        ).all()
+    ]
 
 
 @router.post("/semesters", response_model=SemesterOut, status_code=status.HTTP_201_CREATED)
 def create_semester(
     body: SemesterCreate, db: Session = Depends(get_db), _: object = Depends(editor)
-) -> Semester:
+) -> SemesterOut:
     try:
         validate_academic_year(body.academic_year)
     except ValueError as exc:
@@ -123,9 +190,11 @@ def create_semester(
             end_date=body.end_date,
         )
         db.add(semester)
+    db.flush()
+    semester_context.set_initial_current(db, semester)
     db.commit()
     db.refresh(semester)
-    return semester
+    return _semester_out(db, semester)
 
 
 @router.post(
@@ -136,7 +205,7 @@ def copy_to_new_semester(
     body: SemesterCopyRequest,
     db: Session = Depends(get_db),
     _: object = Depends(editor),
-) -> Semester:
+) -> SemesterOut:
     try:
         validate_academic_year(body.academic_year)
     except ValueError as exc:
@@ -164,14 +233,14 @@ def copy_to_new_semester(
     )
     db.commit()
     db.refresh(new)
-    return new
+    return _semester_out(db, new)
 
 
 @router.get("/semesters/{semester_id}", response_model=SemesterOut)
 def get_semester(
     semester_id: int, db: Session = Depends(get_db), _: object = Depends(viewer)
-) -> Semester:
-    return _get_semester(db, semester_id)
+) -> SemesterOut:
+    return _semester_out(db, _get_semester(db, semester_id))
 
 
 @router.get("/semesters/{semester_id}/summary", response_model=SemesterSummary)
@@ -197,8 +266,8 @@ def update_semester(
     body: SemesterUpdate,
     db: Session = Depends(get_db),
     _: object = Depends(editor),
-) -> Semester:
-    semester = _get_semester(db, semester_id)
+) -> SemesterOut:
+    semester = _require_writable(db, semester_id, lock="update")
     data = body.model_dump(exclude_unset=True)
     dates_changed = "start_date" in data or "end_date" in data
     if "status" in data and data["status"] is not None:
@@ -222,16 +291,19 @@ def update_semester(
         semester.readiness = data["readiness"].value
     elif dates_changed and semester.readiness == "ready":
         semester.readiness = "draft"
+    if semester.status == "archived":
+        semester_context.clear_current_if_matches(db, semester.id)
     db.commit()
     db.refresh(semester)
-    return semester
+    return _semester_out(db, semester)
 
 
 @router.delete("/semesters/{semester_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_semester(
     semester_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
 ) -> None:
-    semester = _get_semester(db, semester_id)
+    semester = _require_writable(db, semester_id, lock="update")
+    semester_context.clear_current_if_matches(db, semester.id)
     db.delete(semester)
     db.commit()
 
@@ -248,7 +320,7 @@ def create_period_table(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> PeriodTable:
-    _get_semester(db, semester_id)
+    _require_writable(db, semester_id)
 
     if body.template_key:
         template = tpl.get_template(body.template_key)
@@ -289,7 +361,7 @@ def update_period_table(
     _: object = Depends(editor),
 ) -> PeriodTable:
     table = _get_period_table(db, table_id)
-    semester = db.get(Semester, table.semester_id)
+    semester = _require_writable(db, table.semester_id)
     data = body.model_dump(exclude_unset=True)
     if data.get("name") is not None:
         table.name = data["name"]
@@ -309,7 +381,7 @@ def delete_period_table(
     table_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
 ) -> None:
     table = _get_period_table(db, table_id)
-    semester = db.get(Semester, table.semester_id)
+    semester = _require_writable(db, table.semester_id)
     ref_count = db.scalar(
         select(func.count()).select_from(ClassUnit).where(ClassUnit.period_table_id == table_id)
     )
@@ -333,7 +405,7 @@ def replace_periods(
 ) -> PeriodTable:
     """整批取代作息时间表的所有单元格(视觉化编辑器存储用)。"""
     table = _get_period_table(db, table_id)
-    semester = db.get(Semester, table.semester_id)
+    semester = _require_writable(db, table.semester_id)
 
     seen: set[tuple[int, int]] = set()
     for p in periods:

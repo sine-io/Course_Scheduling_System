@@ -4,6 +4,10 @@ import { SEM_END, SEM_START } from './dates'
 // 专用于 E2E 的排课管理员账号（由验收前置步骤通过 sudo docker exec 创建，不删除）。
 export const E2E_USER = 'e2e_scheduler'
 export const E2E_PASS = 'e2etest1234'
+export const E2E_DIRECTOR_USER = 'e2e_director'
+export const E2E_DIRECTOR_PASS = 'e2edirector1234'
+export const E2E_TEACHER_USER = 'e2e_teacher'
+export const E2E_TEACHER_PASS = 'e2eteacher1234'
 
 export const JUNIOR_HIGH_SLOTS = [
   [1, '早自习', '07:50', '08:20', 'morning'],
@@ -53,6 +57,15 @@ async function responseJson<T>(response: APIResponse): Promise<T> {
     throw new Error(`${response.url()}：${await response.text()}`)
   }
   return response.json() as Promise<T>
+}
+
+export async function switchCurrentSemester(page: Page, semesterId: number): Promise<void> {
+  const context = await responseJson<{ revision: number }>(
+    await page.request.get('/api/semester-context'),
+  )
+  await responseJson(await page.request.put('/api/semester-context', {
+    data: { semester_id: semesterId, expected_revision: context.revision },
+  }))
 }
 
 export function semesterLabel(year: number, term = 1): string {
@@ -112,6 +125,8 @@ export async function createTestSemester(
       },
     }),
   )
+  // All setup writes below must be made in the same globally selected context.
+  await switchCurrentSemester(page, semester.id)
   await createTestPeriodTable(
     page,
     semester.id,
@@ -142,9 +157,17 @@ export async function login(page: Page, user = E2E_USER, pass = E2E_PASS): Promi
 /** 删除指定学年学期(idempotent),避免测试数据残留或冲突。 */
 export async function deleteSemesterByYearTerm(page: Page, year: number, term: number): Promise<void> {
   const resp = await page.request.get('/api/semesters')
-  const list = (await resp.json()) as Array<{ id: number; academic_year: number; term: number }>
+  const list = (await resp.json()) as Array<{
+    id: number
+    academic_year: number
+    term: number
+    status?: string
+    is_current?: boolean
+  }>
   for (const s of list) {
     if (s.academic_year === year && s.term === term) {
+      if (s.status === 'archived') continue
+      if (!s.is_current) await switchCurrentSemester(page, s.id)
       await page.request.delete(`/api/semesters/${s.id}`)
     }
   }

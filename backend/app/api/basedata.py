@@ -20,7 +20,6 @@ from app.models.basedata import (
     teacher_subjects,
 )
 from app.models.period import PeriodTable
-from app.models.semester import Semester
 from app.models.user import Role, User, UserRole
 from app.schemas.basedata import (
     BindableAccount,
@@ -37,6 +36,7 @@ from app.schemas.basedata import (
 )
 from app.schemas.semester import AvailableSlot, PeriodTableOut
 from app.services import period_tables as pt_service
+from app.services import semester_context
 
 router = APIRouter(tags=["basedata"])
 
@@ -44,9 +44,11 @@ viewer = require_roles(Role.scheduler, Role.director)
 editor = require_roles(Role.scheduler)
 
 
-def _require_semester(db: Session, semester_id: int) -> None:
-    if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+def _require_writable(db: Session, semester_id: int) -> None:
+    try:
+        semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def _resolve_subjects(db: Session, semester_id: int, ids: list[int]) -> list[Subject]:
@@ -81,7 +83,7 @@ def create_subject(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> Subject:
-    _require_semester(db, semester_id)
+    _require_writable(db, semester_id)
     subject = Subject(
         semester_id=semester_id,
         name=body.name,
@@ -103,6 +105,7 @@ def update_subject(
     subject = db.get(Subject, subject_id)
     if subject is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到科目")
+    _require_writable(db, subject.semester_id)
     subject.name = body.name
     subject.domain = body.domain
     subject.required_room_type = body.required_room_type.value if body.required_room_type else None
@@ -120,6 +123,7 @@ def delete_subject(
     subject = db.get(Subject, subject_id)
     if subject is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到科目")
+    _require_writable(db, subject.semester_id)
     t_count = db.scalar(
         select(func.count()).select_from(teacher_subjects).where(
             teacher_subjects.c.subject_id == subject_id
@@ -210,7 +214,7 @@ def create_teacher(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> Teacher:
-    _require_semester(db, semester_id)
+    _require_writable(db, semester_id)
     _validate_teacher_user(db, semester_id, body.user_id)
     teacher = Teacher(
         semester_id=semester_id,
@@ -250,6 +254,7 @@ def update_teacher(
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
+    _require_writable(db, teacher.semester_id)
     _validate_teacher_user(db, teacher.semester_id, body.user_id, exclude_teacher_id=teacher.id)
     teacher.name = body.name
     teacher.id_last4 = body.id_last4
@@ -275,6 +280,7 @@ def delete_teacher(
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
+    _require_writable(db, teacher.semester_id)
     homeroom_count = db.scalar(
         select(func.count()).select_from(ClassUnit).where(
             ClassUnit.homeroom_teacher_id == teacher_id
@@ -309,6 +315,7 @@ def replace_time_rules(
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
+    _require_writable(db, teacher.semester_id)
     seen: set[tuple[int, int]] = set()
     for r in rules:
         key = (r.weekday, r.period_no)
@@ -347,7 +354,7 @@ def create_room(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> Room:
-    _require_semester(db, semester_id)
+    _require_writable(db, semester_id)
     room = Room(
         semester_id=semester_id,
         name=body.name,
@@ -368,6 +375,7 @@ def update_room(
     room = db.get(Room, room_id)
     if room is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
+    _require_writable(db, room.semester_id)
     room.name = body.name
     room.room_type = body.room_type.value
     room.capacity = body.capacity
@@ -382,6 +390,7 @@ def delete_room(room_id: int, db: Session = Depends(get_db), _: object = Depends
     room = db.get(Room, room_id)
     if room is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
+    _require_writable(db, room.semester_id)
     db.delete(room)
     db.commit()
 
@@ -440,7 +449,7 @@ def create_class_unit(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> ClassUnit:
-    _require_semester(db, semester_id)
+    _require_writable(db, semester_id)
     _require_unique_class_name(db, semester_id, body.name)
     _validate_homeroom(db, semester_id, body.homeroom_teacher_id)
     _validate_period_table(db, semester_id, body.period_table_id)
@@ -467,6 +476,7 @@ def update_class_unit(
     cu = db.get(ClassUnit, class_id)
     if cu is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
+    _require_writable(db, cu.semester_id)
     _require_unique_class_name(db, cu.semester_id, body.name, exclude_id=cu.id)
     _validate_homeroom(db, cu.semester_id, body.homeroom_teacher_id)
     _validate_period_table(db, cu.semester_id, body.period_table_id)
@@ -527,5 +537,6 @@ def delete_class_unit(
     cu = db.get(ClassUnit, class_id)
     if cu is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
+    _require_writable(db, cu.semester_id)
     db.delete(cu)
     db.commit()

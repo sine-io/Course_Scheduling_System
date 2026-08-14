@@ -19,7 +19,7 @@ from app.schemas.substitution import (
     RecommendationOut,
     SubstitutionOut,
 )
-from app.services import school_rules
+from app.services import school_rules, semester_context
 from app.services import substitution_recommender as recommender
 from app.services import substitutions as sub_service
 
@@ -33,6 +33,13 @@ def _get_affected(db: Session, affected_id: int) -> AffectedPeriod:
     if ap is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到受影响节次")
     return ap
+
+
+def _require_writable(db: Session, semester_id: int) -> None:
+    try:
+        semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def _sub_out(sub: Substitution) -> SubstitutionOut:
@@ -84,6 +91,7 @@ def assign_substitution(
 ):
     """指派处理方式(代课/调课/合班/自习/不处理);指派即生效并通知处理教师。"""
     affected = _get_affected(db, affected_id)
+    _require_writable(db, affected.leave_request.semester_id)
     try:
         sub = sub_service.assign(
             db,
@@ -125,6 +133,7 @@ def clear_substitution(
 ):
     """撤回处理方式:退回待处理,已指派教师收到取消通知。"""
     affected = _get_affected(db, affected_id)
+    _require_writable(db, affected.leave_request.semester_id)
     try:
         sub_service.clear(db, affected, actor_name=user.username)
     except sub_service.SubstitutionError as exc:

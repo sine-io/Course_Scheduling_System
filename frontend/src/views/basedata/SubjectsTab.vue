@@ -57,11 +57,13 @@ const form = ref<{
 }>({ name: '', domain: '', required_room_type: null, default_block_size: 1, is_major: false })
 
 function openCreate() {
+  if (!props.canEdit) return
   editingId.value = null
   form.value = { name: '', domain: '', required_room_type: null, default_block_size: 1, is_major: false }
   show.value = true
 }
 function openEdit(subject: Subject) {
+  if (!props.canEdit) return
   editingId.value = subject.id
   form.value = {
     name: subject.name,
@@ -77,7 +79,7 @@ function closeModal() {
 }
 
 async function save() {
-  if (saving.value) return
+  if (!props.canEdit || saving.value) return
   if (!form.value.name) {
     message.warning('请输入科目名称')
     return
@@ -104,7 +106,7 @@ async function save() {
 }
 
 async function remove(subject: Subject) {
-  if (deletingId.value !== null) return
+  if (!props.canEdit || deletingId.value !== null) return
   deletingId.value = subject.id
   try {
     await deleteSubject(subject.id)
@@ -213,7 +215,7 @@ async function remove(subject: Subject) {
       </table>
     </div>
 
-    <n-modal v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑科目' : '新增科目'">
+    <n-modal v-if="canEdit" v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑科目' : '新增科目'">
       <div class="basedata-form">
         <div class="basedata-field">
           <label for="subject-name">{{ '名称' }}</label>
@@ -257,11 +259,11 @@ async function remove(subject: Subject) {
           {{ '主科（自动排课会尽量安排在上午）' }}
         </n-checkbox>
         <div class="basedata-modal-actions">
-          <n-button quaternary :disabled="saving" @click="closeModal">
+          <n-button quaternary :disabled="!canEdit || saving" @click="closeModal">
             <template #icon><X :size="15" aria-hidden="true" /></template>
             {{ '取消' }}
           </n-button>
-          <n-button type="primary" data-testid="sub-save" :loading="saving" :disabled="saving" @click="save">
+          <n-button type="primary" data-testid="sub-save" :loading="saving" :disabled="!canEdit || saving" @click="save">
             <template #icon><Save :size="15" aria-hidden="true" /></template>
             {{ '保存' }}
           </n-button>

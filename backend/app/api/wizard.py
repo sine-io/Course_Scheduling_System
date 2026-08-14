@@ -1,6 +1,6 @@
 """设置向导 API:进度状态读写、重新启动。"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.models.semester import Semester
 from app.models.user import Role
 from app.models.wizard import SINGLETON_ID, TOTAL_STEPS, WizardState
 from app.schemas.wizard import WizardStateOut, WizardStateUpdate
+from app.services import semester_context
 
 router = APIRouter(tags=["wizard"])
 
@@ -54,6 +55,13 @@ def update_state(
     if "completed" in data and data["completed"] is not None:
         state.completed = data["completed"]
     if "semester_id" in data:
+        if data["semester_id"] is not None:
+            try:
+                semester_context.require_writable(db, data["semester_id"])
+            except semester_context.SemesterContextError as exc:
+                raise HTTPException(
+                    exc.status_code, {"code": exc.code, "message": exc.message}
+                ) from exc
         state.semester_id = data["semester_id"]
     db.commit()
     db.refresh(state)

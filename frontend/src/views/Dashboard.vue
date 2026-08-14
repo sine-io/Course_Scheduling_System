@@ -6,13 +6,15 @@ import {
 import { NButton, NEmpty, NSpin, NStatistic, NTag } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { listSemesters, STATUS_LABELS } from '@/api/semesters'
+import { STATUS_LABELS } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard } from '@/api/substitutionLog'
 import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 
+const semesterContext = useSemesterContextStore()
 const semester = ref<SemesterListItem | null>(null)
 const summary = ref<SemesterSummary | null>(null)
 const board = ref<DailyBoard | null>(null)
@@ -52,10 +54,9 @@ async function loadDashboard() {
   board.value = null
 
   try {
-    const semesters = await listSemesters()
-    if (!semesters.length) return
-
-    semester.value = semesters.find((item) => item.status === 'active') ?? semesters[0]
+    await semesterContext.load()
+    semester.value = semesterContext.currentSemester
+    if (!semester.value) return
     const [summaryResult, boardResult] = await Promise.allSettled([
       getSemesterSummary(semester.value.id),
       getDailyBoard(semester.value.id),

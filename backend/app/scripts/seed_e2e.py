@@ -1,6 +1,7 @@
 """创建 E2E 验收所需的前置状态(仅供开发机与 CI 使用,正式站不要执行)。
 
 - 排课管理员账号 e2e_scheduler / e2etest1234(见 frontend/e2e/helpers.ts)
+- 教务主任账号 e2e_director / e2edirector1234(验证只读管理视角)
 - 教师账号 e2e_teacher / e2eteacher1234(供测试绑定「陈老师」)
 - 系统管理员账号 e2e_admin / e2eadmin1234(系统管理页的备份/SMTP 卡片只有 admin 看得到)
 - **首次登录账号** e2e_newuser / e2enewuser1234(`must_change_password=True`)
@@ -22,6 +23,7 @@ from app.services.users import create_user
 
 _ACCOUNTS: list[tuple[str, str, Role, str]] = [
     ("e2e_scheduler", "e2etest1234", Role.scheduler, "E2E 排课管理员"),
+    ("e2e_director", "e2edirector1234", Role.director, "E2E 教务主任"),
     ("e2e_teacher", "e2eteacher1234", Role.teacher, "E2E 教师"),
     ("e2e_admin", "e2eadmin1234", Role.admin, "E2E 系统管理员"),
 ]

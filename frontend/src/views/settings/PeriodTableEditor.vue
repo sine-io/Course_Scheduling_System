@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { AlertTriangle, ArrowLeft, Clock3, Plus, RefreshCw, Save, Trash2 } from '@lucide/vue'
 import {
-  NButton, NEmpty, NInput, NPopconfirm, NPopselect, NSpin, useMessage,
+  NAlert, NButton, NEmpty, NInput, NPopconfirm, NPopselect, NSpin, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import { PERIOD_TYPE_LABELS, getPeriodTable, replacePeriods } from '@/api/semesters'
+import { useAuthStore } from '@/stores/auth'
 import type { Period, PeriodType } from '@/api/semesters'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './settings-workspace.css'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 const message = useMessage()
+const semesterContext = useSemesterContextStore()
 const tableId = Number(route.params.id)
 
 interface Row {
@@ -27,8 +31,17 @@ const loading = ref(true)
 const saving = ref(false)
 const loadError = ref<string | null>(null)
 const tableName = ref('')
+const tableSemesterId = ref<number | null>(null)
 const numWeekdays = ref(5)
 const rows = ref<Row[]>([])
+
+const canManageSemesters = computed(() => (
+  !auth.user || auth.hasRole('admin') || auth.hasRole('scheduler')
+))
+const canEdit = computed(() => (
+  canManageSemesters.value
+  && (!semesterContext.authoritative || semesterContext.isCurrent(tableSemesterId.value))
+))
 
 const WEEKDAY_NAMES = ['一', '二', '三', '四', '五', '六', '日']
 const weekdays = computed(() => Array.from({ length: numWeekdays.value }, (_, index) => index + 1))
@@ -76,7 +89,9 @@ async function load() {
   loadError.value = null
   try {
     if (!Number.isInteger(tableId) || tableId <= 0) throw new Error('invalid-period-table-id')
+    await semesterContext.load()
     const table = await getPeriodTable(tableId)
+    tableSemesterId.value = table.semester_id ?? null
     tableName.value = table.name
     numWeekdays.value = table.num_weekdays
     rows.value = buildRows(table.periods, table.num_weekdays)
@@ -90,6 +105,7 @@ async function load() {
 onMounted(load)
 
 function addRow() {
+  if (!canEdit.value) return
   const nextNumber = rows.value.length
     ? Math.max(...rows.value.map((row) => row.period_no)) + 1
     : 1
@@ -105,15 +121,17 @@ function addRow() {
 }
 
 function removeRow(periodNumber: number) {
+  if (!canEdit.value) return
   rows.value = rows.value.filter((row) => row.period_no !== periodNumber)
 }
 
 function applyRowType(row: Row, type: PeriodType) {
+  if (!canEdit.value) return
   for (const weekday of weekdays.value) row.cells[weekday] = type
 }
 
 async function save() {
-  if (saving.value) return
+  if (!canEdit.value || saving.value) return
   if (rows.value.some((row) => !row.name.trim())) {
     message.warning('请填写每个节次的名称')
     return
@@ -156,7 +174,7 @@ async function save() {
           <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
           {{ '返回' }}
         </n-button>
-        <n-button v-if="!loading && !loadError" type="primary" data-testid="period-table-save" :loading="saving" :disabled="saving" @click="save">
+        <n-button v-if="!loading && !loadError" type="primary" data-testid="period-table-save" :loading="saving" :disabled="saving || !canEdit" @click="save">
           <template #icon><Save :size="16" aria-hidden="true" /></template>
           {{ '保存作息表' }}
         </n-button>
@@ -188,6 +206,9 @@ async function save() {
         </div>
         <Clock3 :size="20" class="settings-heading-icon" aria-hidden="true" />
       </div>
+      <n-alert v-if="!canEdit" type="info" data-testid="period-table-readonly">
+        所选作息时间表属于历史学期，历史学期只允许查询，不能保存修改。
+      </n-alert>
 
       <div class="settings-table-scroll period-grid-scroll" data-testid="period-grid-scroll" tabindex="0" aria-label="作息时间表，可横向滚动">
         <table class="settings-data-table period-grid" :style="{ minWidth: gridMinWidth }">
@@ -207,34 +228,35 @@ async function save() {
             <tr v-for="row in rows" v-else :key="row.period_no">
               <td class="period-details-column">
                 <div class="period-details">
-                  <n-input v-model:value="row.name" size="small" :aria-label="`第 ${row.period_no} 行名称`" placeholder="节次名称" />
+                  <n-input v-model:value="row.name" size="small" :aria-label="`第 ${row.period_no} 行名称`" placeholder="节次名称" :disabled="!canEdit" />
                   <div class="period-time-range">
-                    <n-input v-model:value="row.start_time" size="small" :aria-label="`${row.name}开始时间`" placeholder="08:00" />
+                    <n-input v-model:value="row.start_time" size="small" :aria-label="`${row.name}开始时间`" placeholder="08:00" :disabled="!canEdit" />
                     <span aria-hidden="true">-</span>
-                    <n-input v-model:value="row.end_time" size="small" :aria-label="`${row.name}结束时间`" placeholder="08:40" />
+                    <n-input v-model:value="row.end_time" size="small" :aria-label="`${row.name}结束时间`" placeholder="08:40" :disabled="!canEdit" />
                   </div>
                   <div class="period-row-presets">
-                    <n-button text size="tiny" @click="applyRowType(row, 'regular')">{{ '整行常规课' }}</n-button>
-                    <n-button text size="tiny" @click="applyRowType(row, 'reserved')">{{ '整行固定用途' }}</n-button>
+                    <n-button text size="tiny" :disabled="!canEdit" @click="applyRowType(row, 'regular')">{{ '整行常规课' }}</n-button>
+                    <n-button text size="tiny" :disabled="!canEdit" @click="applyRowType(row, 'reserved')">{{ '整行固定用途' }}</n-button>
                   </div>
                 </div>
               </td>
               <td v-for="weekday in weekdays" :key="weekday" class="period-type-column">
-                <n-popselect v-model:value="row.cells[weekday]" :options="typeOptions" trigger="click">
+                <n-popselect v-model:value="row.cells[weekday]" :options="typeOptions" trigger="click" :disabled="!canEdit">
                   <n-button
                     size="small" block
                     class="period-type-cell"
                     :class="`period-type-${row.cells[weekday]}`"
                     :aria-label="`${row.name}，周${WEEKDAY_NAMES[weekday - 1]}，${periodTypeLabels[row.cells[weekday]]}`"
+                    :disabled="!canEdit"
                   >
                     {{ periodTypeLabels[row.cells[weekday]] }}
                   </n-button>
                 </n-popselect>
               </td>
               <td class="period-actions-column">
-                <n-popconfirm @positive-click="removeRow(row.period_no)">
+                <n-popconfirm :disabled="!canEdit" @positive-click="removeRow(row.period_no)">
                   <template #trigger>
-                    <n-button size="small" type="error" quaternary :aria-label="`删除${row.name}`" :title="`删除${row.name}`">
+                    <n-button size="small" type="error" quaternary :disabled="!canEdit" :aria-label="`删除${row.name}`" :title="`删除${row.name}`">
                       <template #icon><Trash2 :size="15" aria-hidden="true" /></template>
                     </n-button>
                   </template>
@@ -247,7 +269,7 @@ async function save() {
       </div>
 
       <div class="settings-actions">
-        <n-button dashed data-testid="period-add-row" @click="addRow">
+        <n-button dashed data-testid="period-add-row" :disabled="!canEdit" @click="addRow">
           <template #icon><Plus :size="15" aria-hidden="true" /></template>
           {{ '新增节次行' }}
         </n-button>

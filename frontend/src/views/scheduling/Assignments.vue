@@ -21,15 +21,20 @@ import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling-workspace.css'
 
 const message = useMessage()
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const router = useRouter()
-const canEdit = computed(() => auth.hasRole('admin') || auth.hasRole('scheduler'))
 
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
+const canEdit = computed(() => (
+  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
+))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
@@ -86,9 +91,12 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
     if (semesters.value.length) {
-      sid.value = semesters.value[0].id
+      sid.value = semesters.value.find((semester) => semester.is_current)?.id
+        ?? semesterContext.currentSemesterId
+        ?? semesters.value[0].id
       await Promise.all([loadBase(sid.value), reloadAll(sid.value)])
     } else {
       sid.value = null
@@ -179,9 +187,11 @@ function openEdit(a: Assignment) {
   show.value = true
 }
 function addBlock() {
+  if (!canEdit.value) return
   form.value.block_rules.push({ block_size: 2, count_per_week: 1 })
 }
 function removeBlock(i: number) {
+  if (!canEdit.value) return
   form.value.block_rules.splice(i, 1)
 }
 
@@ -507,7 +517,7 @@ function blockLabel(a: Assignment): string {
       </div>
     </template>
 
-    <n-modal v-model:show="show" preset="card" :title="editingId ? '编辑教学任务' : '新增教学任务'" class="scheduling-modal assignment-modal">
+    <n-modal v-if="canEdit" v-model:show="show" preset="card" :title="editingId ? '编辑教学任务' : '新增教学任务'" class="scheduling-modal assignment-modal">
       <div class="scheduling-form">
         <div class="scheduling-field">
           <label>{{ '排课对象' }}</label>
@@ -559,7 +569,7 @@ function blockLabel(a: Assignment): string {
 
         <div class="assignment-block-heading">
           <label>{{ '连堂规则' }}</label>
-          <n-button size="tiny" dashed data-testid="a-add-block" @click="addBlock">
+          <n-button size="tiny" dashed data-testid="a-add-block" :disabled="!canEdit" @click="addBlock">
             <template #icon><Plus :size="13" aria-hidden="true" /></template>
             {{ '新增连堂' }}
           </n-button>
@@ -569,7 +579,7 @@ function blockLabel(a: Assignment): string {
           <span>{{ '连堂 ×' }}</span>
           <n-input-number v-model:value="block.count_per_week" :data-testid="`a-block-count-${index}`" :min="1" :input-props="{ 'aria-label': `第${index + 1}条连堂规则的每周次数` }" />
           <span>{{ '次/周' }}</span>
-          <n-button size="tiny" type="error" ghost :aria-label="`移除第${index + 1}条连堂规则`" @click="removeBlock(index)">
+          <n-button size="tiny" type="error" ghost :disabled="!canEdit" :aria-label="`移除第${index + 1}条连堂规则`" @click="removeBlock(index)">
             <template #icon><Trash2 :size="13" aria-hidden="true" /></template>
           </n-button>
         </div>
@@ -588,8 +598,8 @@ function blockLabel(a: Assignment): string {
         <n-checkbox v-model:checked="form.lock_room">{{ '锁定教室/场地（排课时不得变更）' }}</n-checkbox>
 
         <div class="scheduling-modal-actions">
-          <n-button :disabled="saving" @click="show = false">{{ '取消' }}</n-button>
-          <n-button type="primary" data-testid="a-save" :loading="saving" @click="save">
+          <n-button :disabled="!canEdit || saving" @click="show = false">{{ '取消' }}</n-button>
+          <n-button type="primary" data-testid="a-save" :loading="saving" :disabled="!canEdit || saving" @click="save">
             <template #icon><Save :size="15" aria-hidden="true" /></template>
             {{ '保存' }}
           </n-button>
@@ -597,7 +607,7 @@ function blockLabel(a: Assignment): string {
       </div>
     </n-modal>
 
-    <n-modal v-model:show="groupShow" preset="card" :title="'新增走班分组'" class="scheduling-modal assignment-group-modal">
+    <n-modal v-if="canEdit" v-model:show="groupShow" preset="card" :title="'新增走班分组'" class="scheduling-modal assignment-group-modal">
       <div class="scheduling-form">
         <div class="scheduling-field">
           <label>{{ '分组名称' }}</label>
@@ -619,8 +629,8 @@ function blockLabel(a: Assignment): string {
           <n-select v-model:value="groupForm.class_ids" v-accessible-select="'选择分组成员班级'" data-testid="group-classes" multiple :options="classOptions" filterable :placeholder="'选择班级'" />
         </div>
         <div class="scheduling-modal-actions">
-          <n-button :disabled="groupSaving" @click="groupShow = false">{{ '取消' }}</n-button>
-          <n-button type="primary" data-testid="group-save" :loading="groupSaving" @click="saveGroup">
+          <n-button :disabled="!canEdit || groupSaving" @click="groupShow = false">{{ '取消' }}</n-button>
+          <n-button type="primary" data-testid="group-save" :loading="groupSaving" :disabled="!canEdit || groupSaving" @click="saveGroup">
             <template #icon><Layers3 :size="15" aria-hidden="true" /></template>
             {{ '创建' }}
           </n-button>

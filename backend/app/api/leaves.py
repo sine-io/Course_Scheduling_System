@@ -21,7 +21,7 @@ from app.schemas.leave import (
     LeaveRequestOut,
 )
 from app.services import leaves as leave_service
-from app.services import school_rules
+from app.services import school_rules, semester_context
 from app.services.teachers import current_teacher
 
 router = APIRouter(tags=["leaves"])
@@ -42,6 +42,13 @@ def _get_semester(db: Session, semester_id: int) -> Semester:
     if sem is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
     return sem
+
+
+def _writable_semester(db: Session, semester_id: int) -> Semester:
+    try:
+        return semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def _serialize(leave: LeaveRequest) -> LeaveRequestOut:
@@ -116,7 +123,7 @@ def create_leave(
     user: User = Depends(get_active_user),
 ):
     """登记请假,并依已发布课表展开受影响节次。"""
-    sem = _get_semester(db, semester_id)
+    sem = _writable_semester(db, semester_id)
     if body.leave_type not in set(LeaveType):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"未知的请假类型:{body.leave_type}")
 
@@ -212,6 +219,7 @@ def cancel_leave(
     已完成的节次不动——那堂课已经上过了,事后销假不能把历史抹掉。
     """
     leave = _get_leave(db, leave_id, user)
+    _writable_semester(db, leave.semester_id)
     try:
         revoked = leave_service.cancel(db, leave, actor_name=user.username)
     except leave_service.LeaveError as exc:

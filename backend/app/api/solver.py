@@ -22,6 +22,7 @@ from app.schemas.solver import (
     RelaxableOption,
     SolveJobOut,
 )
+from app.services import semester_context
 from app.services.school_rules import (
     SemesterNotReadyError,
     assert_semester_ready,
@@ -44,6 +45,13 @@ router = APIRouter(tags=["solver"])
 
 viewer = require_roles(Role.scheduler, Role.director)
 editor = require_roles(Role.scheduler)
+
+
+def _require_writable(db: Session, semester_id: int) -> Semester:
+    try:
+        return semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def get_progress_store() -> ProgressStore:
@@ -112,8 +120,7 @@ def put_constraint_config(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ):
-    if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    _require_writable(db, semester_id)
     unknown = set(body.weights) - set(DEFAULT_WEIGHTS)
     if unknown:
         raise HTTPException(
@@ -172,13 +179,13 @@ def start_auto_schedule(
     tt = db.get(Timetable, timetable_id)
     if tt is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到课表")
+    _require_writable(db, tt.semester_id)
     if tt.status != TimetableStatus.draft.value:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "只能以草稿为来源自动排课;请先复制为新草稿"
         )
     semester = db.get(Semester, tt.semester_id)
-    if semester is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    assert semester is not None
     try:
         assert_semester_ready(db, semester)
     except SemesterNotReadyError as exc:
@@ -191,8 +198,6 @@ def start_auto_schedule(
                 "issues": exc.issues,
             },
         ) from exc
-    db.commit()
-
     unknown = set(body.relax) - set(RELAXABLE_CODES)
     if unknown:
         raise HTTPException(
@@ -260,11 +265,13 @@ def get_solve_job(
 @router.post("/solver/jobs/{job_id}/stop", response_model=SolveJobOut)
 def stop_solve_job(
     job_id: str,
+    db: Session = Depends(get_db),
     _: object = Depends(editor),
     store: ProgressStore = Depends(get_progress_store),
 ):
     """提前结束:停止搜索但保留当下最佳解,仍会写出结果草稿。"""
     state = _get_job(store, job_id)
+    _require_writable(db, state.semester_id)
     if not state.done:
         store.request(job_id, ControlAction.stop)
     return _job_out(_get_job(store, job_id))
@@ -276,7 +283,7 @@ def cancel_solve_job(
     _: object = Depends(editor),
     store: ProgressStore = Depends(get_progress_store),
 ):
-    """取消:停止搜索并丢弃结果,不生成新草稿。"""
+    """取消:停止搜索并丢弃结果；即使学期已切换，也允许阻止旧任务落库。"""
     state = _get_job(store, job_id)
     if not state.done:
         store.request(job_id, ControlAction.cancel)

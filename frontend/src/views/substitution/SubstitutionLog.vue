@@ -9,10 +9,12 @@ import { listSemesters } from '@/api/semesters'
 import { getSubstitutionLog } from '@/api/substitutionLog'
 import type { LogEntry } from '@/api/substitutionLog'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import { formatDateWithWeekday, toLocalISODate } from './reportDate'
 import './operations-workspace.css'
 
 const MAX_ROWS = 1000
+const semesterContext = useSemesterContextStore()
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
@@ -85,6 +87,7 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     ;[semesters.value, leaveTypes.value] = await Promise.all([listSemesters(), listLeaveTypes()])
     if (!semesters.value.length) {
       sid.value = null
@@ -92,7 +95,11 @@ async function loadPage() {
       teacherOptions.value = []
       return
     }
-    await onSemesterChange(semesters.value[0].id)
+    await onSemesterChange(
+      semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+        ?? semesterContext.currentSemesterId
+        ?? semesters.value[0].id,
+    )
   } catch (error) {
     entries.value = []
     loadError.value = apiErrorMessage(error, '暂时无法读取调课与代课记录，请重试。')

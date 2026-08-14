@@ -15,12 +15,16 @@ import {
 } from '@/api/semesters'
 import type { CopyOptions, SemesterListItem, Semester, Template } from '@/api/semesters'
 import { useAppConfigStore } from '@/stores/appConfig'
+import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './settings-workspace.css'
 
 const message = useMessage()
 const route = useRoute()
 const router = useRouter()
 const appConfig = useAppConfigStore()
+const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 
 const semesters = ref<Semester[]>([])
 const templates = ref<Template[]>([])
@@ -55,17 +59,34 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
   label: semester.label,
   value: semester.id,
 })))
+const canManageSemesters = computed(() => (
+  !auth.user || auth.hasRole('admin') || auth.hasRole('scheduler')
+))
+
+function isCurrentSemester(semester: SemesterListItem): boolean {
+  return semesterContext.authoritative
+    ? semesterContext.isCurrent(semester.id)
+    : semester.id === selectedSemesterId.value
+}
+
+function canWriteSemester(semesterId: number): boolean {
+  return canManageSemesters.value
+    && (!semesterContext.authoritative || semesterContext.isCurrent(semesterId))
+}
 
 async function fetchSemesters() {
+  await semesterContext.load()
   const items = await listSemesters()
   semesters.value = await Promise.all(items.map((item: SemesterListItem) => getSemester(item.id)))
   const queryId = Number(route.query.semester)
-  const currentId = selectedSemesterId.value
-  selectedSemesterId.value = semesters.value.some((semester) => semester.id === currentId)
-    ? currentId
-    : (semesters.value.some((semester) => semester.id === queryId)
-      ? queryId
-      : (semesters.value[0]?.id ?? null))
+  const querySemester = semesters.value.find((semester) => semester.id === queryId)
+  const currentSemester = semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)
+  const previouslySelected = semesters.value.find((semester) => semester.id === selectedSemesterId.value)
+  selectedSemesterId.value = querySemester?.id
+    ?? currentSemester?.id
+    ?? previouslySelected?.id
+    ?? semesters.value[0]?.id
+    ?? null
 }
 
 async function loadPage() {
@@ -96,7 +117,7 @@ async function refreshData() {
 onMounted(loadPage)
 
 async function onCreateSemester() {
-  if (creating.value) return
+  if (!canManageSemesters.value || creating.value) return
   creating.value = true
   try {
     await createSemester({
@@ -114,7 +135,7 @@ async function onCreateSemester() {
 }
 
 async function onDeleteSemester(id: number) {
-  if (deletingSemesterId.value !== null) return
+  if (!canWriteSemester(id) || deletingSemesterId.value !== null) return
   deletingSemesterId.value = id
   try {
     await deleteSemester(id)
@@ -132,6 +153,7 @@ const addTableTarget = ref<number | null>(null)
 const addTableForm = ref({ name: '', template_key: null as string | null, is_default: false })
 
 function openAddTable(semesterId: number) {
+  if (!canWriteSemester(semesterId)) return
   addTableTarget.value = semesterId
   addTableForm.value = { name: '', template_key: null, is_default: false }
   showAddTable.value = true
@@ -139,7 +161,9 @@ function openAddTable(semesterId: number) {
 
 async function onAddTable() {
   if (addingTable.value) return
-  if (!addTableTarget.value || !addTableForm.value.name.trim()) {
+  if (!addTableTarget.value
+    || !canWriteSemester(addTableTarget.value)
+    || !addTableForm.value.name.trim()) {
     message.warning('请输入作息时间表名称')
     return
   }
@@ -161,7 +185,8 @@ async function onAddTable() {
 }
 
 async function onDeleteTable(id: number) {
-  if (deletingTableId.value !== null) return
+  const owner = semesters.value.find((semester) => semester.period_tables.some((table) => table.id === id))
+  if (!owner || !canWriteSemester(owner.id) || deletingTableId.value !== null) return
   deletingTableId.value = id
   try {
     await deletePeriodTable(id)
@@ -175,6 +200,8 @@ async function onDeleteTable(id: number) {
 }
 
 function editTable(id: number) {
+  const owner = semesters.value.find((semester) => semester.period_tables.some((table) => table.id === id))
+  if (!owner || !canWriteSemester(owner.id)) return
   router.push({ name: 'period-table-editor', params: { id } })
 }
 
@@ -293,7 +320,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
     </section>
 
     <template v-else>
-      <section class="settings-panel" data-testid="semester-create-panel">
+      <section v-if="canManageSemesters" class="settings-panel" data-testid="semester-create-panel">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '新建工作面' }}</p>
@@ -352,7 +379,8 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                 <n-tag :type="semester.readiness === 'ready' ? 'success' : 'warning'" size="small">
                   {{ readinessLabel(semester.readiness) }}
                 </n-tag>
-                <n-tag v-if="selectedSemesterId === semester.id" type="info" size="small">{{ '当前选择' }}</n-tag>
+                <n-tag v-if="isCurrentSemester(semester)" type="success" size="small">{{ '当前工作学期' }}</n-tag>
+                <n-tag v-else-if="selectedSemesterId === semester.id" type="info" size="small">{{ '当前查看' }}</n-tag>
               </div>
               <p>{{ semester.start_date || '未设置开始日期' }} - {{ semester.end_date || '未设置结束日期' }}</p>
             </div>
@@ -361,17 +389,17 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                 <template #icon><CalendarDays :size="14" aria-hidden="true" /></template>
                 {{ '校历与排课准备' }}
               </n-button>
-              <n-button size="small" data-testid="copy-semester" :disabled="copying || deletingSemesterId !== null" @click="openCopy(semester)">
+              <n-button v-if="canManageSemesters" size="small" data-testid="copy-semester" :disabled="copying || deletingSemesterId !== null" @click="openCopy(semester)">
                 <template #icon><Copy :size="14" aria-hidden="true" /></template>
                 {{ '复制到新学期' }}
               </n-button>
-              <n-popconfirm :disabled="deletingSemesterId !== null" @positive-click="onDeleteSemester(semester.id)">
+              <n-popconfirm v-if="canManageSemesters" :disabled="deletingSemesterId !== null || !canWriteSemester(semester.id) || semester.status === 'archived'" @positive-click="onDeleteSemester(semester.id)">
                 <template #trigger>
                   <n-button
                     :data-testid="`semester-delete-${semester.id}`"
                     size="small" type="error" ghost
                     :loading="deletingSemesterId === semester.id"
-                    :disabled="deletingSemesterId !== null"
+                    :disabled="deletingSemesterId !== null || !canWriteSemester(semester.id) || semester.status === 'archived'"
                   >
                     <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
                     {{ '删除学期' }}
@@ -388,7 +416,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                 <h3>{{ '作息时间表' }}</h3>
                 <p>{{ '维护排课使用的节次和时段；编辑会进入独立的宽表工作面。' }}</p>
               </div>
-              <n-button size="small" dashed :disabled="addingTable || deletingTableId !== null" @click="openAddTable(semester.id)">
+              <n-button v-if="canManageSemesters" size="small" dashed :disabled="addingTable || deletingTableId !== null || !canWriteSemester(semester.id)" @click="openAddTable(semester.id)">
                 <template #icon><Plus :size="14" aria-hidden="true" /></template>
                 {{ '新增作息表' }}
               </n-button>
@@ -403,17 +431,17 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                   <span>{{ `共 ${table.periods.length} 格` }}<template v-if="table.is_default"> · {{ '默认作息表' }}</template></span>
                 </div>
                 <div class="settings-command-group">
-                  <n-button size="small" @click="editTable(table.id)">
+                  <n-button v-if="canManageSemesters" size="small" :disabled="!canWriteSemester(semester.id)" @click="editTable(table.id)">
                     <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                     {{ '编辑' }}
                   </n-button>
-                  <n-popconfirm :disabled="deletingTableId !== null" @positive-click="onDeleteTable(table.id)">
+                  <n-popconfirm v-if="canManageSemesters" :disabled="deletingTableId !== null || !canWriteSemester(semester.id)" @positive-click="onDeleteTable(table.id)">
                     <template #trigger>
                       <n-button
                         :data-testid="`period-table-delete-${table.id}`"
                         size="small" type="error" ghost
                         :loading="deletingTableId === table.id"
-                        :disabled="deletingTableId !== null"
+                        :disabled="deletingTableId !== null || !canWriteSemester(semester.id)"
                       >
                         <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
                         {{ '删除' }}

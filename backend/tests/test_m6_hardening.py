@@ -46,6 +46,12 @@ def test_the_same_class_name_in_another_semester_is_fine(school):
     client, _db, sid = school
     assert _class(client, sid, "301").status_code == 201
     other = client.post("/api/semesters", json={"academic_year": 2027, "term": 1}).json()["id"]
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": other, "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     assert _class(client, other, "301").status_code == 201
 
 

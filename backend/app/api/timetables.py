@@ -34,6 +34,7 @@ from app.schemas.timetable import (
     TimetableRename,
 )
 from app.services import conflict_checker as cc
+from app.services import semester_context
 from app.services import timetable_publish as pub
 from app.services.school_rules import (
     SemesterNotReadyError,
@@ -52,6 +53,13 @@ def _get_timetable(db: Session, timetable_id: int) -> Timetable:
     if tt is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到课表")
     return tt
+
+
+def _require_writable(db: Session, semester_id: int) -> Semester:
+    try:
+        return semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 def _require_draft(tt: Timetable) -> Timetable:
@@ -166,8 +174,7 @@ def create_timetable(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ):
-    if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    _require_writable(db, semester_id)
     tt = Timetable(semester_id=semester_id, name=body.name)
     db.add(tt)
     db.commit()
@@ -200,6 +207,7 @@ def rename_timetable(
     _: object = Depends(editor),
 ):
     tt = _get_timetable(db, timetable_id)
+    _require_writable(db, tt.semester_id)
     tt.name = body.name
     db.commit()
     return get_timetable(timetable_id, db, None)
@@ -218,6 +226,7 @@ def duplicate_timetable(
 ):
     """复制为新草稿(含全部单元格);两份草稿互不影响。"""
     src = _get_timetable(db, timetable_id)
+    _require_writable(db, src.semester_id)
     new = pub.duplicate(db, src, body.name)
     db.commit()
     return get_timetable(new.id, db, None)
@@ -240,10 +249,9 @@ def publish_timetable(
     user: User = Depends(editor),
 ):
     """draft → published;同学期原 published 转 archived。未排完时需 force=true 才可发布。"""
-    tt = _require_draft(_get_timetable(db, timetable_id))
-    semester = db.get(Semester, tt.semester_id)
-    if semester is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    tt = _get_timetable(db, timetable_id)
+    semester = _require_writable(db, tt.semester_id)
+    _require_draft(tt)
     try:
         assert_semester_ready(db, semester)
     except SemesterNotReadyError as exc:
@@ -256,7 +264,6 @@ def publish_timetable(
                 "issues": exc.issues,
             },
         ) from exc
-    db.commit()
     report = _completeness(pub.completeness(db, tt))
     if not report["complete"] and not force:
         raise HTTPException(
@@ -276,6 +283,7 @@ def delete_timetable(
     timetable_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
 ) -> None:
     tt = _get_timetable(db, timetable_id)
+    _require_writable(db, tt.semester_id)
     db.delete(tt)
     db.commit()
 
@@ -395,7 +403,9 @@ def place_entry(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ):
-    tt = _require_draft(_get_timetable(db, timetable_id))
+    tt = _get_timetable(db, timetable_id)
+    _require_writable(db, tt.semester_id)
+    _require_draft(tt)
     a = _get_assignment(db, tt.semester_id, body.course_assignment_id)
     if body.room_id is not None:
         room = db.get(Room, body.room_id)
@@ -431,7 +441,9 @@ def move_entry(
     timetable_id: int, entry_id: int, body: MoveRequest,
     db: Session = Depends(get_db), _: object = Depends(editor),
 ):
-    tt = _require_draft(_get_timetable(db, timetable_id))
+    tt = _get_timetable(db, timetable_id)
+    _require_writable(db, tt.semester_id)
+    _require_draft(tt)
     e = db.get(ScheduleEntry, entry_id)
     if e is None or e.timetable_id != tt.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到单元格")
@@ -459,7 +471,9 @@ def lock_entry(
     timetable_id: int, entry_id: int, locked: bool = Query(True),
     db: Session = Depends(get_db), _: object = Depends(editor),
 ):
-    tt = _require_draft(_get_timetable(db, timetable_id))
+    tt = _get_timetable(db, timetable_id)
+    _require_writable(db, tt.semester_id)
+    _require_draft(tt)
     e = db.get(ScheduleEntry, entry_id)
     if e is None or e.timetable_id != tt.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到单元格")
@@ -479,7 +493,9 @@ def delete_entry(
     db: Session = Depends(get_db),
     _: object = Depends(editor),
 ) -> None:
-    tt = _require_draft(_get_timetable(db, timetable_id))
+    tt = _get_timetable(db, timetable_id)
+    _require_writable(db, tt.semester_id)
+    _require_draft(tt)
     e = db.get(ScheduleEntry, entry_id)
     if e is None or e.timetable_id != tt.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到单元格")

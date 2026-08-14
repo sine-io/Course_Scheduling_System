@@ -46,7 +46,7 @@ function onFileChange(data: { fileList: UploadFileInfo[] }) {
 }
 
 async function onUpload() {
-  if (uploading.value) return
+  if (!props.canEdit || uploading.value) return
   if (!selectedFile.value) {
     errorMessage.value = '请先选择文件'
     return

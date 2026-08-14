@@ -24,6 +24,7 @@ import {
 } from '@/api/timetables'
 import type { Timetable, TimetableBrief } from '@/api/timetables'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './scheduling-workspace.css'
 
@@ -32,13 +33,17 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const message = useMessage()
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const router = useRouter()
-const canEdit = computed(() => auth.hasRole('admin') || auth.hasRole('scheduler'))
 
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
+const canEdit = computed(() => (
+  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
+))
 const drafts = ref<TimetableBrief[]>([])
 const ttId = ref<number | null>(null)
 const tt = ref<Timetable | null>(null)
@@ -67,6 +72,13 @@ const readonly = computed(() => (
   !canEdit.value || view.value !== 'class' || tt.value?.status !== 'draft'
 ))
 const readonlyReason = computed(() => {
+  if (
+    semesterContext.authoritative
+    && sid.value !== null
+    && !semesterContext.isCurrent(sid.value)
+  ) {
+    return '所选学期不是当前工作学期，历史学期只允许查询。'
+  }
   if (!canEdit.value) return '当前角色仅可查看课表，排课写入仅对排课管理员开放。'
   if (view.value !== 'class') return '教师与教室/场地视图为只读视图，请在班级视图中调整排课。'
   if (tt.value && tt.value.status !== 'draft') return '当前课表不是草稿，无法在工作台中写入更改。'
@@ -136,8 +148,12 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
-    if (semesters.value.length) await loadSemesterData(semesters.value[0].id)
+    const currentId = semesters.value.find((semester) => semester.is_current)?.id
+      ?? semesterContext.currentSemesterId
+      ?? semesters.value[0]?.id
+    if (currentId) await loadSemesterData(currentId)
     else sid.value = null
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取排课工作台，请重试。')

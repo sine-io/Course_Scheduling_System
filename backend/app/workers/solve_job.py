@@ -143,6 +143,22 @@ def execute(
                             _failure_message(result.status), should_stop)
         return
 
+    # 当前学期可能在求解期间被切换。重新获取上下文锁后再落库，保证旧学期不会
+    # 在切换完成后才生成结果草稿；若已切换，则把任务标为可见失败而不是写入历史数据。
+    from app.services import semester_context
+
+    try:
+        semester_context.require_writable(db, source.semester_id)
+    except semester_context.SemesterContextError as exc:
+        db.rollback()
+        store.update(
+            job_id,
+            status=JobStatus.failed.value,
+            heartbeat=time.time(),
+            error=exc.message,
+        )
+        return
+
     new = write_result(db, source, result.entries, user_id, username, result.objective,
                        partial=allow_partial, unplaced=result.unplaced_periods,
                        unscheduled=result.unscheduled)

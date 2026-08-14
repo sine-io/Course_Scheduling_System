@@ -25,6 +25,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import NotificationBell from '@/components/NotificationBell.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/appConfig'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 
 interface NavItem {
   key: string
@@ -39,6 +40,7 @@ interface NavGroup {
 
 const auth = useAuthStore()
 const appConfig = useAppConfigStore()
+const semesterContext = useSemesterContextStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -54,6 +56,10 @@ let drawerFocusFrame: number | null = null
 const roleLabels = computed(() => (auth.user?.roles ?? []).map((role) => auth.roleLabel(role)))
 const schoolName = computed(() => appConfig.config.school_name)
 const userInitial = computed(() => auth.user?.display_name.trim().charAt(0) || '用')
+const semesterOptions = computed(() => semesterContext.semesters.map((semester) => ({
+  label: semester.label,
+  value: semester.id,
+})))
 
 // This predicate mirrors the router guard. Navigation visibility and direct-route access stay aligned.
 const canManage = computed(() => (
@@ -226,6 +232,16 @@ async function onLogout() {
   await router.push({ name: 'login' })
 }
 
+async function onSemesterChange(event: Event) {
+  const value = Number((event.target as HTMLSelectElement).value)
+  if (!Number.isInteger(value) || value <= 0) return
+  try {
+    await semesterContext.switchTo(value)
+  } catch {
+    // The store reloads the authoritative context and exposes the readable error.
+  }
+}
+
 watch(() => route.fullPath, () => closeDrawer(false))
 watch(drawerOpen, (open) => {
   if (typeof document === 'undefined') return
@@ -233,6 +249,7 @@ watch(drawerOpen, (open) => {
 })
 
 onMounted(() => {
+  void semesterContext.load()
   originalBodyOverflow = document.body.style.overflow
   mobileQuery = typeof window.matchMedia === 'function'
     ? window.matchMedia('(max-width: 767px)')
@@ -365,6 +382,37 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="app-topbar-actions">
+          <div
+            v-if="semesterContext.loaded"
+            class="app-semester-context"
+            :class="{ 'is-switching': semesterContext.switching }"
+            data-testid="semester-context"
+            :title="semesterContext.error || '当前工作学期'"
+          >
+            <CalendarDays :size="16" :stroke-width="1.9" aria-hidden="true" />
+            <label class="sr-only" for="current-semester-select">当前工作学期</label>
+            <select
+              v-if="semesterContext.canSwitch"
+              id="current-semester-select"
+              class="app-semester-select"
+              :value="semesterContext.currentSemesterId ?? ''"
+              :disabled="semesterContext.switching || !semesterOptions.length"
+              aria-label="切换当前学期"
+              data-testid="current-semester-select"
+              @change="onSemesterChange"
+            >
+              <option v-if="semesterContext.currentSemesterId === null" value="" disabled>
+                {{ semesterOptions.length ? '未选择学期' : '未创建学期' }}
+              </option>
+              <option v-for="option in semesterOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            <span v-else class="app-semester-label" data-testid="current-semester-label">
+              {{ semesterContext.currentSemester?.label || '未选择学期' }}
+            </span>
+          </div>
+
           <NotificationBell />
 
           <div
@@ -394,7 +442,7 @@ onBeforeUnmount(() => {
       </header>
 
       <main id="main-content" class="app-content" tabindex="-1">
-        <router-view />
+        <router-view :key="semesterContext.revision" />
       </main>
     </div>
   </div>
@@ -664,6 +712,43 @@ onBeforeUnmount(() => {
   margin-left: auto;
 }
 
+.app-semester-context {
+  display: inline-flex;
+  min-width: 0;
+  height: 36px;
+  align-items: center;
+  gap: var(--app-space-1);
+  padding: 0 var(--app-space-2);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface-muted);
+  color: var(--app-primary-strong);
+  transition: opacity var(--app-motion-duration) var(--app-motion-ease);
+}
+
+.app-semester-context.is-switching { opacity: 0.62; }
+
+.app-semester-select,
+.app-semester-label {
+  min-width: 0;
+  max-width: 190px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.app-semester-select { cursor: pointer; }
+.app-semester-select:disabled { cursor: wait; }
+.app-semester-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-profile {
   display: flex;
   min-width: 0;
@@ -741,6 +826,8 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   .app-action-label { display: none; }
   .app-logout-button { width: 38px; padding: 0; }
+  .app-semester-select,
+  .app-semester-label { max-width: 145px; }
 }
 
 @media (max-width: 767px) {
@@ -772,6 +859,9 @@ onBeforeUnmount(() => {
   .app-breadcrumb-group + .app-breadcrumb-separator { display: none; }
   .app-profile-copy { max-width: 76px; }
   .app-profile-copy small { font-size: 10px; }
+  .app-semester-context { max-width: 170px; }
+  .app-semester-select,
+  .app-semester-label { max-width: 118px; }
 }
 
 @media (max-width: 420px) {
@@ -779,5 +869,8 @@ onBeforeUnmount(() => {
   .app-avatar { width: 30px; height: 30px; }
   .app-profile { gap: var(--app-space-1); }
   .app-profile-copy { max-width: 62px; }
+  .app-semester-context { max-width: 132px; padding: 0 var(--app-space-1); }
+  .app-semester-select,
+  .app-semester-label { max-width: 85px; }
 }
 </style>

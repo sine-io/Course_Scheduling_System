@@ -16,6 +16,7 @@ import { exportBatchZip, exportSchoolWorkbook, exportTimetable } from '@/api/exp
 import type { ExportFmt } from '@/api/exports'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling/scheduling-workspace.css'
 
 type ViewKind = 'class' | 'teacher' | 'room'
@@ -30,6 +31,7 @@ const loadError = ref<string | null>(null)
 
 const message = useMessage()
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const canManage = computed(() => (
   auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director')
 ))
@@ -128,8 +130,12 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await publishedSemesters()
-    if (semesters.value.length) await load(semesters.value[0].id)
+    const currentId = semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+      ?? semesterContext.currentSemesterId
+      ?? semesters.value[0]?.id
+    if (currentId) await load(currentId)
     else {
       sid.value = null
       data.value = null

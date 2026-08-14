@@ -332,7 +332,19 @@ def test_place_rejects_room_from_other_semester(env2):
     s = _subject(client, sid, "生物学")
     a = _assign(client, sid, class_id=c["id"], subject_id=s["id"], teacher_ids=[t["id"]])
     other = client.post("/api/semesters", json={"academic_year": 2027, "term": 1}).json()
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": other["id"], "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     foreign = _room(client, other["id"], "他校教室")
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": sid, "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     r = _place(client, tid, a["id"], 1, 1, room_id=foreign["id"])
     assert r.status_code == 400
 

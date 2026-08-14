@@ -54,7 +54,19 @@ def test_teacher_with_subjects(scheduler_env):
 def test_teacher_subject_cross_semester_rejected(scheduler_env):
     client, sid = scheduler_env
     other = client.post("/api/semesters", json={"academic_year": 2026, "term": 2}).json()
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": other["id"], "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     foreign = client.post(f"/api/subjects?semester_id={other['id']}", json={"name": "体育"}).json()
+    context = client.get("/api/semester-context").json()
+    switched = client.put(
+        "/api/semester-context",
+        json={"semester_id": sid, "expected_revision": context["revision"]},
+    )
+    assert switched.status_code == 200, switched.text
     r = client.post(
         f"/api/teachers?semester_id={sid}",
         json={"name": "李老师", "subject_ids": [foreign["id"]]},

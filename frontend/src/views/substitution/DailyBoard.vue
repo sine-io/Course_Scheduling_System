@@ -8,6 +8,7 @@ import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard, LogEntry } from '@/api/substitutionLog'
 import { listSemesters } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import { formatDateWithWeekday, toLocalISODate } from './reportDate'
 import './operations-workspace.css'
 
@@ -22,6 +23,7 @@ function parseISODate(iso: string): number {
 }
 
 const route = useRoute()
+const semesterContext = useSemesterContextStore()
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)
 const dateTs = ref<number>(
@@ -65,6 +67,7 @@ async function loadPage() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
     if (!semesters.value.length) {
       sid.value = null
@@ -73,6 +76,8 @@ async function loadPage() {
     }
     const querySemesterId = Number(route.query.semester_id)
     sid.value = semesters.value.find((semester) => semester.id === querySemesterId)?.id
+      ?? semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)?.id
+      ?? semesterContext.currentSemesterId
       ?? semesters.value[0].id
     board.value = await getDailyBoard(sid.value, toLocalISODate(dateTs.value))
   } catch (error) {

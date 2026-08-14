@@ -108,6 +108,7 @@ const form = ref<{
 const showDepartment = computed(() => form.value.track === 'vocational')
 
 function openCreate() {
+  if (!props.canEdit) return
   editingId.value = null
   form.value = {
     grade: 1,
@@ -121,6 +122,7 @@ function openCreate() {
   show.value = true
 }
 function openEdit(classUnit: ClassUnit) {
+  if (!props.canEdit) return
   editingId.value = classUnit.id
   form.value = {
     grade: classUnit.grade,
@@ -138,7 +140,7 @@ function closeModal() {
 }
 
 async function save() {
-  if (saving.value) return
+  if (!props.canEdit || saving.value) return
   if (!form.value.name) {
     message.warning('请输入班级名称')
     return
@@ -167,7 +169,7 @@ async function save() {
 }
 
 async function remove(classUnit: ClassUnit) {
-  if (deletingId.value !== null) return
+  if (!props.canEdit || deletingId.value !== null) return
   deletingId.value = classUnit.id
   try {
     await deleteClassUnit(classUnit.id)
@@ -275,7 +277,7 @@ async function remove(classUnit: ClassUnit) {
       </table>
     </div>
 
-    <n-modal v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑班级' : '新增班级'">
+    <n-modal v-if="canEdit" v-model:show="show" preset="card" class="basedata-modal" :title="editingId ? '编辑班级' : '新增班级'">
       <div class="basedata-form">
         <div class="basedata-form-row">
           <div class="basedata-field">
@@ -341,11 +343,11 @@ async function remove(classUnit: ClassUnit) {
           />
         </div>
         <div class="basedata-modal-actions">
-          <n-button quaternary :disabled="saving" @click="closeModal">
+          <n-button quaternary :disabled="!canEdit || saving" @click="closeModal">
             <template #icon><X :size="15" aria-hidden="true" /></template>
             {{ '取消' }}
           </n-button>
-          <n-button type="primary" data-testid="class-save" :loading="saving" :disabled="saving" @click="save">
+          <n-button type="primary" data-testid="class-save" :loading="saving" :disabled="!canEdit || saving" @click="save">
             <template #icon><Save :size="15" aria-hidden="true" /></template>
             {{ '保存' }}
           </n-button>

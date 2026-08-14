@@ -8,6 +8,7 @@ import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
+import { useSemesterContextStore } from '@/stores/semesterContext'
 import ClassesTab from './ClassesTab.vue'
 import ImportTab from './ImportTab.vue'
 import RoomsTab from './RoomsTab.vue'
@@ -16,6 +17,7 @@ import TeachersTab from './TeachersTab.vue'
 import './basedata-workspace.css'
 
 const auth = useAuthStore()
+const semesterContext = useSemesterContextStore()
 const router = useRouter()
 const semesters = ref<SemesterListItem[]>([])
 const currentId = ref<number | null>(null)
@@ -23,7 +25,10 @@ const activeTab = ref('teachers')
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
-const canEdit = computed(() => auth.hasRole('admin') || auth.hasRole('scheduler'))
+const canEdit = computed(() => (
+  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(currentId.value))
+))
 
 const semesterOptions = computed(() =>
   semesters.value.map((s) => ({ label: s.label, value: s.id })),
@@ -33,8 +38,12 @@ async function loadSemesters() {
   loading.value = true
   loadError.value = null
   try {
+    await semesterContext.load()
     semesters.value = await listSemesters()
-    currentId.value = semesters.value[0]?.id ?? null
+    currentId.value = semesters.value.find((semester) => semester.is_current)?.id
+      ?? semesterContext.currentSemesterId
+      ?? semesters.value[0]?.id
+      ?? null
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取基础数据，请重试。')
   } finally {

@@ -45,6 +45,7 @@ class AvailableSlot(BaseModel):
 class PeriodTableOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    semester_id: int
     name: str
     num_weekdays: int
     is_default: bool
@@ -113,7 +114,21 @@ class SemesterListItem(BaseModel):
     readiness: SemesterReadiness
     start_date: date | None = None
     end_date: date | None = None
+    is_current: bool = False
 
 
 class SemesterOut(SemesterListItem):
     period_tables: list[PeriodTableOut] = []
+
+
+class SemesterContextOut(BaseModel):
+    """全局工作上下文，供所有登录角色读取。"""
+
+    current_semester: SemesterListItem | None = None
+    revision: int
+    can_switch: bool
+
+
+class SemesterContextSwitch(BaseModel):
+    semester_id: int = Field(gt=0)
+    expected_revision: int = Field(ge=0)

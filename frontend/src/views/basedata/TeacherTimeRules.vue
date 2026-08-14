@@ -57,7 +57,7 @@ function slotName(weekday: number, periodNo: number) {
     ?? '未定义时段'
 }
 function cycle(weekday: number, periodNo: number) {
-  if (!cellExists(weekday, periodNo)) return
+  if (!props.canEdit || !cellExists(weekday, periodNo)) return
   const ruleKey = key(weekday, periodNo)
   const current = ruleMap.value[ruleKey] ?? null
   const next = CYCLE[(CYCLE.indexOf(current) + 1) % CYCLE.length]
@@ -102,7 +102,7 @@ async function loadData() {
 onMounted(loadData)
 
 async function save() {
-  if (saving.value) return
+  if (!props.canEdit || saving.value) return
   saving.value = true
   try {
     const rules = Object.entries(ruleMap.value).map(([ruleKey, rule_type]) => {

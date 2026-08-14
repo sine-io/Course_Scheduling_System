@@ -5,9 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import require_roles
 from app.core.db import get_db
-from app.models.semester import Semester
 from app.models.user import Role
-from app.services import importer
+from app.services import importer, semester_context
 
 router = APIRouter(tags=["import"])
 
@@ -48,8 +47,10 @@ async def upload_import(
     _: object = Depends(editor),
 ) -> dict:
     _check_entity(entity)
-    if db.get(Semester, semester_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    try:
+        semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
     content = await file.read()
     try:
         result = importer.run_import(db, entity, semester_id, content, create_accounts)
