@@ -81,7 +81,12 @@ def _load_preflight(db: Session, semester_id: int) -> tuple[bool, str, dict[str,
     }
     if report.ok:
         return True, "", details
-    return False, report.errors[0].message, details
+    reason = (
+        report.errors[0].message
+        if report.errors
+        else "完整性检查未通过，请打开自动排课页面查看数据问题。"
+    )
+    return False, reason, details
 
 
 def build_status(db: Session) -> OnboardingStatusOut:
