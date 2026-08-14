@@ -206,11 +206,15 @@ def build_status(db: Session) -> OnboardingStatusOut:
         else []
     )
     reports = {tt.id: completeness(db, tt) for tt in timetables}
+    current_timetables = [
+        tt for tt in timetables
+        if tt.status in {TimetableStatus.draft.value, TimetableStatus.published.value}
+    ]
     complete_timetable = next(
-        (tt for tt in timetables if reports[tt.id]["complete"]),
+        (tt for tt in current_timetables if reports[tt.id]["complete"]),
         None,
     )
-    draft_complete = bool(formal and timetables)
+    draft_complete = bool(formal and current_timetables)
     integrity_complete = bool(
         formal and preflight_ok and complete_timetable is not None
     )
@@ -224,7 +228,7 @@ def build_status(db: Session) -> OnboardingStatusOut:
         integrity_reason = preflight_reason
     elif complete_timetable is None:
         incomplete = next(
-            (reports[tt.id] for tt in timetables if not reports[tt.id]["complete"]),
+            (reports[tt.id] for tt in current_timetables if not reports[tt.id]["complete"]),
             None,
         )
         integrity_reason = (

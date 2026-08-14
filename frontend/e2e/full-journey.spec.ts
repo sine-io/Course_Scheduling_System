@@ -65,8 +65,22 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
 
   // ── 1) 建学期 + 基础数据(API 准备)──
   const sem = await createTestSemester(page, YEAR)
+  // 真实状态读模型：有学期和作息但还没有班级/教师/教学任务时，下一步应指向基础数据。
+  const missing = await get(page, '/api/onboarding/status')
+  expect(missing.first_success).toBe(false)
+  expect(missing.next_action.stage).toBe('basedata')
+  expect(missing.stages.find((stage: { key: string }) => stage.key === 'basedata').complete).toBe(false)
+  await page.goto('/')
+  await expect(page.getByTestId('onboarding-status')).toBeVisible()
+  await expect(page.getByTestId('onboarding-stage-basedata')).toContainText('基础数据')
+  await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/basedata')
+
   await seedSchool(page, sem.id)
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
+
+  const prePublish = await get(page, '/api/onboarding/status')
+  expect(prePublish.first_success).toBe(false)
+  expect(prePublish.next_action.stage).toBe('integrity')
 
   // ── 2) 自动排课(真实走 solver worker,UI 显示进度)──
   await page.goto('/scheduling/auto')
@@ -88,6 +102,12 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   if (await force.isVisible().catch(() => false)) await force.click()
   await expect(page.getByTestId('v-status-草稿A 自排结果')).toHaveText('已发布')
   await page.screenshot({ path: `${SHOTS}/journey-2-published.png` })
+
+  const success = await get(page, '/api/onboarding/status')
+  expect(success.first_success).toBe(true)
+  expect(success.p0_todos).toHaveLength(0)
+  await page.goto('/')
+  await expect(page.getByTestId('onboarding-success')).toBeVisible()
 
   // ── 4) 课表查询:已发布课表在只读查询页可见(UI)──
   await page.goto(`/timetable-query?semester_id=${sem.id}`)

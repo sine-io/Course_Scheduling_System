@@ -15,7 +15,6 @@ viewer = require_roles(Role.scheduler, Role.director)
 
 
 @router.get("/onboarding/status", response_model=OnboardingStatusOut)
-@router.get("/onboarding", response_model=OnboardingStatusOut, include_in_schema=False)
 def onboarding_status(
     db: Session = Depends(get_db), _: object = Depends(viewer)
 ) -> OnboardingStatusOut:
