@@ -73,9 +73,16 @@ def require_writable(
 
 
 def set_initial_current(db: Session, semester: Semester) -> None:
-    """首个学期自动成为当前；已有当前学期时新学期保持可查询但只读。"""
+    """选择首次工作学期；正式学期取代示例学期成为当前上下文。"""
     row = _context_row(db, lock="update")
-    if row.current_semester_id is None:
+    current = (
+        db.get(Semester, row.current_semester_id) if row.current_semester_id else None
+    )
+    if (
+        row.current_semester_id is None
+        or current is None
+        or (current.is_demo and not semester.is_demo)
+    ):
         row.current_semester_id = semester.id
         row.revision += 1
 

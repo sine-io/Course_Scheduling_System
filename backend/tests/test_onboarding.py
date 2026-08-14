@@ -93,6 +93,33 @@ def test_demo_semester_is_not_formal_first_success_context(env):
     assert "示例" in body["next_action"]["blocking_reason"]
 
 
+def test_creating_formal_semester_after_demo_switches_current_context(env):
+    client, db = env
+    _login(client, db, username="admin", roles=(Role.admin,))
+
+    demo = client.post("/api/demo-data")
+    assert demo.status_code == 201, demo.text
+
+    formal = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2063,
+            "term": 1,
+            "start_date": "2063-09-01",
+            "end_date": "2064-01-31",
+        },
+    )
+    assert formal.status_code == 201, formal.text
+    formal_body = formal.json()
+
+    context = client.get("/api/semester-context").json()
+    assert context["current_semester"]["id"] == formal_body["id"]
+    onboarding = client.get("/api/onboarding/status").json()
+    assert onboarding["current_semester"]["id"] == formal_body["id"]
+    assert onboarding["current_semester"]["is_demo"] is False
+    assert onboarding["first_success"] is False
+
+
 def test_first_success_is_derived_from_published_complete_timetable(env):
     client, db = env
     _login(client, db)

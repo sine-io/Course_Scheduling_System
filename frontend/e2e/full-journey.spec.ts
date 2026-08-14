@@ -81,6 +81,10 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   const prePublish = await get(page, '/api/onboarding/status')
   expect(prePublish.first_success).toBe(false)
   expect(prePublish.next_action.stage).toBe('integrity')
+  await page.goto('/')
+  await expect(page.getByTestId('onboarding-stage-integrity')).toContainText('完整性检查')
+  await expect(page.getByTestId('onboarding-stage-integrity')).toContainText('未排完')
+  await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/scheduling/versions')
 
   // ── 2) 自动排课(真实走 solver worker,UI 显示进度)──
   await page.goto('/scheduling/auto')

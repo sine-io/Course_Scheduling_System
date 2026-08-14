@@ -89,17 +89,21 @@ async function loadSemester(id: number) {
   semester.value = await getSemester(id)
 }
 
+async function refreshOnboarding() {
+  try {
+    onboarding.value = await getOnboardingStatus()
+  } catch {
+    onboarding.value = null
+  }
+}
+
 async function loadWizardData() {
   initialLoading.value = true
   initialError.value = null
   actionError.value = null
   try {
     await semesterContext.load()
-    try {
-      onboarding.value = await getOnboardingStatus()
-    } catch {
-      onboarding.value = null
-    }
+    await refreshOnboarding()
     templates.value = await listTemplates()
     templateKey.value ??= templates.value[0]?.key ?? null
 
@@ -183,6 +187,9 @@ async function goNext() {
       if (semester.value?.id !== semesterId.value) {
         await loadSemester(semesterId.value)
       }
+      // 创建正式学期可能会把示例当前学期替换为正式当前学期，重新读取权威上下文。
+      await semesterContext.load()
+      await refreshOnboarding()
     }
 
     const nextStep = Math.min(step.value + 1, 4)
@@ -458,7 +465,12 @@ onMounted(loadWizardData)
         <!-- 步骤 3：导入数据 -->
         <div v-else-if="step === 3" class="wizard-step-content">
           <p class="wizard-step-intro">{{ '下载模板填写后上传，批量创建教师、班级和科目（可跳过，稍后在基础数据中补充）。' }}</p>
-          <ImportTab v-if="semesterId" :semester-id="semesterId" :can-edit="canEditSemester" />
+          <ImportTab
+            v-if="semesterId"
+            :semester-id="semesterId"
+            :can-edit="canEditSemester"
+            @imported="refreshOnboarding"
+          />
           <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-import-empty" />
         </div>
 
