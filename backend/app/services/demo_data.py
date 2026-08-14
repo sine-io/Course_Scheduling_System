@@ -201,6 +201,7 @@ def generate(db: Session, spec: dict | None = None) -> DemoSummary:
         term=spec["term"],
         template_key=spec["template_key"],
     )
+    semester.is_demo = True
     sid = semester.id
     _apply_demo_period_table(semester, spec)
 

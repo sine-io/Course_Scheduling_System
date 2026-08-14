@@ -11,6 +11,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import { demoDataStatus, loadDemoData } from '@/api/assignments'
+import { getOnboardingStatus } from '@/api/onboarding'
+import type { OnboardingStatus } from '@/api/onboarding'
 import { createSemester, getSemester, listTemplates } from '@/api/semesters'
 import type { Semester, Template } from '@/api/semesters'
 import { getSemesterSummary } from '@/api/wizard'
@@ -19,6 +21,7 @@ import { useWizardStore } from '@/stores/wizard'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import ImportTab from '@/views/basedata/ImportTab.vue'
+import OnboardingChecklist from '@/components/OnboardingChecklist.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -43,6 +46,7 @@ const summaryLoading = ref(false)
 const demoAvailable = ref(false)
 const demoSchool = ref('')
 const loadingDemo = ref(false)
+const onboarding = ref<OnboardingStatus | null>(null)
 
 const termOptions = [
   { label: '第一学期', value: 1 },
@@ -91,6 +95,11 @@ async function loadWizardData() {
   actionError.value = null
   try {
     await semesterContext.load()
+    try {
+      onboarding.value = await getOnboardingStatus()
+    } catch {
+      onboarding.value = null
+    }
     templates.value = await listTemplates()
     templateKey.value ??= templates.value[0]?.key ?? null
 
@@ -305,6 +314,8 @@ onMounted(loadWizardData)
     </section>
 
     <template v-else>
+      <OnboardingChecklist v-if="onboarding" :status="onboarding" />
+
       <nav class="wizard-progress" aria-label="设置步骤">
         <n-steps :current="step + 1" size="small">
           <n-step :title="'学制模板'" />

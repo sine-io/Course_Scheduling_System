@@ -10,14 +10,18 @@ import { STATUS_LABELS } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard } from '@/api/substitutionLog'
+import { getOnboardingStatus } from '@/api/onboarding'
+import type { OnboardingStatus } from '@/api/onboarding'
 import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
 import { useSemesterContextStore } from '@/stores/semesterContext'
+import OnboardingChecklist from '@/components/OnboardingChecklist.vue'
 
 const semesterContext = useSemesterContextStore()
 const semester = ref<SemesterListItem | null>(null)
 const summary = ref<SemesterSummary | null>(null)
 const board = ref<DailyBoard | null>(null)
+const onboarding = ref<OnboardingStatus | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const summaryError = ref<string | null>(null)
@@ -52,10 +56,15 @@ async function loadDashboard() {
   semester.value = null
   summary.value = null
   board.value = null
+  onboarding.value = null
 
   try {
     await semesterContext.load()
     semester.value = semesterContext.currentSemester
+    const onboardingResult = await getOnboardingStatus().catch(() => null)
+    if (onboardingResult && Array.isArray(onboardingResult.stages)) {
+      onboarding.value = onboardingResult
+    }
     if (!semester.value) return
     const [summaryResult, boardResult] = await Promise.allSettled([
       getSemesterSummary(semester.value.id),
@@ -129,6 +138,8 @@ onMounted(loadDashboard)
     </section>
 
     <template v-else>
+      <OnboardingChecklist v-if="onboarding" :status="onboarding" />
+
       <section v-if="semester" class="dashboard-panel dashboard-summary-panel" data-testid="dash-summary">
         <div class="dashboard-panel-heading">
           <div>

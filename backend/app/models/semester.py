@@ -8,6 +8,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -54,6 +55,8 @@ class Semester(Base):
         String(20), default=SemesterReadiness.draft.value,
         server_default=SemesterReadiness.draft.value,
     )
+    # 示例数据是独立的体验路径，不能满足正式学期的首次成功条件。
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # 当前学期不是 Semester 的生命周期状态，而是单校工作上下文。
     # 通过反向关系投影，避免在每张学期记录上复制一份可竞争的上下文状态。
