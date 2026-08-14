@@ -636,6 +636,8 @@
       <h3 id="21-er-图">2.1 ER 图</h3>
       <pre><code class="language-mermaid">erDiagram
           SCHOOL ||--o{ SEMESTER : &quot;有&quot;
+          SCHOOL ||--|| SEMESTER_CONTEXT : &quot;维护&quot;
+          SEMESTER_CONTEXT ||--o| SEMESTER : &quot;指向当前&quot;
           SEMESTER ||--o{ PERIOD_TABLE : &quot;使用&quot;
           PERIOD_TABLE ||--o{ PERIOD : &quot;定义节次&quot;
           SEMESTER ||--o{ TEACHER : &quot;聘任(快照)&quot;
@@ -682,6 +684,11 @@
       <td><code>semester</code></td>
       <td>学年学期</td>
       <td>学年起始年（如 2026）、学期（1/2）、起止日期、状态（准备中/进行中/已归档）</td>
+      </tr>
+      <tr>
+      <td><code>semester_context</code></td>
+      <td>当前学期工作上下文</td>
+      <td>单校单例行（<code>id=1</code>）；<code>current_semester_id</code> 是可空且唯一的学期外键，<code>revision</code> 用于并发切换校验；当前指针不复用学期生命周期状态</td>
       </tr>
       <tr>
       <td><code>period_table</code></td>
@@ -815,6 +822,8 @@
       4. <strong>走班群组的成员班级必须使用同一作息时间表</strong>(否则 H7「同时段开课」无意义),教学任务创建时验证并拒绝。</p>
       <p><strong>D8|教室/场地互斥,容量仅作事前警告(M2 检查新增,2026-07-10)。</strong>
       v1 中同一教室/场地同时段至多一门课——H3 统一以互斥判定,手动冲突检查(M2-3 已如此实现)与 CP-SAT 建模(M3-2)语义一致。<code>room.capacity</code> 不参与求解,仅于 pre-flight 对「班级人数 &gt; 教室/场地容量」提出警告;M3-2 验收的「实训场地容量限制」即以「互斥 + pre-flight 警告」解读。若日后需要让多组学生共用同一教室/场地(大型实训室、体育馆分区),再引入容量型占用,属 schema 不变的引擎扩充。</p>
+      <p><strong>D9|当前学期工作上下文与学期生命周期分离。</strong>
+      <code>semester.status</code> 只描述准备中、进行中和已归档等生命周期；单例表 <code>semester_context</code> 的 <code>current_semester_id</code> 表示学校唯一的日常工作边界。首个学期自动成为当前学期；归档或删除当前学期时指针可暂时为空。只有系统管理员和排课管理员可以切换当前学期，客户端携带 <code>revision</code> 做乐观并发校验，服务端在切换与常规写入事务中锁定单例行，避免切换期间把结果写入旧学期。只有当前且未归档的学期允许常规编辑、导入、排课和发布；历史或归档学期保留查询及复制到新学期的能力。前端只读状态用于明确反馈，后端校验始终是最终边界。</p>
       <hr />
       <h2 id="3-排课引擎设计">3. 排课引擎设计</h2>
       <h3 id="31-问题建模">3.1 问题建模</h3>
