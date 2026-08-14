@@ -121,6 +121,19 @@ def test_first_success_is_derived_from_published_complete_timetable(env):
     assert success["next_action"] is None
     assert all(stage["status"] == "complete" for stage in success["stages"])
 
+    # 归档的旧完整版本不能掩盖当前被强制发布的不完整版本。
+    replacement = client.post(
+        f"/api/timetables?semester_id={sid}", json={"name": "不完整替代版"}
+    ).json()
+    forced = client.post(f"/api/timetables/{replacement['id']}/publish?force=true")
+    assert forced.status_code == 200, forced.text
+    replaced = client.get("/api/onboarding/status").json()
+    assert replaced["first_success"] is False
+    integrity = next(stage for stage in replaced["stages"] if stage["key"] == "integrity")
+    published_stage = next(stage for stage in replaced["stages"] if stage["key"] == "published")
+    assert integrity["complete"] is False
+    assert published_stage["complete"] is False
+
     # 新增真实教学任务后重新计算，不依赖向导完成标记或历史缓存。
     extra = client.post(
         f"/api/subjects?semester_id={sid}", json={"name": "语文"}
