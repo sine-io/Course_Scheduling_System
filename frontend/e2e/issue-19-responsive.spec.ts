@@ -104,7 +104,20 @@ async function mockSurfaceData(
   }
 
   if (surface === 'dashboard') {
-    await page.route('**/api/auth/login', (route) => fulfillJson(route, DASHBOARD_USER))
+    let authenticated = false
+    await page.route('**/api/auth/login', (route) => {
+      authenticated = true
+      return fulfillJson(route, DASHBOARD_USER)
+    })
+    await page.route('**/api/auth/me', (route) => (
+      authenticated
+        ? fulfillJson(route, DASHBOARD_USER)
+        : fulfillJson(route, { detail: 'Not authenticated' }, 401)
+    ))
+    await page.route('**/api/navigation-preference', (route) => fulfillJson(route, {
+      fixed: [],
+      recent: [],
+    }))
     await page.route('**/api/app-config', (route) => fulfillJson(route, {
       school_name: '响应式验收学校',
       timezone: 'Asia/Shanghai',

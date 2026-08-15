@@ -175,7 +175,8 @@ test.describe('教师端(手机)', () => {
     // 教师看不到排课作业/基础数据等管理菜单
     await page.getByTestId('shell-menu').click()
     await expect(page.getByTestId('mobile-drawer')).toBeVisible()
-    await expect(page.getByRole('link', { name: '课表查询' })).toBeVisible()
+    await expect(page.getByRole('region', { name: '常用' })
+      .getByRole('link', { name: '课表查询' })).toBeVisible()
     await expect(page.getByText('排课作业')).toHaveCount(0)
     await expect(page.getByText('基础数据')).toHaveCount(0)
     await page.screenshot({ path: `${SHOTS}/pub-4-teacher-mobile.png` })
