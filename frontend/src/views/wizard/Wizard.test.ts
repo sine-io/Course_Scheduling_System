@@ -261,6 +261,38 @@ describe('Wizard', () => {
     expect(router.currentRoute.value.name).toBe('auto-schedule')
   })
 
+  it('从示例路线重选正式路线后回到正式向导起点', async () => {
+    const demoState: WizardState = {
+      ...baseState, route: 'demo', current_step: 4, completed: true, semester_id: 9,
+    }
+    const formalState: WizardState = {
+      ...baseState, route: 'formal', current_step: 0, completed: false, semester_id: null,
+    }
+    mocks.getOnboardingRoute
+      .mockResolvedValueOnce({
+        route: 'demo', demo_available: false, demo_school_name: '示例初中',
+        has_demo_semester: true, has_formal_semester: false, can_reselect: true,
+        resume_step: 4, resume_semester_id: 9,
+      })
+      .mockResolvedValue({
+        route: 'formal', demo_available: false, demo_school_name: '示例初中',
+        has_demo_semester: true, has_formal_semester: false, can_reselect: true,
+        resume_step: 0, resume_semester_id: null,
+      })
+    const { wrapper } = await mountWizard(demoState)
+    mocks.getWizardState.mockResolvedValue(formalState)
+
+    await wrapper.get('[data-testid="route-reselect"]').trigger('click')
+    await wrapper.get('[data-testid="route-formal"]').trigger('click')
+    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('formal')
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学制模板')
+    expect(wrapper.find('[data-testid="demo-context-banner"]').exists()).toBe(false)
+    expect(mocks.loadDemoData).not.toHaveBeenCalled()
+  })
+
   it('读取中显示明确状态', async () => {
     let resolveTemplates!: (value: typeof template[]) => void
     mocks.listTemplates.mockReturnValue(new Promise((resolve) => { resolveTemplates = resolve }))

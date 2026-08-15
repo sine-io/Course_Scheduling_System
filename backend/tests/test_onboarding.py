@@ -105,10 +105,12 @@ def test_creating_formal_semester_after_demo_switches_current_context(env):
     formal = client.post(
         "/api/semesters",
         json={
-            "academic_year": 2063,
+            # The demo fixture uses the current default (2026, term 1). A
+            # formal route must still be able to create that real semester.
+            "academic_year": 2026,
             "term": 1,
-            "start_date": "2063-09-01",
-            "end_date": "2064-01-31",
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-31",
         },
     )
     assert formal.status_code == 201, formal.text
@@ -120,6 +122,11 @@ def test_creating_formal_semester_after_demo_switches_current_context(env):
     assert onboarding["current_semester"]["id"] == formal_body["id"]
     assert onboarding["current_semester"]["is_demo"] is False
     assert onboarding["first_success"] is False
+    wizard = client.get("/api/wizard/state").json()
+    assert wizard["route"] == "formal"
+    assert wizard["current_step"] == 0
+    assert wizard["completed"] is False
+    assert wizard["semester_id"] == formal_body["id"]
 
 
 def test_demo_and_formal_publish_are_isolated(env):

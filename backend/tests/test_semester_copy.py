@@ -75,7 +75,9 @@ def test_copying_demo_switches_current_context_to_new_formal_semester(env):
     copied = client.post(
         f"/api/semesters/{demo.json()['semester_id']}/copy",
         json={
-            "academic_year": 2091,
+            # Copying a demo into the wizard's default current year must not
+            # collide with the isolated demo row.
+            "academic_year": 2026,
             "term": 1,
             "period_tables": False,
             "subjects": False,

@@ -166,7 +166,9 @@ def create_semester(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     exists = db.scalar(
         select(Semester).where(
-            Semester.academic_year == body.academic_year, Semester.term == body.term
+            Semester.academic_year == body.academic_year,
+            Semester.term == body.term,
+            Semester.is_demo.is_(False),
         )
     )
     if exists:
@@ -195,6 +197,8 @@ def create_semester(
     # 创建正式学期即确认正式建校路线；示例学期本身保持独立，向导状态从第 0 步恢复。
     onboarding_route.choose_route(db, "formal")
     semester_context.set_initial_current(db, semester)
+    if semester_context.read_context(db)[0].current_semester_id == semester.id:
+        onboarding_route.get_or_create_state(db).semester_id = semester.id
     db.commit()
     db.refresh(semester)
     return _semester_out(db, semester)
@@ -216,7 +220,9 @@ def copy_to_new_semester(
     source = _get_semester(db, source_id)
     exists = db.scalar(
         select(Semester).where(
-            Semester.academic_year == body.academic_year, Semester.term == body.term
+            Semester.academic_year == body.academic_year,
+            Semester.term == body.term,
+            Semester.is_demo.is_(False),
         )
     )
     if exists:

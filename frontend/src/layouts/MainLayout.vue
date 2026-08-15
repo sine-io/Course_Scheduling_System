@@ -58,7 +58,7 @@ const roleLabels = computed(() => (auth.user?.roles ?? []).map((role) => auth.ro
 const schoolName = computed(() => appConfig.config.school_name)
 const userInitial = computed(() => auth.user?.display_name.trim().charAt(0) || '用')
 const semesterOptions = computed(() => semesterContext.semesters.map((semester) => ({
-  label: semester.label,
+  label: semester.is_demo ? `${semester.label}（示例）` : semester.label,
   value: semester.id,
 })))
 
@@ -414,7 +414,9 @@ onBeforeUnmount(() => {
               </option>
             </select>
             <span v-else class="app-semester-label" data-testid="current-semester-label">
-              {{ semesterContext.currentSemester?.label || '未选择学期' }}
+              {{ semesterContext.currentSemester
+                ? `${semesterContext.currentSemester.label}${semesterContext.currentSemester.is_demo ? '（示例）' : ''}`
+                : '未选择学期' }}
             </span>
           </div>
 

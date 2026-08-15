@@ -70,7 +70,10 @@ def choose_route(db: Session, route: str) -> WizardState:
             "已有正式学期数据，不能切换到示例路线；示例数据不会覆盖正式数据",
         )
 
-    changed = current != route
+    # ``Semester`` callers may flush a newly created formal row before calling
+    # this service. In that case effective_route() already sees formal data;
+    # the persisted demo choice must still count as a real route transition.
+    changed = current != route or (state.route is not None and state.route != route)
     if changed:
         # 只有示例 -> 正式会保留示例学期并从正式向导第 0 步开始。
         state.route = route

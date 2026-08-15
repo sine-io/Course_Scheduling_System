@@ -13,10 +13,12 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,7 +43,16 @@ class SemesterReadiness(enum.StrEnum):
 class Semester(Base):
     __tablename__ = "semesters"
     __table_args__ = (
-        UniqueConstraint("academic_year", "term", name="uq_semesters_academic_year"),
+        # 示例学期是隔离的体验上下文，可以与正式学期使用同一学年/学期。
+        # 正式学期之间仍保持业务上的唯一性。
+        Index(
+            "uq_semesters_formal_academic_year",
+            "academic_year",
+            "term",
+            unique=True,
+            postgresql_where=text("is_demo = false"),
+            sqlite_where=text("is_demo = 0"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -116,6 +116,24 @@ async function loadSemester(id: number) {
   semester.value = await getSemester(id)
 }
 
+async function syncWizardState() {
+  step.value = wizard.state?.current_step ?? 0
+  semesterId.value = wizard.state?.semester_id ?? null
+  semester.value = null
+  summary.value = null
+  summaryError.value = null
+  if (semesterId.value) {
+    await loadSemester(semesterId.value)
+    if (step.value === 4) {
+      try {
+        await loadSummary(semesterId.value)
+      } catch {
+        // The completion step owns the inline retry state.
+      }
+    }
+  }
+}
+
 async function refreshOnboarding() {
   try {
     onboarding.value = await getOnboardingStatus()
@@ -146,20 +164,7 @@ async function loadWizardData() {
     templates.value = await listTemplates()
     templateKey.value ??= templates.value[0]?.key ?? null
 
-    if (wizard.state) {
-      step.value = wizard.state.current_step
-      semesterId.value = wizard.state.semester_id
-      if (semesterId.value) {
-        await loadSemester(semesterId.value)
-        if (step.value === 4) {
-          try {
-            await loadSummary(semesterId.value)
-          } catch {
-            // The completion step owns the inline retry state.
-          }
-        }
-      }
-    }
+    await syncWizardState()
 
     if (!routeStatus.value) {
       // 查询接口仅对管理员开放，其他角色进入向导时忽略 403 即可。
@@ -187,13 +192,14 @@ async function confirmRoute() {
     const chosen = await chooseOnboardingRoute(route)
     routeStatus.value = chosen
     await wizard.fetch()
+    await syncWizardState()
+    await semesterContext.load()
+    await refreshOnboarding()
     routeChoiceOpen.value = false
     if (route === 'demo') {
       if (chosen.has_demo_semester) {
         // A re-selection must resume the existing demo context, never POST a
         // second copy of the fixture data.
-        await semesterContext.load()
-        await refreshOnboarding()
         message.success('已恢复示例学期，可以继续试用自动排课。', { duration: 8000 })
         await router.push({ name: 'auto-schedule' })
       } else {

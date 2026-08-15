@@ -56,7 +56,7 @@ const termOptions = [
   { label: '第二学期', value: 2 },
 ]
 const semesterOptions = computed(() => semesters.value.map((semester) => ({
-  label: semester.label,
+  label: semester.is_demo ? `${semester.label}（示例）` : semester.label,
   value: semester.id,
 })))
 const canManageSemesters = computed(() => (
@@ -375,6 +375,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
             <div>
               <div class="settings-meta">
                 <h2>{{ semester.label }}</h2>
+                <n-tag v-if="semester.is_demo" type="info" size="small">{{ '示例数据' }}</n-tag>
                 <n-tag :type="statusType[semester.status]" size="small">{{ statusLabel(semester.status) }}</n-tag>
                 <n-tag :type="semester.readiness === 'ready' ? 'success' : 'warning'" size="small">
                   {{ readinessLabel(semester.readiness) }}
