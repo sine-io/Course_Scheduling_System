@@ -10,16 +10,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import core_editor, core_viewer
 from app.models.audit import AuditLog
 from app.models.semester import Semester
 from app.models.user import Role, User
+from app.models.wizard import WizardRoute
 from app.services import demo_data, semester_context
+from app.services.onboarding_route import effective_route
 
 router = APIRouter(tags=["demo"])
 
-admin_only = require_roles(Role.admin)
+route_viewer = core_viewer
+route_editor = core_editor
 
 
 class DemoDataOut(BaseModel):
@@ -42,7 +45,7 @@ class DemoDataStatus(BaseModel):
 
 
 @router.get("/demo-data", response_model=DemoDataStatus)
-def demo_status(db: Session = Depends(get_db), _: User = Depends(admin_only)):
+def demo_status(db: Session = Depends(get_db), _: User = Depends(route_viewer)):
     """返回当前系统是否允许加载示例数据。"""
     spec_name = demo_data.load_spec()["school_name"]
     if demo_data.any_semester_exists(db):
@@ -55,7 +58,14 @@ def demo_status(db: Session = Depends(get_db), _: User = Depends(admin_only)):
 
 
 @router.post("/demo-data", response_model=DemoDataOut, status_code=status.HTTP_201_CREATED)
-def create_demo_data(db: Session = Depends(get_db), user: User = Depends(admin_only)):
+def create_demo_data(db: Session = Depends(get_db), user: User = Depends(route_editor)):
+    route = effective_route(db)
+    if route == WizardRoute.formal.value:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "已选择正式建校路线，示例数据不会写入正式环境"
+        )
+    if Role.admin.value not in user.role_names and route != WizardRoute.demo.value:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "请先选择示例体验路线")
     if demo_data.any_semester_exists(db):
         raise HTTPException(
             status.HTTP_409_CONFLICT,

@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   updateWizardState: vi.fn(),
   getSemesterSummary: vi.fn(),
   getOnboardingStatus: vi.fn(),
+  getOnboardingRoute: vi.fn(),
+  chooseOnboardingRoute: vi.fn(),
   demoDataStatus: vi.fn(),
   loadDemoData: vi.fn(),
 }))
@@ -33,6 +35,8 @@ vi.mock('@/api/wizard', () => ({
 }))
 vi.mock('@/api/onboarding', () => ({
   getOnboardingStatus: mocks.getOnboardingStatus,
+  getOnboardingRoute: mocks.getOnboardingRoute,
+  chooseOnboardingRoute: mocks.chooseOnboardingRoute,
 }))
 vi.mock('@/api/assignments', () => ({
   demoDataStatus: mocks.demoDataStatus,
@@ -115,6 +119,7 @@ function makeRouter() {
       { path: '/basedata', name: 'basedata', component: { template: '<main>基础数据</main>' } },
       { path: '/settings/semesters', name: 'semesters', component: { template: '<main>学期设置</main>' } },
       { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main>教学任务管理</main>' } },
+      { path: '/scheduling/auto', name: 'auto-schedule', component: { template: '<main>自动排课</main>' } },
       { path: '/', name: 'dashboard', component: { template: '<main>仪表盘</main>' } },
       { path: '/settings/period-tables/:id', name: 'period-table-editor', component: { template: '<main>编辑器</main>' } },
     ],
@@ -168,7 +173,65 @@ describe('Wizard', () => {
     mocks.createSemester.mockResolvedValue(semester)
     mocks.getSemesterSummary.mockResolvedValue({ subjects: 12, teachers: 8, classes: 4, rooms: 3 })
     mocks.getOnboardingStatus.mockResolvedValue(makeOnboardingStatus('semester'))
+    mocks.getOnboardingRoute.mockResolvedValue({
+      route: 'formal', demo_available: false, demo_school_name: '示例初中',
+      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
+      resume_step: 0, resume_semester_id: null,
+    })
+    mocks.chooseOnboardingRoute.mockImplementation(async (route: 'demo' | 'formal') => ({
+      route, demo_available: route === 'demo', demo_school_name: '示例初中',
+      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
+      resume_step: 0, resume_semester_id: null,
+    }))
     mocks.demoDataStatus.mockRejectedValue(new Error('not available'))
+  })
+
+  it('全新管理用户先选择示例或正式路线', async () => {
+    mocks.getWizardState.mockResolvedValue({ ...baseState, route: null })
+    mocks.getOnboardingRoute.mockResolvedValue({
+      route: null, demo_available: true, demo_school_name: '海州市启明实验初级中学',
+      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
+      resume_step: 0, resume_semester_id: null,
+    })
+    const { wrapper } = await mountWizard({ ...baseState, route: null })
+
+    expect(wrapper.get('[data-testid="route-choice"]').text()).toContain('体验示例数据')
+    expect(wrapper.find('[data-testid="wizard-next"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="route-formal"]').trigger('click')
+    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('formal')
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学制模板')
+  })
+
+  it('示例路线加载后进入自动排课并保持示例上下文', async () => {
+    mocks.getWizardState.mockResolvedValue({ ...baseState, route: null })
+    mocks.getOnboardingRoute
+      .mockResolvedValueOnce({
+        route: null, demo_available: true, demo_school_name: '示例初中',
+        has_demo_semester: false, has_formal_semester: false, can_reselect: true,
+        resume_step: 0, resume_semester_id: null,
+      })
+      .mockResolvedValue({
+        route: 'demo', demo_available: false, demo_school_name: '示例初中',
+        has_demo_semester: true, has_formal_semester: false, can_reselect: true,
+        resume_step: 0, resume_semester_id: null,
+      })
+    mocks.loadDemoData.mockResolvedValue({
+      semester_id: 9, school_name: '示例初中', classes: 18, teachers: 49,
+      subjects: 16, rooms: 26, assignments: 252, total_periods: 594,
+      max_overtime_used: 0, under_target: 0,
+    })
+    const { router, wrapper } = await mountWizard({ ...baseState, route: null })
+
+    await wrapper.get('[data-testid="route-demo"]').trigger('click')
+    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('demo')
+    expect(mocks.loadDemoData).toHaveBeenCalledTimes(1)
+    expect(router.currentRoute.value.name).toBe('auto-schedule')
   })
 
   it('读取中显示明确状态', async () => {

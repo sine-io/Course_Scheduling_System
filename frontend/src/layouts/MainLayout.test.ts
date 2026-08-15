@@ -54,6 +54,7 @@ function makeRouter() {
         name: 'dashboard',
         component: { template: '<main data-testid="page">仪表盘内容</main>' },
       },
+      { path: '/wizard', name: 'wizard', component: { template: '<main />' } },
       { path: '/timetable-query', name: 'timetable-query', component: { template: '<main />' } },
       { path: '/leaves', name: 'leaves', component: { template: '<main />' } },
       { path: '/substitution-stats', name: 'substitution-stats', component: { template: '<main />' } },

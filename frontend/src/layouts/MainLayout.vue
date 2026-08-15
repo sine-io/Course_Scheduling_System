@@ -89,6 +89,7 @@ const navGroups = computed<NavGroup[]>(() => {
       label: '概览',
       items: [
         navItem('dashboard', '仪表盘', LayoutDashboard),
+        navItem('wizard', '设置向导', Settings2),
         query,
       ],
     },

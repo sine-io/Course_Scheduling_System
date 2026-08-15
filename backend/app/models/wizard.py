@@ -3,7 +3,9 @@
 单校部署,全系统一份向导状态(id 固定为 1)。用于首次登录引导与续作。
 """
 
-from sqlalchemy import Boolean, ForeignKey, Integer
+import enum
+
+from sqlalchemy import Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -12,12 +14,21 @@ SINGLETON_ID = 1
 TOTAL_STEPS = 5
 
 
+class WizardRoute(enum.StrEnum):
+    """首次进入时选择的工作路线。"""
+
+    demo = "demo"
+    formal = "formal"
+
+
 class WizardState(Base):
     __tablename__ = "wizard_state"
 
     id: Mapped[int] = mapped_column(primary_key=True)  # 固定为 1
     current_step: Mapped[int] = mapped_column(Integer, default=0)  # 0..TOTAL_STEPS-1
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 首次入口路线；NULL 表示尚未选择，不能把示例体验误当成正式建校。
+    route: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # 向导过程中创建的学期(续作时沿用)
     semester_id: Mapped[int | None] = mapped_column(
         ForeignKey("semesters.id", ondelete="SET NULL"), nullable=True

@@ -9,7 +9,7 @@ from app.core.permissions import core_editor, core_viewer
 from app.models.semester import Semester
 from app.models.wizard import SINGLETON_ID, TOTAL_STEPS, WizardState
 from app.schemas.wizard import WizardStateOut, WizardStateUpdate
-from app.services import semester_context
+from app.services import onboarding_route, semester_context
 
 router = APIRouter(tags=["wizard"])
 
@@ -20,8 +20,7 @@ editor = core_editor
 def _get_or_create(db: Session) -> WizardState:
     state = db.get(WizardState, SINGLETON_ID)
     if state is None:
-        state = WizardState(id=SINGLETON_ID, current_step=0, completed=False)
-        db.add(state)
+        state = onboarding_route.get_or_create_state(db)
         db.commit()
         db.refresh(state)
     return state
@@ -35,6 +34,7 @@ def _to_out(db: Session, state: WizardState) -> WizardStateOut:
         semester_id=state.semester_id,
         total_steps=TOTAL_STEPS,
         has_semesters=has_semesters,
+        route=onboarding_route.effective_route(db, state),
     )
 
 
@@ -49,6 +49,11 @@ def update_state(
 ) -> WizardStateOut:
     state = _get_or_create(db)
     data = body.model_dump(exclude_unset=True)
+    if "route" in data and data["route"] is not None:
+        try:
+            onboarding_route.choose_route(db, data.pop("route"))
+        except onboarding_route.OnboardingRouteError as exc:
+            raise HTTPException(exc.status_code, exc.message) from exc
     if "current_step" in data and data["current_step"] is not None:
         state.current_step = max(0, min(data["current_step"], TOTAL_STEPS - 1))
     if "completed" in data and data["completed"] is not None:
@@ -73,6 +78,7 @@ def reset_state(db: Session = Depends(get_db), _: object = Depends(editor)) -> W
     state.current_step = 0
     state.completed = False
     state.semester_id = None
+    state.route = None
     db.commit()
     db.refresh(state)
     return _to_out(db, state)

@@ -11,8 +11,8 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import { demoDataStatus, loadDemoData } from '@/api/assignments'
-import { getOnboardingStatus } from '@/api/onboarding'
-import type { OnboardingStatus } from '@/api/onboarding'
+import { chooseOnboardingRoute, getOnboardingRoute, getOnboardingStatus } from '@/api/onboarding'
+import type { OnboardingRouteStatus, OnboardingStatus, WizardRoute } from '@/api/onboarding'
 import { createSemester, getSemester, listTemplates } from '@/api/semesters'
 import type { Semester, Template } from '@/api/semesters'
 import { getSemesterSummary } from '@/api/wizard'
@@ -50,6 +50,9 @@ const demoAvailable = ref(false)
 const demoSchool = ref('')
 const loadingDemo = ref(false)
 const onboarding = ref<OnboardingStatus | null>(null)
+const routeStatus = ref<OnboardingRouteStatus | null>(null)
+const selectedRoute = ref<WizardRoute | null>(null)
+const routeChoiceOpen = ref(false)
 
 const termOptions = [
   { label: '第一学期', value: 1 },
@@ -68,6 +71,22 @@ const canEditSemester = computed(() => (
   canEditCore.value
   && (!semesterContext.authoritative || semesterContext.isCurrent(semesterId.value))
 ))
+const routeChoiceRequired = computed(() => {
+  if (routeChoiceOpen.value) return true
+  const state = wizard.state
+  // Missing route means an older API response; preserve its formal-wizard behavior.
+  const hasPersistedRoute = state && Object.prototype.hasOwnProperty.call(state, 'route')
+  return Boolean(hasPersistedRoute && state?.route === null && routeStatus.value?.route === null)
+})
+const persistedRoute = computed<WizardRoute | null>(() => {
+  const stateRoute = wizard.state?.route
+  if (stateRoute === 'demo' || stateRoute === 'formal') return stateRoute
+  if (routeStatus.value?.route) return routeStatus.value.route
+  // Older backends did not expose a route; their only behavior was formal setup.
+  if (wizard.state && !Object.prototype.hasOwnProperty.call(wizard.state, 'route')) return 'formal'
+  return null
+})
+const canReselectRoute = computed(() => routeStatus.value?.can_reselect ?? false)
 
 async function loadSummary(id: number) {
   summaryLoading.value = true
@@ -110,13 +129,23 @@ async function loadWizardData() {
   initialError.value = null
   actionError.value = null
   try {
+    if (!wizard.loaded || wizard.error) await wizard.fetch()
+    if (wizard.error && !wizard.state) throw new Error(wizard.error)
+    try {
+      routeStatus.value = await getOnboardingRoute()
+      demoAvailable.value = routeStatus.value.demo_available
+      demoSchool.value = routeStatus.value.demo_school_name
+    } catch {
+      // A pre-route backend can still render the formal wizard and expose its legacy demo check.
+      routeStatus.value = null
+    }
+    selectedRoute.value = persistedRoute.value
+
     await semesterContext.load()
     await refreshOnboarding()
     templates.value = await listTemplates()
     templateKey.value ??= templates.value[0]?.key ?? null
 
-    if (!wizard.loaded || wizard.error) await wizard.fetch()
-    if (wizard.error && !wizard.state) throw new Error(wizard.error)
     if (wizard.state) {
       step.value = wizard.state.current_step
       semesterId.value = wizard.state.semester_id
@@ -132,19 +161,51 @@ async function loadWizardData() {
       }
     }
 
-    // 查询接口仅对管理员开放，其他角色进入向导时忽略 403 即可。
-    try {
-      const demo = await demoDataStatus()
-      demoAvailable.value = demo.available
-      demoSchool.value = demo.school_name
-    } catch {
-      demoAvailable.value = false
+    if (!routeStatus.value) {
+      // 查询接口仅对管理员开放，其他角色进入向导时忽略 403 即可。
+      try {
+        const demo = await demoDataStatus()
+        demoAvailable.value = demo.available
+        demoSchool.value = demo.school_name
+      } catch {
+        demoAvailable.value = false
+      }
     }
   } catch (error) {
     initialError.value = apiErrorMessage(error, '无法读取设置向导，请稍后重试。')
   } finally {
     initialLoading.value = false
   }
+}
+
+async function confirmRoute() {
+  if (!canEditCore.value || busy.value || !selectedRoute.value) return
+  actionError.value = null
+  busy.value = true
+  try {
+    routeStatus.value = await chooseOnboardingRoute(selectedRoute.value)
+    await wizard.fetch()
+    routeChoiceOpen.value = false
+    if (selectedRoute.value === 'demo') await onLoadDemo()
+  } catch (error) {
+    actionError.value = apiErrorMessage(error, '路线选择失败，请稍后重试。')
+  } finally {
+    busy.value = false
+  }
+}
+
+function openRouteChoice() {
+  if (!canEditCore.value || busy.value || !canReselectRoute.value) return
+  selectedRoute.value = persistedRoute.value
+  routeChoiceOpen.value = true
+  actionError.value = null
+}
+
+function cancelRouteChoice() {
+  if (routeChoiceRequired.value && !routeStatus.value?.route) return
+  routeChoiceOpen.value = false
+  selectedRoute.value = persistedRoute.value
+  actionError.value = null
 }
 
 async function persistStep(nextStep: number): Promise<boolean> {
@@ -256,12 +317,15 @@ async function onLoadDemo() {
   try {
     const r = await loadDemoData()
     await wizard.fetch()
+    await semesterContext.load()
+    await refreshOnboarding()
+    try { routeStatus.value = await getOnboardingRoute() } catch { /* legacy backend */ }
     message.success(
       `已创建 ${r.classes} 个班级、${r.teachers} 名教师和 ${r.assignments} 条教学任务，`
       + '现在可以直接试用自动排课。',
       { duration: 8000 },
     )
-    router.push({ name: 'dashboard' })
+    await router.push({ name: 'auto-schedule' })
   } catch (e) {
     actionError.value = apiErrorMessage(e, '示例数据加载失败，请稍后重试。')
   } finally {
@@ -302,17 +366,27 @@ onMounted(loadWizardData)
         <h1>{{ '设置向导' }}</h1>
         <p>{{ '按顺序准备学期、作息时间表和基础数据，之后即可开始排课。' }}</p>
       </div>
-      <n-button
-        v-if="canEditCore"
-        quaternary
-        class="wizard-skip"
-        :disabled="initialLoading || busy"
-        data-testid="wizard-skip"
-        @click="skip"
-      >
-        <template #icon><SkipForward :size="16" aria-hidden="true" /></template>
-        {{ '跳过，稍后设置' }}
-      </n-button>
+      <div class="wizard-header-actions">
+        <n-button
+          v-if="canEditCore && !routeChoiceRequired"
+          quaternary
+          class="wizard-skip"
+          :disabled="initialLoading || busy"
+          data-testid="wizard-skip"
+          @click="skip"
+        >
+          <template #icon><SkipForward :size="16" aria-hidden="true" /></template>
+          {{ '跳过，稍后设置' }}
+        </n-button>
+        <n-button
+          v-if="canEditCore && canReselectRoute && !routeChoiceRequired"
+          quaternary
+          data-testid="route-reselect"
+          @click="openRouteChoice"
+        >
+          {{ '重新选择路线' }}
+        </n-button>
+      </div>
     </header>
 
     <section v-if="initialLoading" class="wizard-state" data-testid="wizard-loading" role="status" aria-live="polite">
@@ -333,9 +407,70 @@ onMounted(loadWizardData)
       <n-alert v-if="!canEditCore" type="info" data-testid="wizard-readonly">
         当前角色只能查看设置向导，创建、导入和保存操作仅对排课管理员开放。
       </n-alert>
-      <OnboardingChecklist v-if="onboarding" :status="onboarding" />
+      <OnboardingChecklist v-if="onboarding && !routeChoiceRequired" :status="onboarding" />
 
-      <nav class="wizard-progress" aria-label="设置步骤">
+      <section v-if="routeChoiceRequired" class="wizard-route-choice wizard-panel" data-testid="route-choice" aria-labelledby="route-choice-title">
+        <div class="wizard-panel-heading">
+          <span class="wizard-panel-icon" aria-hidden="true"><LayoutTemplate :size="20" /></span>
+          <div>
+            <p class="wizard-step-count">首次进入</p>
+            <h2 id="route-choice-title">先选择一条工作路线</h2>
+          </div>
+        </div>
+        <p class="wizard-step-intro">
+          示例路线使用隔离的虚构学校数据，正式路线只写入正式当前学期。选择会保存，退出后可以从上次位置继续。
+        </p>
+        <div class="wizard-route-grid" role="radiogroup" aria-label="首次进入路线">
+          <button
+            type="button"
+            class="wizard-route-card"
+            :class="{ 'is-selected': selectedRoute === 'demo' }"
+            :aria-pressed="selectedRoute === 'demo'"
+            data-testid="route-demo"
+            :disabled="!canEditCore || busy || (!routeStatus?.demo_available && !routeStatus?.has_demo_semester)"
+            @click="selectedRoute = 'demo'"
+          >
+            <span class="wizard-route-card-mark" aria-hidden="true"><LayoutTemplate :size="20" /></span>
+            <span class="wizard-route-card-copy">
+              <strong>体验示例数据</strong>
+              <span>加载“{{ demoSchool || '示例初中' }}”，直接运行排课并查看发布结果。</span>
+            </span>
+            <CheckCircle2 v-if="selectedRoute === 'demo'" class="wizard-template-check" :size="18" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="wizard-route-card"
+            :class="{ 'is-selected': selectedRoute === 'formal' }"
+            :aria-pressed="selectedRoute === 'formal'"
+            data-testid="route-formal"
+            :disabled="!canEditCore || busy"
+            @click="selectedRoute = 'formal'"
+          >
+            <span class="wizard-route-card-mark" aria-hidden="true"><CalendarRange :size="20" /></span>
+            <span class="wizard-route-card-copy">
+              <strong>正式建校</strong>
+              <span>使用正式当前学期，保留 P0 待办直到第一张正式课表发布。</span>
+            </span>
+            <CheckCircle2 v-if="selectedRoute === 'formal'" class="wizard-template-check" :size="18" aria-hidden="true" />
+          </button>
+        </div>
+        <div class="wizard-route-actions">
+          <n-button v-if="routeStatus?.route" quaternary :disabled="busy" data-testid="route-cancel" @click="cancelRouteChoice">
+            取消
+          </n-button>
+          <n-button
+            type="primary"
+            :loading="busy || loadingDemo"
+            :disabled="!selectedRoute || !canEditCore || busy || loadingDemo"
+            data-testid="route-confirm"
+            @click="confirmRoute"
+          >
+            {{ selectedRoute === 'demo' ? '选择并加载示例' : '进入正式建校' }}
+          </n-button>
+        </div>
+      </section>
+
+      <nav v-if="!routeChoiceRequired" class="wizard-progress" aria-label="设置步骤">
         <n-steps :current="step + 1" size="small">
           <n-step :title="'学制模板'" />
           <n-step :title="'学年学期'" />
@@ -345,7 +480,7 @@ onMounted(loadWizardData)
         </n-steps>
       </nav>
 
-      <section class="wizard-panel" aria-labelledby="wizard-step-title">
+      <section v-if="!routeChoiceRequired" class="wizard-panel" aria-labelledby="wizard-step-title">
         <div class="wizard-panel-heading">
           <span class="wizard-panel-icon" aria-hidden="true">
             <LayoutTemplate v-if="step === 0" :size="20" />
@@ -369,8 +504,11 @@ onMounted(loadWizardData)
 
         <!-- 步骤 0：学校模板 -->
         <div v-if="step === 0" class="wizard-step-content">
+          <n-alert v-if="persistedRoute === 'demo' && routeStatus?.has_demo_semester" type="success" class="wizard-demo-alert" data-testid="demo-context-banner">
+            当前正在体验示例学期；示例数据与正式当前学期完全隔离，不会结束正式首次成功。
+          </n-alert>
           <n-alert
-            v-if="demoAvailable" type="info" title="先体验完整排课流程"
+            v-if="demoAvailable && !routeStatus && persistedRoute === 'formal'" type="info" title="先体验完整排课流程"
             class="wizard-demo-alert"
           >
             <n-space vertical size="small">
@@ -511,7 +649,7 @@ onMounted(loadWizardData)
         </div>
       </section>
 
-      <footer class="wizard-actions">
+      <footer v-if="!routeChoiceRequired" class="wizard-actions">
         <n-button data-testid="wizard-prev" :disabled="step === 0 || busy || !canEditCore" @click="goPrev">
           <template #icon><ChevronLeft :size="16" aria-hidden="true" /></template>
           {{ '上一步' }}
@@ -563,6 +701,7 @@ onMounted(loadWizardData)
   gap: 24px;
   margin-bottom: 26px;
 }
+.wizard-header-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 
 .wizard-header h1 { margin: 0; font-size: 30px; line-height: 1.2; }
 .wizard-header p:last-child { margin: 8px 0 0; color: var(--app-text-muted); font-size: 14px; line-height: 1.6; }
@@ -616,6 +755,31 @@ onMounted(loadWizardData)
 .wizard-step-content { min-width: 0; }
 .wizard-step-intro { margin: 0 0 20px; color: var(--app-text-muted); font-size: 14px; line-height: 1.65; }
 .wizard-demo-alert { margin-bottom: 20px; }
+.wizard-route-choice { max-width: 860px; margin: 0 auto; }
+.wizard-route-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.wizard-route-card {
+  display: flex;
+  min-width: 0;
+  min-height: 132px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--app-motion-duration) var(--app-motion-ease), background var(--app-motion-duration) var(--app-motion-ease);
+}
+.wizard-route-card:hover:not(:disabled) { border-color: var(--app-primary-border); background: var(--app-primary-soft); }
+.wizard-route-card.is-selected { border-color: var(--app-primary); background: var(--app-primary-soft); box-shadow: inset 0 0 0 1px var(--app-primary); }
+.wizard-route-card:disabled { cursor: not-allowed; opacity: .6; }
+.wizard-route-card-mark { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: var(--app-radius-sm); background: var(--app-surface-muted); color: var(--app-primary-strong); }
+.wizard-route-card-copy { display: grid; min-width: 0; gap: 6px; }
+.wizard-route-card-copy strong { overflow-wrap: anywhere; font-size: 15px; }
+.wizard-route-card-copy span { color: var(--app-text-muted); font-size: 13px; line-height: 1.55; }
+.wizard-route-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
 .wizard-template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 
 .wizard-template {
@@ -691,8 +855,10 @@ onMounted(loadWizardData)
 @media (max-width: 700px) {
   .wizard-page { padding: 24px 16px 36px; }
   .wizard-header { align-items: flex-start; flex-direction: column; gap: 14px; }
+  .wizard-header-actions { justify-content: flex-start; }
   .wizard-skip { align-self: flex-start; }
   .wizard-template-grid { grid-template-columns: 1fr; }
+  .wizard-route-grid { grid-template-columns: 1fr; }
   .wizard-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 }
 
@@ -701,6 +867,7 @@ onMounted(loadWizardData)
   .wizard-header h1 { font-size: 26px; }
   .wizard-header p:last-child { font-size: 13px; }
   .wizard-panel { padding: 20px 16px; }
+  .wizard-route-card { min-height: 0; padding: 14px; }
   .wizard-panel-heading { margin-bottom: 22px; }
   .wizard-semester-fields { grid-template-columns: 1fr; }
   .wizard-actions { align-items: stretch; }

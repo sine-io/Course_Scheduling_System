@@ -30,8 +30,8 @@ from app.schemas.semester import (
     TemplateOut,
 )
 from app.schemas.wizard import SemesterSummary
+from app.services import onboarding_route, semester_context
 from app.services import period_tables as pt_service
-from app.services import semester_context
 from app.services import templates as tpl
 from app.services.calendar import readiness_issues
 from app.services.school_rules import validate_academic_year
@@ -192,6 +192,8 @@ def create_semester(
         )
         db.add(semester)
     db.flush()
+    # 创建正式学期即确认正式建校路线；示例学期本身保持独立，向导状态从第 0 步恢复。
+    onboarding_route.choose_route(db, "formal")
     semester_context.set_initial_current(db, semester)
     db.commit()
     db.refresh(semester)
@@ -232,6 +234,8 @@ def copy_to_new_semester(
         db, source, body.academic_year, body.term, opts,
         start_date=body.start_date, end_date=body.end_date,
     )
+    # 复制学期产生的是正式学期；从示例体验进入这里也应锁定正式路线。
+    onboarding_route.choose_route(db, "formal")
     db.commit()
     db.refresh(new)
     return _semester_out(db, new)

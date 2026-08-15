@@ -25,6 +25,78 @@ def test_initial_state_is_step0_incomplete(scheduler):
     assert body["completed"] is False
     assert body["has_semesters"] is False
     assert body["total_steps"] == 5
+    assert body["route"] is None
+
+
+def test_management_user_can_select_and_resume_formal_route(scheduler):
+    """路线选择属于单校引导状态，刷新/重新登录后仍能恢复原步骤。"""
+    route = scheduler.put("/api/onboarding/route", json={"route": "formal"})
+    assert route.status_code == 200, route.text
+    assert route.json()["route"] == "formal"
+
+    scheduler.patch("/api/wizard/state", json={"current_step": 2})
+    scheduler.post("/api/auth/logout")
+    scheduler.post("/api/auth/login", json={"username": "s", "password": PW})
+
+    state = scheduler.get("/api/wizard/state").json()
+    route = scheduler.get("/api/onboarding/route").json()
+    assert state["current_step"] == 2
+    assert state["route"] == "formal"
+    assert route["resume_step"] == 2
+    assert route["can_reselect"] is True
+
+
+def test_demo_route_requires_an_explicit_choice_and_stays_isolated(scheduler):
+    """示例路线只能在明确选择后加载，且正式路线切换不会覆盖示例上下文。"""
+    denied = scheduler.post("/api/demo-data")
+    assert denied.status_code == 403
+
+    selected = scheduler.put("/api/onboarding/route", json={"route": "demo"})
+    assert selected.status_code == 200, selected.text
+    loaded = scheduler.post("/api/demo-data")
+    assert loaded.status_code == 201, loaded.text
+    demo_id = loaded.json()["semester_id"]
+
+    status = scheduler.get("/api/onboarding/route").json()
+    assert status["route"] == "demo"
+    assert status["has_demo_semester"] is True
+    assert status["has_formal_semester"] is False
+
+    switched = scheduler.put("/api/onboarding/route", json={"route": "formal"})
+    assert switched.status_code == 200, switched.text
+    state = scheduler.get("/api/wizard/state").json()
+    assert state["route"] == "formal"
+    assert state["completed"] is False
+    assert state["current_step"] == 0
+
+    formal = scheduler.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2098,
+            "term": 1,
+            "start_date": "2098-09-01",
+            "end_date": "2099-01-31",
+        },
+    )
+    assert formal.status_code == 201, formal.text
+    context = scheduler.get("/api/semester-context").json()
+    assert context["current_semester"]["id"] == formal.json()["id"]
+    assert context["current_semester"]["is_demo"] is False
+    assert scheduler.get(f"/api/semesters/{demo_id}").json()["is_demo"] is True
+
+
+def test_route_cannot_switch_from_formal_data_to_demo(scheduler):
+    formal = scheduler.post(
+        "/api/semesters",
+        json={"academic_year": 2097, "term": 1},
+    )
+    assert formal.status_code == 201, formal.text
+    selected = scheduler.put("/api/onboarding/route", json={"route": "formal"})
+    assert selected.status_code == 200, selected.text
+
+    blocked = scheduler.put("/api/onboarding/route", json={"route": "demo"})
+    assert blocked.status_code == 409
+    assert "正式" in blocked.json()["detail"]
 
 
 def test_progress_persists(scheduler):

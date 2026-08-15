@@ -1,4 +1,18 @@
-import { apiGet } from '@/api/client'
+import { apiGet, apiPut, apiPost } from '@/api/client'
+import type { WizardRoute } from '@/api/wizard'
+
+export type { WizardRoute }
+
+export interface OnboardingRouteStatus {
+  route: WizardRoute | null
+  demo_available: boolean
+  demo_school_name: string
+  has_demo_semester: boolean
+  has_formal_semester: boolean
+  can_reselect: boolean
+  resume_step: number
+  resume_semester_id: number | null
+}
 
 export interface OnboardingAction {
   stage: string
@@ -31,3 +45,9 @@ export interface OnboardingStatus {
 }
 
 export const getOnboardingStatus = () => apiGet<OnboardingStatus>('/onboarding/status')
+export const getOnboardingRoute = () => apiGet<OnboardingRouteStatus>('/onboarding/route')
+export const chooseOnboardingRoute = (route: WizardRoute) =>
+  apiPut<OnboardingRouteStatus>('/onboarding/route', { route })
+// POST keeps the entry point usable for clients that submit a first-use form.
+export const chooseOnboardingRoutePost = (route: WizardRoute) =>
+  apiPost<OnboardingRouteStatus>('/onboarding/route', { route })

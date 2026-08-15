@@ -11,7 +11,7 @@
 
 import json
 from dataclasses import dataclass, field
-from datetime import time
+from datetime import date, time
 from functools import lru_cache
 from pathlib import Path
 
@@ -21,6 +21,7 @@ from app.models.assignment import AssignmentTeacher, CourseAssignment
 from app.models.basedata import ClassTrack, ClassUnit, Room, Subject, Teacher
 from app.models.period import Period
 from app.models.semester import Semester
+from app.models.timetable import Timetable
 from app.models.wizard import SINGLETON_ID, TOTAL_STEPS, WizardState
 from app.services import settings as settings_service
 from app.services import templates as template_service
@@ -202,6 +203,11 @@ def generate(db: Session, spec: dict | None = None) -> DemoSummary:
         template_key=spec["template_key"],
     )
     semester.is_demo = True
+    # 示例路线需要能直接进入自动排课；日期和准备状态仍只属于示例学期，
+    # onboarding 读模型会因为 is_demo=True 将其排除在正式首次成功之外。
+    semester.start_date = date(spec["academic_year"], 9, 1)
+    semester.end_date = date(spec["academic_year"] + 1, 1, 31)
+    semester.readiness = "ready"
     sid = semester.id
     _apply_demo_period_table(semester, spec)
 
@@ -338,6 +344,8 @@ def generate(db: Session, spec: dict | None = None) -> DemoSummary:
     wizard.completed = True
     wizard.current_step = TOTAL_STEPS - 1
     wizard.semester_id = sid
+    wizard.route = "demo"
+    db.add(Timetable(semester_id=sid, name="示例课表草稿"))
     db.flush()
 
     overs = [-p.headroom for p in plans if p.headroom < 0]

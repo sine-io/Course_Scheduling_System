@@ -233,3 +233,8 @@ def test_demo_data_marks_the_setup_wizard_complete(admin_client):
     assert state is not None and state.completed is True
     assert state.semester_id == body["semester_id"]
     assert client.get("/api/wizard/state").json()["completed"] is True
+    readiness = client.get(f"/api/semesters/{body['semester_id']}/readiness").json()
+    assert readiness["ready"] is True
+    timetables = client.get(f"/api/timetables?semester_id={body['semester_id']}").json()
+    assert len(timetables) == 1
+    assert timetables[0]["status"] == "draft"
