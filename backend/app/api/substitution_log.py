@@ -8,10 +8,10 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import daily_operator
 from app.models.semester import Semester
-from app.models.user import Role, User
+from app.models.user import User
 from app.schemas.substitution_log import DailyBoardOut, LogEntryOut
 from app.services import calendar as calendar_service
 from app.services import settings as app_settings
@@ -19,7 +19,7 @@ from app.services import substitution_log as log_service
 
 router = APIRouter(tags=["substitution-log"])
 
-viewer = require_roles(Role.scheduler, Role.director)
+viewer = daily_operator
 
 
 def _entry_out(e: log_service.LogEntry) -> LogEntryOut:

@@ -23,7 +23,7 @@ import type { Component } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import NotificationBell from '@/components/NotificationBell.vue'
-import { canViewCore } from '@/permissions'
+import { canOperateDaily } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
@@ -64,7 +64,7 @@ const semesterOptions = computed(() => semesterContext.semesters.map((semester) 
 
 // This predicate mirrors the router guard. Navigation visibility and direct-route access stay aligned.
 const canManage = computed(() => (
-  canViewCore(auth.user?.roles)
+  canOperateDaily(auth.user?.roles)
 ))
 
 function navItem(key: string, label: string, icon: Component): NavItem {

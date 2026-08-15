@@ -10,6 +10,7 @@ import { publishedSemesters } from '@/api/timetables'
 import { getMyStats, getStats, statsExportUrl } from '@/api/substitutionStats'
 import type { MonthlyReport } from '@/api/substitutionStats'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { canOperateDaily } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import { formatDateWithWeekday } from './reportDate'
@@ -18,8 +19,7 @@ import './operations-workspace.css'
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 const route = useRoute()
-const canManage = computed(() =>
-  auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
+const canManage = computed(() => canOperateDaily(auth.user?.roles))
 
 function monthTs(): number {
   const date = new Date()

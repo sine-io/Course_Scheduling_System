@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
+import { canOperateDaily } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import type { SemesterListItem } from '@/api/semesters'
@@ -63,7 +64,7 @@ function resetForm() {
 
 const editingExceptionId = ref<number | null>(null)
 const canEdit = computed(() => (
-  (!auth.user || auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
+  canOperateDaily(auth.user?.roles)
   && (!semesterContext.authoritative || semesterContext.isCurrent(selectedSemesterId.value))
 ))
 

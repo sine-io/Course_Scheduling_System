@@ -1,9 +1,10 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { NMessageProvider } from 'naive-ui'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import Calendar from './Calendar.vue'
 
 const semesterMocks = vi.hoisted(() => ({
@@ -56,6 +57,17 @@ const readiness = {
 }
 
 async function mountCalendar(options: Record<string, unknown> = {}) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const auth = useAuthStore(pinia)
+  auth.user = {
+    id: 1,
+    username: 'director',
+    display_name: '教务主任',
+    roles: ['director'],
+    must_change_password: false,
+  }
+  auth.loaded = true
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -68,7 +80,7 @@ async function mountCalendar(options: Record<string, unknown> = {}) {
   const Host = { render: () => h(NMessageProvider, null, { default: () => h(Calendar) }) }
   return mount(Host, {
     global: {
-      plugins: [createPinia(), router],
+      plugins: [pinia, router],
       ...options,
     },
   })

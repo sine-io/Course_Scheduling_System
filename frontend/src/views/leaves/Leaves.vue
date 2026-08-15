@@ -14,6 +14,7 @@ import type { AffectedPeriod, LeaveRequest } from '@/api/leaves'
 import { listSemesters } from '@/api/semesters'
 import { publishedSemesters } from '@/api/timetables'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { canOperateDaily } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import '../substitution/operations-workspace.css'
@@ -23,8 +24,7 @@ const semesterContext = useSemesterContextStore()
 const message = useMessage()
 
 // 排课管理员/主任可代登、可看全校;教师只登记自己的假、只看自己的假单。
-const canManage = computed(() =>
-  auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
+const canManage = computed(() => canOperateDaily(auth.user?.roles))
 
 const semesters = ref<{ id: number; label: string }[]>([])
 const sid = ref<number | null>(null)

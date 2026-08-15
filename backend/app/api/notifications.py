@@ -4,10 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
+from app.core.permissions import daily_operator, daily_user
 from app.models.notification import Notification
-from app.models.user import Role, User
+from app.models.semester import Semester
+from app.models.user import User
 from app.schemas.notification import (
     NotificationListOut,
     NotificationOut,
@@ -20,7 +21,14 @@ from app.services.teachers import current_teacher
 
 router = APIRouter(tags=["notifications"])
 
-registrar = require_roles(Role.scheduler, Role.director)
+registrar = daily_operator
+
+
+def _get_semester(db: Session, semester_id: int) -> Semester:
+    semester = db.get(Semester, semester_id)
+    if semester is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到学期")
+    return semester
 
 
 # ── 教师端 ────────────────────────────────
@@ -28,9 +36,10 @@ registrar = require_roles(Role.scheduler, Role.director)
 def my_notifications(
     semester_id: int = Query(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_active_user),
+    user: User = Depends(daily_user),
 ):
     """本人的通知(最新在前)与未读数。未绑定教师基础信息者回空列表。"""
+    _get_semester(db, semester_id)
     me = current_teacher(db, user, semester_id)
     if me is None:
         return NotificationListOut(items=[], unread=0)
@@ -45,9 +54,10 @@ def my_notifications(
 def my_unread_count(
     semester_id: int = Query(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_active_user),
+    user: User = Depends(daily_user),
 ):
     """铃铛的未读数(轮询用,刻意轻量)。"""
+    _get_semester(db, semester_id)
     me = current_teacher(db, user, semester_id)
     if me is None:
         return UnreadCountOut(unread=0)
@@ -73,7 +83,7 @@ def _require_writable(db: Session, semester_id: int) -> None:
 
 @router.post("/notifications/{notification_id}/read", response_model=NotificationOut)
 def mark_read(
-    notification_id: int, db: Session = Depends(get_db), user: User = Depends(get_active_user)
+    notification_id: int, db: Session = Depends(get_db), user: User = Depends(daily_user)
 ):
     n = _get_own_notification(db, notification_id, user)
     _require_writable(db, n.semester_id)
@@ -84,7 +94,7 @@ def mark_read(
 
 @router.post("/notifications/{notification_id}/acknowledge", response_model=NotificationOut)
 def acknowledge(
-    notification_id: int, db: Session = Depends(get_db), user: User = Depends(get_active_user)
+    notification_id: int, db: Session = Depends(get_db), user: User = Depends(daily_user)
 ):
     """「确认收到」——通知层的已读确认,不影响教学任务状态(指派即生效)。"""
     n = _get_own_notification(db, notification_id, user)
@@ -104,6 +114,7 @@ def board(
     _: User = Depends(registrar),
 ):
     """全校通知的确认状态;可筛教师、可只看未确认者。"""
+    _get_semester(db, semester_id)
     stmt = select(Notification).where(Notification.semester_id == semester_id)
     if teacher_id is not None:
         stmt = stmt.where(Notification.teacher_id == teacher_id)

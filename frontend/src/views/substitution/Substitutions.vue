@@ -16,10 +16,13 @@ import {
 } from '@/api/substitutions'
 import type { Candidate, Recommendation } from '@/api/substitutions'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
+import { canOperateDaily } from '@/permissions'
+import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './operations-workspace.css'
 
 const message = useMessage()
+const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 
 const semesters = ref<{ id: number; label: string }[]>([])
@@ -39,7 +42,8 @@ const countsHours = ref(true)
 const actingKey = ref<string | null>(null)
 const actionError = ref<{ periodId: number; message: string } | null>(null)
 const canEdit = computed(() => (
-  !semesterContext.authoritative || semesterContext.isCurrent(sid.value)
+  canOperateDaily(auth.user?.roles)
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']

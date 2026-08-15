@@ -8,12 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
+from app.core.permissions import daily_operator, daily_user, is_daily_operator
 from app.models.audit import AuditLog
 from app.models.leave import AffectedStatus, LeaveRequest, LeaveType
 from app.models.semester import Semester
-from app.models.user import Role, User
+from app.models.user import User
 from app.schemas.leave import (
     AffectedPeriodOut,
     LeaveCancelled,
@@ -29,12 +29,12 @@ router = APIRouter(tags=["leaves"])
 # 假单列表的保护性上限(M6-5);完整分页 UI 留 v1.2
 MAX_LEAVE_ROWS = 1000
 
-registrar = require_roles(Role.scheduler, Role.director)  # 可代登/代销
+registrar = daily_operator  # 保留名称供文档和扩展端点复用
 
 
 def _is_registrar(user: User) -> bool:
-    """可代登/代销/看全校。admin 统一通过(与 require_roles 一致)。"""
-    return bool(user.role_names & {Role.scheduler.value, Role.director.value, Role.admin.value})
+    """可代登/代销/看全校；角色集合与 HTTP 依赖保持同一来源。"""
+    return is_daily_operator(user)
 
 
 def _get_semester(db: Session, semester_id: int) -> Semester:
@@ -120,7 +120,7 @@ def create_leave(
     body: LeaveRequestIn,
     semester_id: int = Query(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_active_user),
+    user: User = Depends(daily_user),
 ):
     """登记请假,并依已发布课表展开受影响节次。"""
     sem = _writable_semester(db, semester_id)
@@ -172,7 +172,7 @@ def list_leaves(
     semester_id: int = Query(...),
     teacher_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_active_user),
+    user: User = Depends(daily_user),
 ):
     """排课管理员看全校;教师只看得到自己的假单(即使指定了别人的 teacher_id)。"""
     _get_semester(db, semester_id)
@@ -206,13 +206,13 @@ def _get_leave(db: Session, leave_id: int, user: User) -> LeaveRequest:
 
 
 @router.get("/leaves/{leave_id}", response_model=LeaveRequestOut)
-def get_leave(leave_id: int, db: Session = Depends(get_db), user: User = Depends(get_active_user)):
+def get_leave(leave_id: int, db: Session = Depends(get_db), user: User = Depends(daily_user)):
     return _serialize(_get_leave(db, leave_id, user))
 
 
 @router.post("/leaves/{leave_id}/cancel", response_model=LeaveCancelled)
 def cancel_leave(
-    leave_id: int, db: Session = Depends(get_db), user: User = Depends(get_active_user)
+    leave_id: int, db: Session = Depends(get_db), user: User = Depends(daily_user)
 ):
     """销假:级联取消所有受影响节次,已被指派的代课教师会收到取消通知。
 
@@ -244,11 +244,11 @@ def cancel_leave(
 
 @router.get("/leaves/{leave_id}/affected", response_model=list[AffectedPeriodOut])
 def list_affected(
-    leave_id: int, db: Session = Depends(get_db), user: User = Depends(get_active_user)
+    leave_id: int, db: Session = Depends(get_db), user: User = Depends(daily_user)
 ):
     return _serialize(_get_leave(db, leave_id, user)).affected_periods
 
 
 @router.get("/leave-types", response_model=dict[str, str])
-def leave_types(_: object = Depends(get_active_user)):
+def leave_types(_: object = Depends(daily_user)):
     return {t.value: school_rules.leave_type_label(t.value) for t in LeaveType}

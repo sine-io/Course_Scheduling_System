@@ -6,6 +6,8 @@
 export const CORE_VIEW_ROLES = ['admin', 'scheduler', 'director'] as const
 export const CORE_EDIT_ROLES = ['admin', 'scheduler'] as const
 export const BATCH_EXPORT_ROLES = ['admin', 'scheduler'] as const
+export const DAILY_OPERATOR_ROLES = ['admin', 'scheduler', 'director'] as const
+export const DAILY_USER_ROLES = ['admin', 'scheduler', 'director', 'teacher'] as const
 
 export function hasAnyRole(
   userRoles: readonly string[] | null | undefined,
@@ -24,4 +26,12 @@ export function canEditCore(userRoles: readonly string[] | null | undefined): bo
 
 export function canBatchExport(userRoles: readonly string[] | null | undefined): boolean {
   return hasAnyRole(userRoles, BATCH_EXPORT_ROLES)
+}
+
+export function canOperateDaily(userRoles: readonly string[] | null | undefined): boolean {
+  return hasAnyRole(userRoles, DAILY_OPERATOR_ROLES)
+}
+
+export function canUseDaily(userRoles: readonly string[] | null | undefined): boolean {
+  return hasAnyRole(userRoles, DAILY_USER_ROLES)
 }

@@ -1,7 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { canViewCore, hasAnyRole } from '@/permissions'
+import {
+  canUseDaily,
+  canViewCore,
+  CORE_VIEW_ROLES,
+  DAILY_OPERATOR_ROLES,
+  DAILY_USER_ROLES,
+  hasAnyRole,
+} from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useWizardStore } from '@/stores/wizard'
+
+const ALL_DAILY_ROLES = [...DAILY_USER_ROLES]
+const CORE_VIEW_ROLE_LIST = [...CORE_VIEW_ROLES]
+const DAILY_OPERATOR_ROLE_LIST = [...DAILY_OPERATOR_ROLES]
 
 const routes = [
   {
@@ -26,6 +37,7 @@ const routes = [
     path: '/daily-board/print',
     name: 'daily-board-print',
     component: () => import('@/views/substitution/DailyBoardPrint.vue'),
+    meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
   },
   {
     path: '/',
@@ -40,81 +52,97 @@ const routes = [
         path: 'settings/semesters',
         name: 'semesters',
         component: () => import('@/views/settings/Semesters.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'settings/calendar',
         name: 'calendar',
         component: () => import('@/views/settings/Calendar.vue'),
+        meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
         path: 'basedata',
         name: 'basedata',
         component: () => import('@/views/basedata/BaseData.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'scheduling/assignments',
         name: 'assignments',
         component: () => import('@/views/scheduling/Assignments.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'timetable-query',
         name: 'timetable-query',
         component: () => import('@/views/TimetableQuery.vue'),
+        meta: { allowedRoles: ALL_DAILY_ROLES },
       },
       {
         path: 'scheduling/workbench',
         name: 'workbench',
         component: () => import('@/views/scheduling/Workbench.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'scheduling/auto',
         name: 'auto-schedule',
         component: () => import('@/views/scheduling/AutoSchedule.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'leaves',
         name: 'leaves',
         component: () => import('@/views/leaves/Leaves.vue'),
+        meta: { allowedRoles: ALL_DAILY_ROLES },
       },
       {
         path: 'substitutions',
         name: 'substitutions',
         component: () => import('@/views/substitution/Substitutions.vue'),
+        meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
         path: 'notification-board',
         name: 'notification-board',
         component: () => import('@/views/substitution/NotificationBoard.vue'),
+        meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
         path: 'daily-board',
         name: 'daily-board',
         component: () => import('@/views/substitution/DailyBoard.vue'),
+        meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
         path: 'substitution-log',
         name: 'substitution-log',
         component: () => import('@/views/substitution/SubstitutionLog.vue'),
+        meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
         path: 'substitution-stats',
         name: 'substitution-stats',
         component: () => import('@/views/substitution/SubstitutionStats.vue'),
+        meta: { allowedRoles: ALL_DAILY_ROLES },
       },
       {
         path: 'scheduling/versions',
         name: 'versions',
         component: () => import('@/views/scheduling/Versions.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'scheduling/timetable-demo',
         name: 'timetable-demo',
         component: () => import('@/views/scheduling/TimetableGridDemo.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'settings/period-tables/:id',
         name: 'period-table-editor',
         component: () => import('@/views/settings/PeriodTableEditor.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'settings/system',
@@ -132,10 +160,6 @@ export const router = createRouter({
 })
 
 const AUTH_PAGES = new Set(['login', 'change-password'])
-
-// 全域守卫:管控登录、强制改密、首次登录引导至设置向导
-// 纯教师账号可进入的页面(请假是教师自己要做的事)
-const TEACHER_PAGES = new Set(['timetable-query', 'leaves', 'substitution-stats'])
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
@@ -160,15 +184,18 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  // 纯教师账号:只开放课表查询与请假登记(其余页面的后端 API 均需排课管理员以上权限)
+  const allowedRoles = to.meta.allowedRoles as string[] | undefined
   const canManage = canViewCore(auth.user?.roles)
-  if (!canManage && auth.hasRole('teacher') && !TEACHER_PAGES.has(to.name as string)) {
+  // 未声明教师角色的页面不对纯教师账号开放；页面权限只维护在路由元数据中。
+  if (!canManage && auth.hasRole('teacher') && !allowedRoles?.includes('teacher')) {
     return { name: 'timetable-query' }
   }
 
-  const allowedRoles = to.meta.allowedRoles as string[] | undefined
   if (allowedRoles && !hasAnyRole(auth.user?.roles, allowedRoles)) {
-    return { name: canManage ? 'dashboard' : 'timetable-query' }
+    const fallback = canManage
+      ? 'dashboard'
+      : canUseDaily(auth.user?.roles) ? 'timetable-query' : 'dashboard'
+    return { name: fallback }
   }
 
   // 首次登录引导:排课管理员/管理员在尚未完成初始设置时,自动进入向导(向导内可跳过)

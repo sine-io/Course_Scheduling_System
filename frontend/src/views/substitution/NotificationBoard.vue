@@ -6,11 +6,14 @@ import { apiErrorMessage } from '@/api/client'
 import { notificationBoard, remind } from '@/api/notifications'
 import type { BoardEntry } from '@/api/notifications'
 import { listSemesters } from '@/api/semesters'
+import { canOperateDaily } from '@/permissions'
+import { useAuthStore } from '@/stores/auth'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './operations-workspace.css'
 
 const message = useMessage()
+const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 
 const semesters = ref<{ id: number; label: string }[]>([])
@@ -28,7 +31,8 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
 const unconfirmedCount = computed(() =>
   entries.value.filter((entry) => !entry.acknowledged_at).length)
 const canEdit = computed(() => (
-  !semesterContext.authoritative || semesterContext.isCurrent(sid.value)
+  canOperateDaily(auth.user?.roles)
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 
 const TYPE_LABEL: Record<string, string> = {

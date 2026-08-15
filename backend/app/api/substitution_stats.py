@@ -6,10 +6,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
+from app.core.permissions import daily_operator, daily_user
 from app.models.semester import Semester
-from app.models.user import Role, User
+from app.models.user import User
 from app.schemas.substitution_stats import (
     MonthlyReportOut,
     StatDetailOut,
@@ -20,7 +20,7 @@ from app.services.teachers import current_teacher
 
 router = APIRouter(tags=["substitution-stats"])
 
-viewer = require_roles(Role.scheduler, Role.director)
+viewer = daily_operator
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -73,7 +73,7 @@ def my_substitution_stats(
     year: int = Query(...),
     month: int = Query(...),
     db: Session = Depends(get_db),
-    user: User = Depends(get_active_user),
+    user: User = Depends(daily_user),
 ):
     """教师查自己的代课明细。未绑定教师基础信息者回空报表。"""
     _get_semester(db, semester_id)

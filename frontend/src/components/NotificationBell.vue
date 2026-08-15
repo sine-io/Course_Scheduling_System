@@ -6,6 +6,7 @@ import { acknowledge, markRead, myNotifications } from '@/api/notifications'
 import type { Notification } from '@/api/notifications'
 import { publishedSemesters } from '@/api/timetables'
 import { listSemesters } from '@/api/semesters'
+import { canOperateDaily } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 
@@ -25,8 +26,7 @@ let viewportMedia: MediaQueryList | null = null
 const bellLabel = computed(() => unread.value > 0 ? `通知，${unread.value} 条未读` : '通知')
 const popoverPlacement = computed(() => compactViewport.value ? 'bottom' : 'bottom-end')
 
-const canManage = computed(() =>
-  auth.hasRole('admin') || auth.hasRole('scheduler') || auth.hasRole('director'))
+const canManage = computed(() => canOperateDaily(auth.user?.roles))
 const canWrite = computed(() =>
   !semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 

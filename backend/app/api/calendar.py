@@ -5,12 +5,12 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import daily_operator
 from app.models.audit import AuditLog
 from app.models.calendar import SemesterCalendarException
 from app.models.semester import Semester, SemesterReadiness
-from app.models.user import Role, User
+from app.models.user import User
 from app.schemas.calendar import (
     CalendarExceptionCreate,
     CalendarExceptionOut,
@@ -22,8 +22,8 @@ from app.services import semester_context
 
 router = APIRouter(tags=["calendar"])
 
-viewer = require_roles(Role.scheduler, Role.director)
-editor = require_roles(Role.scheduler, Role.director)
+viewer = daily_operator
+editor = daily_operator
 
 
 def _semester(db: Session, semester_id: int) -> Semester:

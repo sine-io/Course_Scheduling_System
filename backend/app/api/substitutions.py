@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.auth import require_roles
 from app.core.db import get_db
+from app.core.permissions import daily_operator
 from app.models.audit import AuditLog
 from app.models.leave import AffectedPeriod
 from app.models.substitution import Substitution, SubstitutionType
-from app.models.user import Role, User
+from app.models.user import User
 from app.schemas.substitution import (
     AssignRequest,
     CandidateOut,
@@ -25,7 +25,7 @@ from app.services import substitutions as sub_service
 
 router = APIRouter(tags=["substitutions"])
 
-editor = require_roles(Role.scheduler, Role.director)
+editor = daily_operator
 
 
 def _get_affected(db: Session, affected_id: int) -> AffectedPeriod:
