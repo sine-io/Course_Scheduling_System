@@ -41,13 +41,15 @@ def _semesters(db: Session) -> list[Semester]:
 def effective_route(db: Session, state: WizardState | None = None) -> str | None:
     """兼容迁移前已存在的数据，推导而不改变原始向导进度。"""
     state = state or db.get(WizardState, SINGLETON_ID)
+    semesters = _semesters(db)
+    # 正式学期是路线的最终锁定边界；旧数据库中残留的 demo 标记不能让
+    # 向导读模型回到示例路线，避免 UI 与写入接口看到相互矛盾的状态。
+    if any(not semester.is_demo for semester in semesters):
+        return WizardRoute.formal.value
     if state is not None and state.route in {route.value for route in WizardRoute}:
         return state.route
-    semesters = _semesters(db)
     if semesters and all(semester.is_demo for semester in semesters):
         return WizardRoute.demo.value
-    if semesters and any(not semester.is_demo for semester in semesters):
-        return WizardRoute.formal.value
     return None
 
 
@@ -99,6 +101,9 @@ def route_snapshot(db: Session, state: WizardState | None = None) -> dict[str, o
     has_demo = any(semester.is_demo for semester in semesters)
     has_formal = any(not semester.is_demo for semester in semesters)
     route = effective_route(db, state)
+    state_matches_route = state is not None and (
+        state.route is None or state.route == route
+    )
     # 已有正式数据后不可反向切到示例；示例-only 数据仍可转正式。
     return {
         "route": route,
@@ -107,10 +112,14 @@ def route_snapshot(db: Session, state: WizardState | None = None) -> dict[str, o
         "has_demo_semester": has_demo,
         "has_formal_semester": has_formal,
         "can_reselect": not has_formal,
-        "resume_step": state.current_step if state is not None and route is not None else 0,
+        "resume_step": (
+            state.current_step
+            if state is not None and state_matches_route and route is not None
+            else 0
+        ),
         "resume_semester_id": (
             state.semester_id
-            if state is not None and route is not None
+            if state is not None and state_matches_route and route is not None
             else None
         ),
     }

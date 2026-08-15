@@ -102,6 +102,13 @@ def switch_current(db: Session, semester_id: int, expected_revision: int) -> Sem
         raise SemesterContextError(
             "semester_read_only", "已归档学期为只读，不能设为当前学期"
         )
+    if semester.is_demo and db.scalar(
+        select(Semester.id).where(Semester.is_demo.is_(False)).limit(1)
+    ) is not None:
+        raise SemesterContextError(
+            "demo_context_locked",
+            "已有正式学期，不能切换回示例学期；示例数据不会覆盖正式首次成功",
+        )
     if row.current_semester_id != semester.id:
         row.current_semester_id = semester.id
         row.revision += 1

@@ -3,6 +3,7 @@
 import pytest
 
 from app.models.user import Role
+from app.models.wizard import SINGLETON_ID, WizardState
 from tests.conftest import make_user
 
 PW = "password123"
@@ -97,6 +98,45 @@ def test_route_cannot_switch_from_formal_data_to_demo(scheduler):
     blocked = scheduler.put("/api/onboarding/route", json={"route": "demo"})
     assert blocked.status_code == 409
     assert "正式" in blocked.json()["detail"]
+
+
+def test_formal_semester_takes_precedence_over_stale_demo_route(env):
+    client, db = env
+    make_user(db, "stale-route", PW, roles=[Role.scheduler])
+    assert client.post(
+        "/api/auth/login", json={"username": "stale-route", "password": PW}
+    ).status_code == 200
+    formal = client.post(
+        "/api/semesters", json={"academic_year": 2096, "term": 1}
+    )
+    assert formal.status_code == 201, formal.text
+    state = db.get(WizardState, SINGLETON_ID)
+    assert state is not None
+    state.route = "demo"
+    state.current_step = 4
+    state.completed = True
+    db.commit()
+
+    wizard = client.get("/api/wizard/state")
+    snapshot = client.get("/api/onboarding/route")
+    assert wizard.json()["route"] == "formal"
+    assert wizard.json()["current_step"] == 0
+    assert wizard.json()["completed"] is False
+    assert snapshot.json()["route"] == "formal"
+    assert snapshot.json()["resume_step"] == 0
+
+
+def test_wizard_state_rejects_demo_semester_for_formal_route(scheduler):
+    assert scheduler.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
+    demo = scheduler.post("/api/demo-data")
+    assert demo.status_code == 201, demo.text
+
+    blocked = scheduler.patch(
+        "/api/wizard/state",
+        json={"route": "formal", "semester_id": demo.json()["semester_id"]},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "wizard_route_semester_mismatch"
 
 
 def test_progress_persists(scheduler):

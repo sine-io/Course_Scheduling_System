@@ -28,13 +28,15 @@ def _get_or_create(db: Session) -> WizardState:
 
 def _to_out(db: Session, state: WizardState) -> WizardStateOut:
     has_semesters = bool(db.scalar(select(func.count()).select_from(Semester)))
+    route = onboarding_route.effective_route(db, state)
+    state_matches_route = state.route is None or state.route == route
     return WizardStateOut(
-        current_step=state.current_step,
-        completed=state.completed,
-        semester_id=state.semester_id,
+        current_step=state.current_step if state_matches_route else 0,
+        completed=state.completed if state_matches_route else False,
+        semester_id=state.semester_id if state_matches_route else None,
         total_steps=TOTAL_STEPS,
         has_semesters=has_semesters,
-        route=onboarding_route.effective_route(db, state),
+        route=route,
     )
 
 
@@ -49,6 +51,20 @@ def update_state(
 ) -> WizardStateOut:
     state = _get_or_create(db)
     data = body.model_dump(exclude_unset=True)
+    requested_route = data.get("route") or onboarding_route.effective_route(db, state)
+    requested_semester_id = data.get("semester_id")
+    if requested_semester_id is not None:
+        requested_semester = db.get(Semester, requested_semester_id)
+        if requested_semester is not None and requested_route is not None:
+            route_is_demo = requested_route == "demo"
+            if requested_semester.is_demo != route_is_demo:
+                raise HTTPException(
+                    409,
+                    {
+                        "code": "wizard_route_semester_mismatch",
+                        "message": "向导路线与学期类型不一致，不能把示例学期写入正式路线",
+                    },
+                )
     if "route" in data and data["route"] is not None:
         try:
             onboarding_route.choose_route(db, data.pop("route"))

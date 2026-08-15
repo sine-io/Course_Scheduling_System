@@ -73,6 +73,25 @@ def test_scheduler_switches_current_semester_and_stale_switch_is_rejected(env):
     assert context(client)["current_semester"]["id"] == second["id"]
 
 
+def test_formal_semester_locks_demo_context_switch(env):
+    client, db = env
+    login(client, db)
+    assert client.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
+    demo = client.post("/api/demo-data")
+    assert demo.status_code == 201, demo.text
+    formal = create_api_semester(client, academic_year=2090, with_periods=False)
+
+    revision = context(client)["revision"]
+    blocked = client.put(
+        "/api/semester-context",
+        json={"semester_id": demo.json()["semester_id"], "expected_revision": revision},
+    )
+
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "demo_context_locked"
+    assert context(client)["current_semester"]["id"] == formal["id"]
+
+
 def test_admin_can_switch_but_teacher_cannot(env):
     client, db = env
     login(client, db, username="scheduler")

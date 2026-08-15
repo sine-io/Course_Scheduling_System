@@ -122,6 +122,62 @@ def test_creating_formal_semester_after_demo_switches_current_context(env):
     assert onboarding["first_success"] is False
 
 
+def test_demo_and_formal_publish_are_isolated(env):
+    """真实 API 的示例发布可用，但正式首次成功只由正式学期计入。"""
+    client, db = env
+    _login(client, db, username="route-publish")
+    assert client.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
+
+    demo = client.post("/api/demo-data")
+    assert demo.status_code == 201, demo.text
+    demo_id = demo.json()["semester_id"]
+    demo_timetable = client.get(f"/api/timetables?semester_id={demo_id}").json()[0]
+    demo_assignment = client.get(f"/api/assignments?semester_id={demo_id}").json()[0]
+    placed_demo = client.post(
+        f"/api/timetables/{demo_timetable['id']}/entries",
+        json={
+            "course_assignment_id": demo_assignment["id"],
+            "weekday": 1,
+            "period_no": 2,
+        },
+    )
+    assert placed_demo.status_code == 201, placed_demo.text
+    published_demo = client.post(
+        f"/api/timetables/{demo_timetable['id']}/publish?force=true"
+    )
+    assert published_demo.status_code == 200, published_demo.text
+    assert client.get("/api/onboarding/status").json()["first_success"] is False
+
+    formal = create_api_semester(
+        client,
+        academic_year=2064,
+        ready=True,
+        start_date="2064-09-01",
+        end_date="2065-01-31",
+    )
+    assignment = _setup_one_assignment(client, formal["id"])
+    timetable = client.post(
+        f"/api/timetables?semester_id={formal['id']}", json={"name": "正式课表"}
+    ).json()
+    placed_formal = client.post(
+        f"/api/timetables/{timetable['id']}/entries",
+        json={"course_assignment_id": assignment["id"], "weekday": 1, "period_no": 2},
+    )
+    assert placed_formal.status_code == 201, placed_formal.text
+    published_formal = client.post(f"/api/timetables/{timetable['id']}/publish")
+    assert published_formal.status_code == 200, published_formal.text
+    assert client.get("/api/onboarding/status").json()["first_success"] is True
+
+    revision = client.get("/api/semester-context").json()["revision"]
+    blocked = client.put(
+        "/api/semester-context",
+        json={"semester_id": demo_id, "expected_revision": revision},
+    )
+    assert blocked.status_code == 409
+    assert blocked.json()["detail"]["code"] == "demo_context_locked"
+    assert client.get("/api/onboarding/status").json()["first_success"] is True
+
+
 def test_first_success_is_derived_from_published_complete_timetable(env):
     client, db = env
     _login(client, db)

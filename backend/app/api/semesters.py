@@ -236,6 +236,12 @@ def copy_to_new_semester(
     )
     # 复制学期产生的是正式学期；从示例体验进入这里也应锁定正式路线。
     onboarding_route.choose_route(db, "formal")
+    semester_context.set_initial_current(db, new)
+    if semester_context.read_context(db)[0].current_semester_id == new.id:
+        state = onboarding_route.get_or_create_state(db)
+        state.current_step = 0
+        state.completed = False
+        state.semester_id = new.id
     db.commit()
     db.refresh(new)
     return _semester_out(db, new)
