@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>校智中枢 - 学校AI智能辅助系统原型</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-2: #f8fafc;
+      --text: #14213d;
+      --muted: #667085;
+      --line: #e6eaf0;
+      --primary: #2864dc;
+      --primary-2: #5b8def;
+      --teal: #12a8a0;
+      --purple: #7a5af8;
+      --orange: #f79009;
+      --red: #ef4444;
+      --green: #22a06b;
+      --shadow: 0 10px 30px rgba(30, 55, 90, 0.08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(40,100,220,.08), transparent 26%),
+        radial-gradient(circle at 100% 10%, rgba(18,168,160,.06), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .prototype-shell {
+      display: grid;
+      grid-template-columns: 228px 1fr;
+      width: 100vw;
+      height: 100vh;
+      min-width: 1180px;
+      min-height: 680px;
+    }
+
+    .sidebar {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255,255,255,.94);
+      border-right: 1px solid var(--line);
+      backdrop-filter: blur(16px);
+      z-index: 5;
+    }
+
+    .brand {
+      height: 74px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand-mark {
+      width: 38px; height: 38px; border-radius: 12px;
+      background: linear-gradient(135deg, #245ee5, #28b8c4);
+      display: grid; place-items: center; color: #fff; font-weight: 800;
+      box-shadow: 0 8px 18px rgba(40,100,220,.26);
+      position: relative;
+    }
+    .brand-mark:before,
+    .brand-mark:after { content: ""; position: absolute; border: 1.5px solid rgba(255,255,255,.75); border-radius: 50%; }
+    .brand-mark:before { width: 18px; height: 18px; }
+    .brand-mark:after { width: 7px; height: 7px; background: #fff; }
+    .brand-title { font-size: 17px; font-weight: 800; letter-spacing: .5px; }
+    .brand-sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+    .nav-section { padding: 16px 12px 0; }
+    .nav-label { color: #98a2b3; font-size: 11px; padding: 0 10px 8px; letter-spacing: .8px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      width: 100%; height: 44px; border: 0; border-radius: 12px;
+      background: transparent; color: #475467; padding: 0 12px;
+      margin-bottom: 4px; text-align: left; transition: .18s ease;
+    }
+    .nav-item:hover { background: #f1f5fb; color: var(--primary); }
+    .nav-item.active { background: linear-gradient(90deg, #eaf1ff, #f4f8ff); color: var(--primary); font-weight: 700; }
+    .nav-icon {
+      width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center;
+      background: #f2f4f7; font-size: 13px; flex: 0 0 auto;
+    }
+    .nav-item.active .nav-icon { background: var(--primary); color: white; box-shadow: 0 5px 12px rgba(40,100,220,.23); }
+    .nav-text { font-size: 14px; flex: 1; }
+    .nav-badge { min-width: 20px; padding: 2px 6px; border-radius: 10px; background: #fff1f0; color: var(--red); font-size: 10px; text-align: center; }
+
+    .sidebar-bottom { margin-top: auto; padding: 12px; }
+    .school-card {
+      background: linear-gradient(145deg, #f7faff, #eef5ff);
+      border: 1px solid #dce8ff; border-radius: 14px; padding: 12px;
+    }
+    .school-card strong { display: block; font-size: 13px; }
+    .school-card span { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .school-status { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--green); font-size: 11px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+    .main {
+      display: grid;
+      grid-template-rows: 74px 1fr;
+      min-width: 0;
+      min-height: 0;
+    }
+
+    .topbar {
+      display: flex; align-items: center; gap: 18px;
+      padding: 0 24px;
+      background: rgba(255,255,255,.86);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(16px);
+      z-index: 4;
+    }
+    .page-heading { min-width: 210px; }
+    .page-heading h1 { font-size: 18px; margin: 0; }
+    .page-heading p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+    .global-search {
+      flex: 1; max-width: 540px; height: 42px; border-radius: 12px;
+      background: #f6f8fb; border: 1px solid #e7ebf1;
+      display: flex; align-items: center; gap: 10px; padding: 0 14px;
+    }
+    .global-search input { flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 13px; }
+    .keycap { font-size: 10px; color: #98a2b3; background: #fff; border: 1px solid #e4e7ec; padding: 3px 6px; border-radius: 6px; }
+    .top-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .icon-btn {
+      width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 11px;
+      background: white; display: grid; place-items: center; color: #475467; position: relative;
+    }
+    .icon-btn .badge { position: absolute; right: -3px; top: -4px; font-size: 9px; color: white; background: var(--red); min-width: 17px; height: 17px; line-height: 17px; border-radius: 9px; border: 2px solid white; }
+    .profile { display: flex; align-items: center; gap: 9px; padding-left: 4px; }
+    .avatar { width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg,#dce8ff,#e6fbf9); display: grid; place-items: center; color: var(--primary); font-weight: 800; }
+    .profile strong { font-size: 12px; display: block; }
+    .profile span { color: var(--muted); font-size: 10px; display: block; margin-top: 2px; }
+
+    .content {
+      min-width: 0; min-height: 0; overflow: auto; padding: 20px 22px 28px;
+      scroll-behavior: smooth;
+    }
+    .page { display: none; animation: fade .22s ease; }
+    .page.active { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card {
+      background: rgba(255,255,255,.96);
+      border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: 0 4px 18px rgba(30,55,90,.04);
+    }
+    .card-header { display: flex; align-items: center; gap: 10px; padding: 16px 18px 12px; }
+    .card-header h3 { margin: 0; font-size: 14px; }
+    .card-header p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+    .card-body { padding: 0 18px 18px; }
+    .link-btn { border: 0; background: transparent; color: var(--primary); font-size: 11px; margin-left: auto; }
+
+    .btn {
+      border: 0; border-radius: 11px; height: 38px; padding: 0 15px;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      font-weight: 700; font-size: 12px; transition: .18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); filter: brightness(.99); }
+    .btn-primary { background: linear-gradient(135deg,#2c66e4,#4e86ee); color: white; box-shadow: 0 8px 18px rgba(40,100,220,.22); }
+    .btn-secondary { background: #eef4ff; color: var(--primary); border: 1px solid #d8e5ff; }
+    .btn-plain { background: white; color: #475467; border: 1px solid var(--line); }
+    .btn-teal { background: linear-gradient(135deg,#10a59c,#2dc7bb); color: white; }
+    .btn-purple { background: linear-gradient(135deg,#6f56e8,#8b6df5); color: white; }
+    .btn-orange { background: linear-gradient(135deg,#ed7907,#ff9d32); color: white; }
+    .btn-green { background: linear-gradient(135deg,#139b62,#30b679); color: white; }
+    .btn-danger { background: #fff0f0; color: var(--red); border: 1px solid #ffd2d2; }
+
+    .tag { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; background: #f2f4f7; color: #475467; font-size: 10px; white-space: nowrap; }
+    .tag.blue { background: #eaf1ff; color: var(--primary); }
+    .tag.green { background: #eaf8f1; color: var(--green); }
+    .tag.orange { background: #fff4e6; color: #d96d00; }
+    .tag.red { background: #fff0f0; color: var(--red); }
+    .tag.purple { background: #f2edff; color: var(--purple); }
+
+    /* 首页 */
+    .hero {
+      display: grid; grid-template-columns: 1.2fr .8fr; gap: 16px;
+      min-height: 142px; padding: 22px 24px; overflow: hidden; position: relative;
+      background: linear-gradient(120deg,#edf4ff 0%,#f6fbff 50%,#e9fbf8 100%);
+      border-color: #dbe8ff;
+    }
+    .hero:after { content: ""; position: absolute; width: 240px; height: 240px; border-radius: 50%; right: -80px; top: -85px; border: 24px solid rgba(40,100,220,.05); }
+    .hero h2 { margin: 0; font-size: 24px; }
+    .hero p { margin: 9px 0 16px; color: var(--muted); font-size: 12px; }
+    .hero-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .hero-visual { display: flex; align-items: center; justify-content: center; position: relative; z-index: 1; }
+    .ai-orbit { width: 230px; height: 104px; position: relative; }
+    .ai-core {
+      position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      width: 72px; height: 72px; border-radius: 22px; background: linear-gradient(145deg,#2b65df,#27b7bd);
+      color: white; display: grid; place-items: center; font-weight: 900; font-size: 20px;
+      box-shadow: 0 18px 35px rgba(40,100,220,.28);
+    }
+    .ai-chip { position: absolute; width: 42px; height: 42px; border-radius: 14px; background: white; border: 1px solid #dce7f9; box-shadow: var(--shadow); display: grid; place-items: center; font-size: 16px; }
+    .ai-chip:nth-child(2){ left:0; top:16px; } .ai-chip:nth-child(3){ right:0; top:8px; } .ai-chip:nth-child(4){ left:35px; bottom:0; } .ai-chip:nth-child(5){ right:42px; bottom:-2px; }
+    .orbit-line { position: absolute; border: 1px dashed rgba(40,100,220,.28); border-radius: 50%; inset: 7px 12px; }
+
+    .metric-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+    .metric { padding: 15px; min-width: 0; }
+    .metric-top { display: flex; align-items: center; justify-content: space-between; }
+    .metric-icon { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: #edf3ff; color: var(--primary); }
+    .metric-change { font-size: 9px; color: var(--green); }
+    .metric-change.down { color: var(--red); }
+    .metric strong { display: block; font-size: 22px; margin-top: 10px; }
+    .metric label { color: var(--muted); font-size: 11px; display: block; margin-top: 3px; }
+
+    .dashboard-grid { display: grid; grid-template-columns: 1.2fr .9fr .9fr; gap: 14px; margin-top: 14px; }
+    .feature-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+    .feature-card { padding: 14px 12px; border: 1px solid var(--line); border-radius: 13px; background: #fff; transition: .18s ease; position: relative; overflow: hidden; }
+    .feature-card:hover { border-color: #cbdcff; box-shadow: 0 8px 18px rgba(40,100,220,.09); transform: translateY(-2px); }
+    .feature-card .f-icon { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: #edf3ff; color: var(--primary); margin-bottom: 12px; }
+    .feature-card strong { font-size: 12px; display: block; }
+    .feature-card span { font-size: 10px; color: var(--muted); line-height: 1.5; display: block; margin-top: 5px; }
+    .feature-card.primary { background: linear-gradient(145deg,#f4f8ff,#edf5ff); border-color:#bcd0ff; }
+
+    .todo-list, .notice-list, .source-list { display: flex; flex-direction: column; gap: 9px; }
+    .todo-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+    .todo-item:last-child { border-bottom: 0; }
+    .todo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); }
+    .todo-item strong { font-size: 11px; display: block; }
+    .todo-item span { font-size: 9px; color: var(--muted); display: block; margin-top: 3px; }
+    .todo-count { margin-left: auto; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: #f2f4f7; font-size: 10px; }
+    .progress-ring { width: 110px; height: 110px; border-radius: 50%; background: conic-gradient(var(--teal) 0 82%, #edf1f5 82% 100%); display: grid; place-items: center; margin: 6px auto 14px; }
+    .progress-ring:before { content: ""; width: 76px; height: 76px; border-radius: 50%; background: white; position: absolute; }
+    .progress-ring { position: relative; }
+    .progress-ring strong { position: relative; z-index: 1; font-size: 20px; }
+    .progress-ring span { position: absolute; z-index: 2; font-size: 9px; color: var(--muted); margin-top: 38px; }
+    .legend { display: flex; flex-direction: column; gap: 8px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); }
+    .legend-row b { margin-left: auto; color: var(--text); }
+
+    .ai-suggestions { margin-top: 14px; }
+    .suggestion-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; }
+    .suggestion { border: 1px solid #dce7f9; background: linear-gradient(145deg,#f8fbff,#fff); border-radius: 13px; padding: 12px; }
+    .suggestion .s-head { display:flex; gap:8px; align-items:center; color: var(--primary); font-size: 10px; font-weight: 700; }
+    .suggestion strong { display: block; font-size: 11px; margin: 9px 0 5px; }
+    .suggestion p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.6; min-height: 44px; }
+    .suggestion .btn { margin-top: 10px; height: 30px; padding: 0 10px; font-size: 10px; }
+
+    /* AI工作台 */
+    .workbench-layout { display: grid; grid-template-columns: 220px minmax(520px,1fr) 270px; gap: 14px; min-height: calc(100vh - 122px); }
+    .template-list { padding: 10px; }
+    .template-title { padding: 8px 8px 10px; font-size: 11px; color: var(--muted); }
+    .template-item { border: 1px solid transparent; border-radius: 12px; padding: 11px; margin-bottom: 6px; cursor: pointer; transition: .18s; }
+    .template-item:hover, .template-item.active { background: #eef4ff; border-color:#d8e5ff; }
+    .template-item strong { font-size: 11px; display: block; }
+    .template-item span { font-size: 9px; color: var(--muted); line-height:1.4; display:block; margin-top:4px; }
+    .chat-card { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+    .chat-header { padding: 16px 18px; border-bottom: 1px solid var(--line); display:flex; align-items:center; }
+    .chat-title strong { font-size: 14px; display:block; } .chat-title span { font-size: 10px; color: var(--muted); display:block; margin-top:3px; }
+    .chat-body { padding: 18px; overflow:auto; min-height:0; }
+    .message { display:flex; gap:10px; margin-bottom:18px; align-items:flex-start; }
+    .message.user { flex-direction:row-reverse; }
+    .msg-avatar { width:32px; height:32px; border-radius:11px; display:grid; place-items:center; background:#edf3ff; color:var(--primary); font-weight:800; font-size:11px; flex:0 0 auto; }
+    .message.user .msg-avatar { background:#eaf8f1; color:var(--green); }
+    .bubble { max-width:82%; background:#f6f8fb; border:1px solid #edf0f4; border-radius:14px; padding:12px 14px; font-size:11px; line-height:1.65; }
+    .message.user .bubble { background:#eaf1ff; border-color:#d5e2ff; }
+    .task-card { border:1px solid #cfe0ff; background:linear-gradient(145deg,#f8fbff,#ffffff); border-radius:14px; padding:14px; margin:10px 0 0; }
+    .task-card h4 { margin:0 0 10px; font-size:12px; }
+    .task-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+    .task-metric { background:#fff; border:1px solid var(--line); border-radius:10px; padding:9px; }
+    .task-metric strong { font-size:16px; display:block; } .task-metric span { font-size:9px; color:var(--muted); }
+    .task-steps { display:flex; flex-direction:column; gap:7px; }
+    .step { display:flex; align-items:center; gap:8px; font-size:10px; }
+    .step-num { width:18px; height:18px; border-radius:6px; display:grid; place-items:center; background:#eaf1ff; color:var(--primary); font-size:9px; font-weight:700; }
+    .chat-input { padding:14px; border-top:1px solid var(--line); }
+    .prompt-box { display:grid; grid-template-columns:1fr auto; gap:10px; border:1px solid #d8e2f0; border-radius:14px; background:white; padding:10px; }
+    .prompt-box textarea { border:0; outline:0; resize:none; min-height:44px; max-height:100px; color:var(--text); }
+    .context-panel { padding:14px; }
+    .context-section { padding:12px 0; border-bottom:1px solid var(--line); }
+    .context-section:last-child { border-bottom:0; }
+    .context-section h4 { margin:0 0 10px; font-size:11px; }
+    .context-chip { display:flex; align-items:center; gap:8px; padding:8px; border:1px solid var(--line); border-radius:10px; margin-bottom:7px; background:#fbfcfe; }
+    .context-chip strong { font-size:10px; display:block; } .context-chip span { font-size:8px; color:var(--muted); display:block; margin-top:2px; }
+    .risk-row { display:flex; align-items:flex-start; gap:8px; padding:8px 0; font-size:9px; line-height:1.5; color:var(--muted); }
+
+    /* 排课 */
+    .schedule-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+    .field { display:flex; align-items:center; gap:7px; background:white; border:1px solid var(--line); border-radius:11px; height:38px; padding:0 10px; }
+    .field label { color:var(--muted); font-size:10px; }
+    .field select { border:0; outline:0; color:var(--text); background:transparent; font-size:11px; }
+    .schedule-actions { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:12px; }
+    .action-card { border:0; border-radius:14px; padding:12px 14px; color:white; text-align:left; min-height:68px; position:relative; overflow:hidden; }
+    .action-card:after { content:""; width:72px; height:72px; border-radius:50%; border:12px solid rgba(255,255,255,.10); position:absolute; right:-18px; top:-22px; }
+    .action-card strong { display:block; font-size:12px; position:relative; z-index:1; }
+    .action-card span { display:block; font-size:9px; opacity:.85; margin-top:6px; position:relative; z-index:1; }
+    .a-blue{background:linear-gradient(135deg,#2d67e5,#4b8cff)} .a-teal{background:linear-gradient(135deg,#119c96,#24c5b8)} .a-purple{background:linear-gradient(135deg,#6d51e8,#8f73f5)} .a-orange{background:linear-gradient(135deg,#ef7b0a,#ff9e32)} .a-green{background:linear-gradient(135deg,#149b61,#32b97d)}
+    .schedule-layout { display:grid; grid-template-columns:230px minmax(620px,1fr) 245px; gap:12px; align-items:start; }
+    .rules-card { padding:14px; }
+    .tabs { display:flex; gap:4px; background:#f2f4f7; border-radius:10px; padding:3px; margin-bottom:12px; }
+    .tab { flex:1; border:0; background:transparent; color:var(--muted); border-radius:8px; height:30px; font-size:10px; }
+    .tab.active { background:white; color:var(--primary); font-weight:700; box-shadow:0 3px 8px rgba(30,55,90,.08); }
+    .rule-row { display:flex; align-items:center; justify-content:space-between; padding:9px 0; border-bottom:1px dashed var(--line); gap:8px; }
+    .rule-row:last-child { border-bottom:0; }
+    .rule-row strong { font-size:10px; display:block; } .rule-row span { font-size:8px; color:var(--muted); display:block; margin-top:3px; }
+    .switch { width:34px; height:19px; border-radius:10px; background:#d7dce3; padding:2px; transition:.18s; flex:0 0 auto; }
+    .switch:before { content:""; width:15px; height:15px; background:white; border-radius:50%; display:block; box-shadow:0 1px 3px rgba(0,0,0,.15); transition:.18s; }
+    .switch.on { background:var(--primary); }
+    .switch.on:before { transform:translateX(15px); }
+
+    .timetable-card { overflow:hidden; }
+    .timetable-head { padding:13px 14px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; }
+    .view-pills { display:flex; gap:5px; margin-left:auto; }
+    .view-pill { border:1px solid var(--line); background:white; color:var(--muted); border-radius:8px; height:28px; padding:0 9px; font-size:9px; }
+    .view-pill.active { color:var(--primary); border-color:#cddcff; background:#eff4ff; }
+    .timetable-wrap { overflow:auto; }
+    .timetable { display:grid; grid-template-columns:78px repeat(6,minmax(92px,1fr)); min-width:720px; }
+    .cell { min-height:66px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:4px; background:#fff; position:relative; }
+    .cell.header { min-height:38px; display:grid; place-items:center; color:#475467; font-size:10px; background:#f8fafc; font-weight:700; }
+    .cell.period { display:flex; flex-direction:column; align-items:center; justify-content:center; background:#fbfcfe; color:var(--muted); font-size:9px; }
+    .cell.period strong { color:#475467; font-size:10px; }
+    .cell.drop-hover { background:#eef5ff; outline:2px dashed #9bb9ff; outline-offset:-3px; }
+    .course { border-radius:9px; padding:6px 7px; min-height:56px; font-size:8px; line-height:1.45; border:1px solid transparent; cursor:grab; position:relative; }
+    .course strong { font-size:10px; display:block; }
+    .course small { display:block; opacity:.74; }
+    .course.blue { background:#eaf1ff; color:#2458c8; border-color:#d6e3ff; }
+    .course.green { background:#eaf8f1; color:#18784e; border-color:#d4f0e2; }
+    .course.purple { background:#f2edff; color:#6746d7; border-color:#e3d9ff; }
+    .course.orange { background:#fff3e4; color:#bd6106; border-color:#ffe1bd; }
+    .course.cyan { background:#e7f8f8; color:#087c78; border-color:#cceeee; }
+    .course.red { background:#fff0f0; color:#cf3535; border-color:#ffbebe; outline:1px dashed #ef4444; }
+    .lock { position:absolute; right:5px; top:4px; font-size:8px; }
+    .right-stack { display:flex; flex-direction:column; gap:12px; }
+    .pool-card, .conflict-card { padding:14px; }
+    .pool-item { border:1px dashed #cbd5e1; border-radius:10px; padding:9px; margin-bottom:8px; background:#fbfcfe; cursor:grab; }
+    .pool-item strong { font-size:10px; display:block; } .pool-item span { font-size:8px; color:var(--muted); display:block; margin-top:3px; }
+    .conflict-item { display:flex; gap:8px; padding:9px 0; border-bottom:1px dashed var(--line); }
+    .conflict-item:last-child { border-bottom:0; }
+    .conflict-item strong { font-size:9px; display:block; } .conflict-item span { font-size:8px; color:var(--muted); display:block; margin-top:3px; line-height:1.4; }
+    .conflict-dot { width:7px; height:7px; border-radius:50%; background:var(--red); margin-top:4px; flex:0 0 auto; }
+    .schedule-bottom { margin-top:12px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .ai-reco-list { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; }
+    .reco { border:1px solid #dbe6fb; border-radius:11px; padding:10px; background:#fbfdff; }
+    .reco strong { font-size:10px; display:block; } .reco p { font-size:8px; color:var(--muted); line-height:1.5; min-height:34px; }
+    .reco .btn { height:28px; font-size:9px; padding:0 9px; }
+    .validation-bar { display:flex; align-items:center; gap:14px; padding:12px 14px; }
+    .validation-bar strong { font-size:11px; }
+    .validation-stat { display:flex; align-items:center; gap:5px; font-size:9px; color:var(--muted); }
+
+    /* 知识助手 */
+    .knowledge-hero { padding:24px; background:linear-gradient(120deg,#eef4ff,#f7fbff 60%,#edfbf9); border-color:#d8e5ff; }
+    .knowledge-hero h2 { margin:0; font-size:20px; }
+    .knowledge-hero p { color:var(--muted); font-size:11px; margin:7px 0 15px; }
+    .knowledge-search { display:grid; grid-template-columns:1fr auto; gap:10px; max-width:850px; background:white; border:1px solid #d6e2f4; border-radius:14px; padding:8px; box-shadow:0 12px 24px rgba(40,100,220,.08); }
+    .knowledge-search input { border:0; outline:0; padding:0 8px; font-size:12px; }
+    .quick-questions { display:flex; gap:7px; flex-wrap:wrap; margin-top:12px; }
+    .quick-q { border:1px solid #dce6f7; background:rgba(255,255,255,.72); color:#475467; border-radius:999px; height:28px; padding:0 10px; font-size:9px; }
+    .knowledge-layout { display:grid; grid-template-columns:230px minmax(500px,1fr) 280px; gap:14px; margin-top:14px; }
+    .category-list { padding:10px; }
+    .category { display:flex; align-items:center; gap:10px; padding:11px; border-radius:11px; cursor:pointer; margin-bottom:4px; }
+    .category:hover, .category.active { background:#eef4ff; color:var(--primary); }
+    .category strong { font-size:10px; flex:1; } .category span { font-size:9px; color:var(--muted); }
+    .answer-card { padding:18px; }
+    .question-label { color:var(--muted); font-size:9px; }
+    .answer-card h3 { font-size:16px; margin:5px 0 14px; }
+    .answer-box { background:#f8fafc; border:1px solid var(--line); border-radius:14px; padding:14px; line-height:1.75; font-size:11px; }
+    .answer-box strong { color:var(--primary); }
+    .citation { border-left:3px solid var(--primary); background:#f3f7ff; border-radius:0 10px 10px 0; padding:10px 12px; margin-top:10px; font-size:9px; color:#475467; }
+    .source-item { border:1px solid var(--line); border-radius:11px; padding:10px; background:#fff; }
+    .source-item strong { font-size:10px; display:block; } .source-item span { font-size:8px; color:var(--muted); display:block; margin-top:3px; }
+    .health-card { padding:14px; }
+    .health-score { display:flex; align-items:center; gap:12px; padding:10px 0 13px; }
+    .score-circle { width:56px; height:56px; border-radius:50%; background:conic-gradient(var(--green) 0 92%,#edf1f5 92% 100%); display:grid; place-items:center; position:relative; }
+    .score-circle:before { content:""; position:absolute; width:42px; height:42px; border-radius:50%; background:white; }
+    .score-circle strong { position:relative; z-index:1; font-size:13px; }
+    .doc-row { display:flex; align-items:center; gap:8px; padding:9px 0; border-bottom:1px dashed var(--line); }
+    .doc-row:last-child { border-bottom:0; }
+    .doc-icon { width:28px; height:28px; border-radius:9px; background:#eef4ff; color:var(--primary); display:grid; place-items:center; font-size:10px; }
+    .doc-row strong { font-size:9px; display:block; } .doc-row span { font-size:8px; color:var(--muted); display:block; margin-top:2px; }
+
+    /* 办公 */
+    .office-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .office-hero { padding:20px; display:flex; align-items:center; gap:18px; background:linear-gradient(120deg,#f0f5ff,#f7fbff 65%,#effbf8); border-color:#d9e5f8; }
+    .office-hero .office-icon { width:58px; height:58px; border-radius:18px; background:linear-gradient(135deg,#2b65df,#27b7bd); color:white; display:grid; place-items:center; font-size:22px; box-shadow:0 12px 24px rgba(40,100,220,.22); }
+    .office-hero h2 { margin:0; font-size:19px; } .office-hero p { margin:6px 0 0; color:var(--muted); font-size:11px; }
+    .office-hero .btn { margin-left:auto; }
+    .doc-templates { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .doc-template { border:1px solid var(--line); border-radius:12px; padding:12px; background:#fff; transition:.18s; }
+    .doc-template:hover { border-color:#cbdcff; transform:translateY(-1px); }
+    .doc-template .t-icon { width:34px; height:34px; border-radius:11px; display:grid; place-items:center; background:#edf3ff; color:var(--primary); margin-bottom:10px; }
+    .doc-template strong { font-size:10px; display:block; } .doc-template span { font-size:8px; color:var(--muted); display:block; margin-top:4px; line-height:1.4; }
+    .minutes-card { padding:16px; }
+    .upload-zone { border:1px dashed #b9c9e5; border-radius:13px; padding:18px; text-align:center; background:#fbfdff; }
+    .upload-zone strong { font-size:11px; display:block; } .upload-zone span { font-size:9px; color:var(--muted); display:block; margin:5px 0 12px; }
+    .extract-metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }
+    .extract-metric { background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:10px; text-align:center; }
+    .extract-metric strong { font-size:17px; display:block; } .extract-metric span { font-size:8px; color:var(--muted); }
+    .task-table { width:100%; border-collapse:collapse; }
+    .task-table th, .task-table td { padding:10px 8px; border-bottom:1px solid var(--line); text-align:left; font-size:9px; }
+    .task-table th { color:var(--muted); font-weight:600; background:#f8fafc; }
+    .task-title { font-size:10px; font-weight:700; }
+    .assignee { display:flex; align-items:center; gap:6px; }
+    .mini-avatar { width:22px; height:22px; border-radius:7px; background:#edf3ff; color:var(--primary); display:grid; place-items:center; font-size:8px; font-weight:700; }
+    .approval-flow { display:flex; align-items:center; gap:6px; padding:12px 0; }
+    .flow-node { flex:1; background:#f8fafc; border:1px solid var(--line); border-radius:10px; padding:10px; text-align:center; }
+    .flow-node.done { background:#eaf8f1; border-color:#d2eedf; }
+    .flow-node.active { background:#eaf1ff; border-color:#cddcff; }
+    .flow-node strong { font-size:9px; display:block; } .flow-node span { font-size:8px; color:var(--muted); display:block; margin-top:3px; }
+    .flow-arrow { color:#98a2b3; font-size:12px; }
+
+    /* Toast / Modal */
+    .toast {
+      position: fixed; right: 24px; bottom: 24px; z-index: 50;
+      min-width: 280px; max-width: 360px; background:#14213d; color:white;
+      border-radius:14px; padding:13px 15px; box-shadow:0 20px 40px rgba(20,33,61,.28);
+      transform: translateY(130px); opacity:0; transition:.25s ease;
+      display:flex; align-items:flex-start; gap:10px;
+    }
+    .toast.show { transform:translateY(0); opacity:1; }
+    .toast strong { font-size:11px; display:block; } .toast span { font-size:9px; opacity:.75; display:block; margin-top:4px; line-height:1.45; }
+    .modal-backdrop { position:fixed; inset:0; background:rgba(13,25,49,.42); backdrop-filter:blur(4px); display:none; place-items:center; z-index:40; }
+    .modal-backdrop.show { display:grid; }
+    .modal { width:430px; background:white; border-radius:18px; box-shadow:0 30px 70px rgba(20,33,61,.28); padding:20px; }
+    .modal h3 { margin:0; font-size:16px; } .modal p { color:var(--muted); font-size:10px; line-height:1.65; }
+    .modal-summary { background:#f8fafc; border:1px solid var(--line); border-radius:12px; padding:12px; margin:12px 0; }
+    .modal-summary .row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; font-size:10px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+
+    @media (max-height: 760px) {
+      .metric { padding: 12px; }
+      .metric strong { font-size: 18px; }
+      .hero { min-height: 126px; padding:18px 20px; }
+      .feature-card { padding:11px 10px; }
+      .content { padding-top:14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="prototype-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">AI</div>
+        <div>
+          <div class="brand-title">校智中枢</div>
+          <div class="brand-sub">School Copilot</div>
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-label">工作空间</div>
+        <button class="nav-item active" data-page="home"><span class="nav-icon">⌂</span><span class="nav-text">首页总览</span></button>
+        <button class="nav-item" data-page="ai"><span class="nav-icon">✦</span><span class="nav-text">AI 工作台</span><span class="nav-badge">3</span></button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">业务中心</div>
+        <button class="nav-item" data-page="schedule"><span class="nav-icon">▦</span><span class="nav-text">智能排课</span><span class="nav-badge">7</span></button>
+        <button class="nav-item"><span class="nav-icon">▤</span><span class="nav-text">教学中心</span></button>
+        <button class="nav-item" data-page="knowledge"><span class="nav-icon">◎</span><span class="nav-text">学校知识助手</span></button>
+        <button class="nav-item" data-page="office"><span class="nav-icon">▣</span><span class="nav-text">校务办公</span><span class="nav-badge">6</span></button>
+        <button class="nav-item"><span class="nav-icon">◫</span><span class="nav-text">数据决策</span></button>
+      </div>
+      <div class="nav-section">
+        <div class="nav-label">管理</div>
+        <button class="nav-item"><span class="nav-icon">⚙</span><span class="nav-text">系统管理</span></button>
+      </div>
+
+      <div class="sidebar-bottom">
+        <div class="school-card">
+          <strong>明德实验学校</strong>
+          <span>2026—2027 学年 · 秋季学期</span>
+          <div class="school-status"><i class="dot"></i> AI 服务运行正常</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="page-heading">
+          <h1 id="topTitle">首页总览</h1>
+          <p id="topSub">掌握学校运行状态，处理今日重点任务</p>
+        </div>
+        <div class="global-search">
+          <span>⌕</span>
+          <input id="globalInput" placeholder="搜索功能，或直接告诉 AI 你想完成什么…" />
+          <span class="keycap">Ctrl K</span>
+        </div>
+        <div class="top-actions">
+          <button class="icon-btn" title="AI 建议">✦<span class="badge">3</span></button>
+          <button class="icon-btn" title="通知">♢<span class="badge">12</span></button>
+          <div class="profile">
+            <div class="avatar">张</div>
+            <div><strong>张老师</strong><span>教务主任</span></div>
+          </div>
+        </div>
+      </header>
+
+      <section class="content">
+        <!-- 首页 -->
+        <div class="page active" id="page-home">
+          <div class="card hero">
+            <div>
+              <span class="tag blue">✦ AI 今日摘要</span>
+              <h2>下午好，张老师</h2>
+              <p>今天是 2026 年 7 月 20 日。系统发现 3 项需要优先处理的教务事项。</p>
+              <div class="hero-actions">
+                <button class="btn btn-primary" onclick="gotoPage('ai','检查今天需要优先处理的教务事项')">让 AI 帮我处理</button>
+                <button class="btn btn-plain" onclick="gotoPage('schedule')">查看排课进度</button>
+                <span class="tag green">● 数据已于 14:26 更新</span>
+              </div>
+            </div>
+            <div class="hero-visual">
+              <div class="ai-orbit">
+                <div class="orbit-line"></div>
+                <div class="ai-core">AI</div>
+                <div class="ai-chip">课</div>
+                <div class="ai-chip">知</div>
+                <div class="ai-chip">数</div>
+                <div class="ai-chip">办</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="metric-grid">
+            <div class="card metric"><div class="metric-top"><div class="metric-icon">师</div><span class="metric-change">+3</span></div><strong>156</strong><label>在校教师</label></div>
+            <div class="card metric"><div class="metric-top"><div class="metric-icon" style="background:#eaf8f1;color:var(--green)">班</div><span class="metric-change">+2</span></div><strong>48</strong><label>行政班级</label></div>
+            <div class="card metric"><div class="metric-top"><div class="metric-icon" style="background:#fff3e4;color:var(--orange)">课</div><span class="metric-change">-12</span></div><strong>128</strong><label>待排课程</label></div>
+            <div class="card metric"><div class="metric-top"><div class="metric-icon" style="background:#f2edff;color:var(--purple)">%</div><span class="metric-change">+6%</span></div><strong>82%</strong><label>排课完成率</label></div>
+            <div class="card metric"><div class="metric-top"><div class="metric-icon" style="background:#fff0f0;color:var(--red)">!</div><span class="metric-change down">7 条</span></div><strong>23</strong><label>待处理冲突</label></div>
+            <div class="card metric"><div class="metric-top"><div class="metric-icon" style="background:#e7f8f8;color:var(--teal)">↻</div><span class="metric-change down">-5</span></div><strong>37</strong><label>本周调课</label></div>
+          </div>
+
+          <div class="dashboard-grid">
+            <div class="card">
+              <div class="card-header"><div><h3>核心功能入口</h3><p>根据你的角色和近期任务智能排序</p></div></div>
+              <div class="card-body">
+                <div class="feature-grid">
+                  <div class="feature-card primary" onclick="gotoPage('schedule')"><div class="f-icon">▦</div><strong>智能排课</strong><span>自动 / 半自动排课<br>AI 优化与冲突解释</span></div>
+                  <div class="feature-card" onclick="gotoPage('ai','为八年级生成分层练习和教学建议')"><div class="f-icon" style="background:#eaf8f1;color:var(--green)">教</div><strong>教师助手</strong><span>备课、练习、反思<br>班级学情辅助</span></div>
+                  <div class="feature-card" onclick="gotoPage('knowledge')"><div class="f-icon" style="background:#e7f8f8;color:var(--teal)">知</div><strong>知识助手</strong><span>制度与流程问答<br>回答附原文来源</span></div>
+                  <div class="feature-card" onclick="gotoPage('office')"><div class="f-icon" style="background:#fff3e4;color:var(--orange)">文</div><strong>校务办公</strong><span>通知、公文、纪要<br>从会议生成任务</span></div>
+                  <div class="feature-card"><div class="f-icon" style="background:#f2edff;color:var(--purple)">数</div><strong>校务驾驶舱</strong><span>教学运行分析<br>资源配置模拟</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><div><h3>我的待办</h3><p>按紧急程度排序</p></div><button class="link-btn">全部待办</button></div>
+              <div class="card-body todo-list">
+                <div class="todo-item"><i class="todo-dot" style="background:var(--red)"></i><div><strong>确认七年级排课方案</strong><span>今天 17:00 前 · 教务中心</span></div><div class="todo-count">2</div></div>
+                <div class="todo-item"><i class="todo-dot" style="background:var(--orange)"></i><div><strong>处理教师请假影响课程</strong><span>涉及 3 位教师、11 节课程</span></div><div class="todo-count">8</div></div>
+                <div class="todo-item"><i class="todo-dot" style="background:var(--primary)"></i><div><strong>审核期中考试工作通知</strong><span>王老师提交 · 13:42</span></div><div class="todo-count">1</div></div>
+                <div class="todo-item"><i class="todo-dot" style="background:var(--teal)"></i><div><strong>确认下周场地维护安排</strong><span>体育馆、实验室 2</span></div><div class="todo-count">3</div></div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header"><div><h3>排课进度概览</h3><p>全校课表方案 v3.2</p></div><button class="link-btn" onclick="gotoPage('schedule')">查看详情</button></div>
+              <div class="card-body">
+                <div class="progress-ring"><strong>82%</strong><span>完成率</span></div>
+                <div class="legend">
+                  <div class="legend-row"><i class="dot" style="color:var(--teal)"></i>已完成<b>1,620 节</b></div>
+                  <div class="legend-row"><i class="dot" style="color:var(--primary)"></i>待优化<b>240 节</b></div>
+                  <div class="legend-row"><i class="dot" style="color:#c7ccd4"></i>未排课<b>118 节</b></div>
+                  <div class="legend-row"><i class="dot" style="color:var(--red)"></i>硬冲突<b>1 条</b></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card ai-suggestions">
+            <div class="card-header"><div><h3>AI 主动建议</h3><p>基于学校运行数据和业务规则生成，应用前需人工确认</p></div><span class="tag purple">今日 4 条</span></div>
+            <div class="card-body suggestion-grid">
+              <div class="suggestion"><div class="s-head">✦ 排课冲突建议</div><strong>优先处理七年级教师冲突</strong><p>当前有 8 处高优先级冲突，主要集中在周三下午，涉及 5 位教师。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">查看并处理</button></div>
+              <div class="suggestion"><div class="s-head" style="color:var(--teal)">✦ 场地优化建议</div><strong>调整体育课场地分配</strong><p>操场周二上午利用率仅 42%，可迁移 3 节体育课，减少周四拥挤。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">查看方案</button></div>
+              <div class="suggestion"><div class="s-head" style="color:var(--purple)">✦ 课程均衡建议</div><strong>优化八年级主科分布</strong><p>部分班级数学课集中在周五，建议将 6 节课程调整至周二、周四。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">对比调整</button></div>
+              <div class="suggestion"><div class="s-head" style="color:var(--orange)">✦ 办公任务建议</div><strong>从会议纪要生成待办</strong><p>昨日行政会议识别出 12 项任务，其中 3 项缺少截止日期。</p><button class="btn btn-secondary" onclick="gotoPage('office')">补充并生成</button></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI 工作台 -->
+        <div class="page" id="page-ai">
+          <div class="workbench-layout">
+            <div class="card template-list">
+              <div class="template-title">常用 AI 任务模板</div>
+              <div class="template-item active" data-prompt="检查下周因教师请假受到影响的课程，并生成调课方案，但不要直接发布。"><strong>请假影响分析</strong><span>识别受影响课程并推荐调课 / 代课方案</span></div>
+              <div class="template-item" data-prompt="检查当前排课方案中的冲突，并按严重程度排序。"><strong>排课冲突检查</strong><span>检查教师、班级、场地及规则冲突</span></div>
+              <div class="template-item" data-prompt="根据行政会议记录，提取任务、责任人和截止日期。"><strong>会议生成任务</strong><span>从纪要中提取结论与可执行事项</span></div>
+              <div class="template-item" data-prompt="查询教师临时调课需要经过哪些审批，并引用学校制度。"><strong>制度流程查询</strong><span>基于学校知识库回答并显示原文</span></div>
+              <div class="template-item" data-prompt="为八年级数学期中复习生成分层练习建议。"><strong>教学内容辅助</strong><span>结合学情生成教学设计与练习</span></div>
+              <div class="template-title" style="margin-top:14px">最近任务</div>
+              <div class="template-item"><strong>八年级课表优化</strong><span>已完成 · 今天 10:32</span></div>
+              <div class="template-item"><strong>期中考试通知初稿</strong><span>待确认 · 昨天 16:20</span></div>
+            </div>
+
+            <div class="card chat-card">
+              <div class="chat-header">
+                <div class="chat-title"><strong>学校 AI 任务助手</strong><span>跨模块分析和执行，所有写操作均需人工确认</span></div>
+                <span class="tag green" style="margin-left:auto">● 已连接 6 个业务系统</span>
+              </div>
+              <div class="chat-body" id="chatBody">
+                <div class="message user"><div class="msg-avatar">张</div><div class="bubble" id="userPrompt">检查下周因教师请假受到影响的课程，并生成调课方案，但不要直接发布。</div></div>
+                <div class="message"><div class="msg-avatar">AI</div><div class="bubble">已完成初步分析。我读取了下周课表、请假申请、教师任课关系和工作量规则，发现 3 名教师的请假将影响 11 节课程。
+                  <div class="task-card">
+                    <h4>教师请假影响处理方案</h4>
+                    <div class="task-metrics">
+                      <div class="task-metric"><strong>11</strong><span>受影响课程</span></div>
+                      <div class="task-metric"><strong>4</strong><span>涉及班级</span></div>
+                      <div class="task-metric"><strong>1</strong><span>暂未找到方案</span></div>
+                    </div>
+                    <div class="task-steps">
+                      <div class="step"><span class="step-num">1</span>代课 6 节：已找到同学科且无冲突的候选教师</div>
+                      <div class="step"><span class="step-num">2</span>调课 4 节：对现有课表的总改动控制在 8 节以内</div>
+                      <div class="step"><span class="step-num">3</span>待处理 1 节：周五第 6 节实验室资源不足</div>
+                    </div>
+                    <div style="display:flex;gap:8px;margin-top:12px">
+                      <button class="btn btn-primary" onclick="showToast('方案已展开','可查看每节课程的推荐教师、影响范围和替代方案。')">查看完整方案</button>
+                      <button class="btn btn-plain" onclick="showToast('任务已保存','方案保存在草稿中，尚未修改正式课表。')">保存为草稿</button>
+                      <button class="btn btn-plain" onclick="gotoPage('schedule')">进入排课工作台</button>
+                    </div>
+                  </div>
+                </div></div>
+              </div>
+              <div class="chat-input">
+                <div class="prompt-box">
+                  <textarea id="aiPrompt" placeholder="描述你想完成的任务，例如：张老师周三下午不能上课，其他课程尽量不动。"></textarea>
+                  <button class="btn btn-primary" id="sendPrompt">发送给 AI</button>
+                </div>
+                <div style="display:flex;gap:6px;margin-top:8px;align-items:center"><span class="tag blue">可引用当前页面</span><span class="tag">支持文件</span><span class="tag">执行前确认</span><span style="font-size:8px;color:var(--muted);margin-left:auto">AI 可能出错，重要结果请人工复核</span></div>
+              </div>
+            </div>
+
+            <div class="card context-panel">
+              <div class="context-section"><h4>本次任务使用的数据</h4>
+                <div class="context-chip"><span class="nav-icon">▦</span><div><strong>2026 秋季课表 v3.2</strong><span>最后更新：今天 13:58</span></div></div>
+                <div class="context-chip"><span class="nav-icon">师</span><div><strong>教师请假申请</strong><span>3 条有效申请</span></div></div>
+                <div class="context-chip"><span class="nav-icon">规</span><div><strong>调课与代课规则</strong><span>版本 2.4 · 已生效</span></div></div>
+              </div>
+              <div class="context-section"><h4>执行计划</h4>
+                <div class="risk-row"><span class="tag green">完成</span><span>读取课表和请假数据</span></div>
+                <div class="risk-row"><span class="tag green">完成</span><span>分析课程和教师冲突</span></div>
+                <div class="risk-row"><span class="tag blue">待确认</span><span>应用调课 / 代课方案</span></div>
+                <div class="risk-row"><span class="tag">未执行</span><span>发送相关通知</span></div>
+              </div>
+              <div class="context-section"><h4>风险与权限</h4>
+                <div class="risk-row"><i class="dot" style="color:var(--orange)"></i><span>方案涉及正式课表变更，需教务主任确认。</span></div>
+                <div class="risk-row"><i class="dot" style="color:var(--primary)"></i><span>当前仅生成草稿，不会直接通知教师和学生。</span></div>
+                <div class="risk-row"><i class="dot" style="color:var(--green)"></i><span>所有变更可查看差异并支持撤销。</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 智能排课 -->
+        <div class="page" id="page-schedule">
+          <div class="schedule-toolbar">
+            <div class="field"><label>学期</label><select><option>2026—2027 秋季学期</option></select></div>
+            <div class="field"><label>年级</label><select><option>八年级</option><option>七年级</option></select></div>
+            <div class="field"><label>方案</label><select><option>方案 v3.2（综合最优）</option></select></div>
+            <span class="tag orange">草稿 · 未发布</span>
+            <button class="btn btn-plain" style="margin-left:auto">方案管理</button>
+            <button class="btn btn-plain">导出课表</button>
+          </div>
+
+          <div class="schedule-actions">
+            <button class="action-card a-blue" id="autoSchedule"><strong>一键自动排课</strong><span>AI 理解目标，求解器全局生成课表</span></button>
+            <button class="action-card a-teal" id="optimizeSchedule"><strong>AI 智能优化</strong><span>减少冲突、空堂和不均衡安排</span></button>
+            <button class="action-card a-purple"><strong>半自动调整</strong><span>拖拽课程、锁定格位、局部重排</span></button>
+            <button class="action-card a-orange" id="validateSchedule"><strong>规则校验</strong><span>检查硬冲突、软约束和风险</span></button>
+            <button class="action-card a-green" id="publishSchedule"><strong>发布课表</strong><span>审批后发布到教师和班级端</span></button>
+          </div>
+
+          <div class="schedule-layout">
+            <div class="card rules-card">
+              <div class="tabs"><button class="tab active">硬约束</button><button class="tab">软约束</button></div>
+              <div class="rule-row"><div><strong>教师不可冲突</strong><span>同一教师不可同时授课</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>班级不可冲突</strong><span>行政班与教学班均校验</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>场地不可冲突</strong><span>含实验室与专用教室</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>连堂完整性</strong><span>不得跨午休或被拆分</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>单双周规则</strong><span>资源重叠时仍不可冲突</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>每日课时上限</strong><span>教师不超过 6 节</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>主科优先上午</strong><span>语文、数学、英语</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>避免连续晚课</strong><span>教师偏好规则</span></div><div class="switch"></div></div>
+              <button class="btn btn-secondary" style="width:100%;margin-top:12px">更多规则设置</button>
+            </div>
+
+            <div class="card timetable-card">
+              <div class="timetable-head"><div><strong style="font-size:12px">八年级 2 班课表</strong><div style="font-size:8px;color:var(--muted);margin-top:3px">可拖拽调整 · 已启用实时冲突校验</div></div>
+                <span class="tag blue">🔒 6 节已锁定</span><span class="tag red">! 1 条冲突</span>
+                <div class="view-pills"><button class="view-pill active">班级</button><button class="view-pill">教师</button><button class="view-pill">场地</button></div>
+              </div>
+              <div class="timetable-wrap">
+                <div class="timetable" id="timetable">
+                  <div class="cell header">节次</div><div class="cell header">周一</div><div class="cell header">周二</div><div class="cell header">周三</div><div class="cell header">周四</div><div class="cell header">周五</div><div class="cell header">周六</div>
+
+                  <div class="cell period"><strong>第 1 节</strong><span>08:00</span></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><span class="lock">🔒</span><strong>语文</strong><small>李老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>数学</strong><small>张老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>英语</strong><small>王老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><span class="lock">🔒</span><strong>数学</strong><small>张老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><strong>语文</strong><small>李老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>物理</strong><small>刘老师 · B203</small></div></div>
+
+                  <div class="cell period"><strong>第 2 节</strong><span>08:55</span></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>数学</strong><small>张老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>英语</strong><small>王老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><strong>语文</strong><small>李老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course orange" draggable="true"><strong>道德与法治</strong><small>陈老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>英语</strong><small>王老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>体育</strong><small>赵老师 · 操场</small></div></div>
+
+                  <div class="cell period"><strong>第 3 节</strong><span>10:00</span></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>物理</strong><small>刘老师 · B203</small></div></div>
+                  <div class="cell dropzone"><div class="course orange" draggable="true"><strong>历史</strong><small>周老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course red" draggable="true"><strong>数学  !</strong><small>张老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>生物</strong><small>孙老师 · B204</small></div></div>
+                  <div class="cell dropzone"><div class="course orange" draggable="true"><strong>化学</strong><small>赵老师 · B205</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>信息技术</strong><small>吴老师 · 机房 1</small></div></div>
+
+                  <div class="cell period"><strong>第 4 节</strong><span>10:55</span></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>英语</strong><small>王老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>地理</strong><small>林老师 · B202</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>物理</strong><small>刘老师 · B203</small></div></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><strong>语文</strong><small>李老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>生物</strong><small>孙老师 · B204</small></div></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>音乐</strong><small>何老师 · 音乐室</small></div></div>
+
+                  <div class="cell period"><strong>第 5 节</strong><span>14:00</span></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>体育</strong><small>赵老师 · 操场</small></div></div>
+                  <div class="cell dropzone"><div class="course orange" draggable="true"><strong>美术</strong><small>张老师 · 美术室</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>信息技术</strong><small>吴老师 · 机房 1</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>体育</strong><small>赵老师 · 操场</small></div></div>
+                  <div class="cell dropzone"><div class="course orange" draggable="true"><strong>历史</strong><small>周老师 · A201</small></div></div>
+                  <div class="cell dropzone"></div>
+
+                  <div class="cell period"><strong>第 6 节</strong><span>14:55</span></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><strong>班会</strong><small>李老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>物理实验</strong><small>刘老师 · 实验室 1</small></div></div>
+                  <div class="cell dropzone"><div class="course orange" draggable="true"><strong>化学实验</strong><small>赵老师 · 实验室 2</small></div></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><strong>阅读</strong><small>王老师 · 图书馆</small></div></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>自习</strong><small>张老师 · A201</small></div></div>
+                  <div class="cell dropzone"></div>
+
+                  <div class="cell period"><strong>第 7 节</strong><span>16:00</span></div>
+                  <div class="cell dropzone"><div class="course purple" draggable="true"><strong>自习</strong><small>张老师 · A201</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>社团活动</strong><small>多位教师 · 多功能厅</small></div></div>
+                  <div class="cell dropzone"><div class="course green" draggable="true"><strong>体育</strong><small>赵老师 · 操场</small></div></div>
+                  <div class="cell dropzone"><div class="course cyan" draggable="true"><strong>社团活动</strong><small>多位教师 · 多功能厅</small></div></div>
+                  <div class="cell dropzone"><div class="course blue" draggable="true"><strong>心理健康</strong><small>黄老师 · A201</small></div></div>
+                  <div class="cell dropzone"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="right-stack">
+              <div class="card pool-card">
+                <div style="display:flex;align-items:center;margin-bottom:10px"><strong style="font-size:11px">未排课程池</strong><span class="tag blue" style="margin-left:auto">可拖拽</span></div>
+                <div class="pool-item" draggable="true" data-course="书法" data-teacher="吴老师 · 书法教室" data-color="orange"><strong>书法</strong><span>吴老师 · 1 课时 / 周</span></div>
+                <div class="pool-item" draggable="true" data-course="劳动教育" data-teacher="陈老师 · 劳动教室" data-color="green"><strong>劳动教育</strong><span>陈老师 · 1 课时 / 周</span></div>
+                <div class="pool-item" draggable="true" data-course="科学探究" data-teacher="刘老师 · 实验室 3" data-color="cyan"><strong>科学探究</strong><span>刘老师 · 1 课时 / 周</span></div>
+                <button class="btn btn-secondary" style="width:100%;height:30px;font-size:9px">展开全部 12 节</button>
+              </div>
+              <div class="card conflict-card">
+                <div style="display:flex;align-items:center;margin-bottom:5px"><strong style="font-size:11px">冲突检测</strong><span class="tag red" style="margin-left:auto">共 7 条</span></div>
+                <div class="conflict-item"><i class="conflict-dot"></i><div><strong>张老师 · 周三第 3 节</strong><span>与八年级 1 班数学课冲突</span></div></div>
+                <div class="conflict-item"><i class="conflict-dot" style="background:var(--orange)"></i><div><strong>实验室 1 · 周二第 6 节</strong><span>容量上限 30 人，当前安排 32 人</span></div></div>
+                <div class="conflict-item"><i class="conflict-dot" style="background:var(--orange)"></i><div><strong>体育场 · 周五第 5 节</strong><span>与校队训练时间重叠</span></div></div>
+                <button class="btn btn-plain" style="width:100%;height:30px;font-size:9px;margin-top:8px">查看全部冲突</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="schedule-bottom">
+            <div class="card">
+              <div class="card-header"><div><h3>AI 推荐调整</h3><p>基于冲突、教师偏好和课程均衡目标</p></div><span class="tag purple">3 条建议</span></div>
+              <div class="card-body ai-reco-list">
+                <div class="reco"><strong>调整数学课时间</strong><p>建议将周三第 3 节移动至周四第 1 节，可消除教师冲突。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用数学课调整建议')">应用</button></div>
+                <div class="reco"><strong>优化体育课安排</strong><p>建议移至周二或周四下午，操场利用率更低。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用体育课场地优化')">应用</button></div>
+                <div class="reco"><strong>平衡主科分布</strong><p>建议将一节语文课移至周二，减少周五主科集中。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用主科分布优化')">应用</button></div>
+              </div>
+            </div>
+            <div class="card validation-bar"><strong>实时校验</strong><div class="validation-stat"><i class="dot" style="color:var(--green)"></i>通过 21 项</div><div class="validation-stat"><i class="dot" style="color:var(--orange)"></i>警告 5 项</div><div class="validation-stat"><i class="dot" style="color:var(--red)"></i>错误 1 项</div><div class="validation-stat" style="margin-left:auto">最后校验：14:25:36</div><button class="btn btn-plain" id="revalidate" style="height:30px;font-size:9px">重新校验</button></div>
+          </div>
+        </div>
+
+        <!-- 知识助手 -->
+        <div class="page" id="page-knowledge">
+          <div class="card knowledge-hero">
+            <span class="tag blue">◎ 学校专属知识库</span>
+            <h2>学校知识助手</h2>
+            <p>查询校内制度、流程、通知、校历和工作手册。每个回答均显示来源，不确定时明确提示。</p>
+            <div class="knowledge-search"><input id="knowledgeInput" value="教师临时调课需要经过哪些审批？" /><button class="btn btn-primary" id="askKnowledge">查询知识库</button></div>
+            <div class="quick-questions"><button class="quick-q">学生请假需要哪些材料？</button><button class="quick-q">期中考试命题有哪些要求？</button><button class="quick-q">实验室使用如何申请？</button><button class="quick-q">教师外出培训如何报销？</button></div>
+          </div>
+
+          <div class="knowledge-layout">
+            <div class="card category-list">
+              <div class="category active"><span class="nav-icon">规</span><strong>规章制度</strong><span>126</span></div>
+              <div class="category"><span class="nav-icon">教</span><strong>教务流程</strong><span>48</span></div>
+              <div class="category"><span class="nav-icon">历</span><strong>校历与活动</strong><span>31</span></div>
+              <div class="category"><span class="nav-icon">通</span><strong>通知公告</strong><span>286</span></div>
+              <div class="category"><span class="nav-icon">会</span><strong>会议纪要</strong><span>94</span></div>
+              <div class="category"><span class="nav-icon">课</span><strong>课程与教学</strong><span>73</span></div>
+              <div class="category"><span class="nav-icon">办</span><strong>行政办公</strong><span>65</span></div>
+              <div style="padding:14px 8px 4px;color:var(--muted);font-size:9px;line-height:1.6">当前账号可访问 723 份文档。权限范围：全校教务与行政公开资料。</div>
+            </div>
+
+            <div class="card answer-card">
+              <div class="question-label">你的问题</div>
+              <h3 id="answerTitle">教师临时调课需要经过哪些审批？</h3>
+              <div class="answer-box" id="answerBox">
+                根据学校现行制度，普通教学周内的临时调课应经过以下流程：
+                <br><br>
+                <strong>1. 任课教师发起申请</strong><br>
+                填写调课原因、原课程、拟调整时间及涉及班级；因请假产生的调课需关联有效请假申请。
+                <br><br>
+                <strong>2. 年级主任确认</strong><br>
+                核对班级教学安排、任课教师时间和年级活动是否冲突。
+                <br><br>
+                <strong>3. 教务处审批</strong><br>
+                教务处完成教师、班级、场地和课时规则校验后，批准并更新临时课表。
+                <br><br>
+                <strong>4. 通知相关人员</strong><br>
+                审批通过后，由系统通知任课教师、班主任及相关班级。未经批准不得私自调课。
+                <div class="citation">来源：《教学运行与调课管理办法（2026 修订）》第 12—15 条 · 2026 年 2 月 28 日发布</div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-secondary" onclick="showToast('已打开原文','已定位到《教学运行与调课管理办法》第 12 条。')">查看原文</button><button class="btn btn-primary" onclick="showToast('已创建申请草稿','调课申请表已预填，可继续补充课程和时间。')">打开调课申请</button><button class="btn btn-plain">继续追问</button></div>
+            </div>
+
+            <div class="right-stack">
+              <div class="card health-card">
+                <strong style="font-size:11px">知识库健康度</strong>
+                <div class="health-score"><div class="score-circle"><strong>92</strong></div><div><strong style="font-size:11px">状态良好</strong><div style="font-size:8px;color:var(--muted);margin-top:4px;line-height:1.5">723 份文档已索引<br>18 份文档待更新</div></div></div>
+                <div class="legend-row"><i class="dot" style="color:var(--green)"></i>有效文档<b>705</b></div>
+                <div class="legend-row"><i class="dot" style="color:var(--orange)"></i>即将过期<b>12</b></div>
+                <div class="legend-row"><i class="dot" style="color:var(--red)"></i>索引失败<b>6</b></div>
+              </div>
+              <div class="card health-card">
+                <div style="display:flex;align-items:center;margin-bottom:7px"><strong style="font-size:11px">本次引用来源</strong><span class="tag blue" style="margin-left:auto">3 份</span></div>
+                <div class="source-list">
+                  <div class="source-item"><strong>教学运行与调课管理办法</strong><span>2026 修订版 · 教务处</span></div>
+                  <div class="source-item"><strong>教师请假与代课实施细则</strong><span>2025 修订版 · 人事处</span></div>
+                  <div class="source-item"><strong>临时课表发布工作流程</strong><span>流程编号 EDU-018</span></div>
+                </div>
+              </div>
+              <div class="card health-card">
+                <strong style="font-size:11px">最近更新</strong>
+                <div class="doc-row"><div class="doc-icon">PDF</div><div><strong>期末考试工作方案</strong><span>今天 11:20 · 教务处</span></div></div>
+                <div class="doc-row"><div class="doc-icon">DOC</div><div><strong>暑期值班管理办法</strong><span>昨天 16:45 · 校办</span></div></div>
+                <div class="doc-row"><div class="doc-icon">XLS</div><div><strong>2026 秋季校历</strong><span>7 月 18 日 · 教务处</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 校务办公 -->
+        <div class="page" id="page-office">
+          <div class="card office-hero">
+            <div class="office-icon">文</div>
+            <div><span class="tag blue">AI 校务办公</span><h2>从文字生成到任务执行</h2><p>起草通知、公文和方案；整理会议纪要；自动提取责任人、截止日期并持续跟踪。</p></div>
+            <button class="btn btn-primary" id="newDocument">新建 AI 文档</button>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-header"><div><h3>常用文档模板</h3><p>使用学校正式模板生成初稿，发送前必须人工审核</p></div><button class="link-btn">管理模板</button></div>
+            <div class="card-body doc-templates">
+              <div class="doc-template" data-doc="期中考试工作通知"><div class="t-icon">通</div><strong>工作通知</strong><span>考试、活动、放假及全校性事项通知</span></div>
+              <div class="doc-template" data-doc="校园科技节活动方案"><div class="t-icon" style="background:#eaf8f1;color:var(--green)">方</div><strong>活动方案</strong><span>目标、分工、日程、预算及风险预案</span></div>
+              <div class="doc-template" data-doc="行政会议纪要"><div class="t-icon" style="background:#f2edff;color:var(--purple)">会</div><strong>会议纪要</strong><span>自动整理结论、任务和责任人</span></div>
+              <div class="doc-template" data-doc="学期教学工作总结"><div class="t-icon" style="background:#fff3e4;color:var(--orange)">总</div><strong>工作总结</strong><span>按学校标准结构汇总数据和成果</span></div>
+            </div>
+          </div>
+
+          <div class="office-grid" style="margin-top:14px">
+            <div class="card minutes-card">
+              <div style="display:flex;align-items:center;margin-bottom:12px"><div><strong style="font-size:12px">会议纪要 → 执行任务</strong><div style="font-size:9px;color:var(--muted);margin-top:4px">上传录音、文字记录或历史纪要，AI 自动提取可执行事项</div></div><span class="tag purple" style="margin-left:auto">AI 自动整理</span></div>
+              <div class="upload-zone"><strong>行政会议记录 · 7 月 19 日</strong><span>已完成语音转写和关键事项识别</span><button class="btn btn-secondary" onclick="showToast('分析结果已刷新','共识别 5 项会议结论和 12 项执行任务。')">重新分析</button></div>
+              <div class="extract-metrics"><div class="extract-metric"><strong>5</strong><span>会议结论</span></div><div class="extract-metric"><strong>12</strong><span>待办任务</span></div><div class="extract-metric"><strong>2</strong><span>责任人缺失</span></div><div class="extract-metric"><strong>3</strong><span>截止日期缺失</span></div></div>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" onclick="showToast('已生成任务草稿','12 项任务已进入确认清单，尚未发送给责任人。')">生成任务草稿</button><button class="btn btn-plain">查看完整纪要</button></div>
+            </div>
+
+            <div class="card minutes-card">
+              <div style="display:flex;align-items:center;margin-bottom:12px"><div><strong style="font-size:12px">通知草稿预览</strong><div style="font-size:9px;color:var(--muted);margin-top:4px">AI 已根据“期中考试工作通知”模板生成</div></div><span class="tag orange" style="margin-left:auto">待审核</span></div>
+              <div style="border:1px solid var(--line);border-radius:12px;padding:14px;background:#fbfcfe;min-height:145px">
+                <div style="text-align:center;font-size:13px;font-weight:800;margin-bottom:10px">关于做好 2026 年秋季学期期中考试工作的通知</div>
+                <div style="font-size:9px;line-height:1.75;color:#475467">各年级组、各教研组：<br>为规范组织本学期期中考试，全面了解阶段性教学情况，现将有关事项通知如下……<br><br>一、考试时间：2026 年 11 月 4 日至 6 日；<br>二、命题要求：严格依据课程标准和教学进度；<br>三、请各年级于 10 月 28 日前完成考场与监考安排。</div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" onclick="showToast('已提交审核','通知草稿已提交分管校长审核，尚未发布。')">提交审核</button><button class="btn btn-plain">继续编辑</button><button class="btn btn-plain">查看引用数据</button></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px">
+            <div class="card-header"><div><h3>任务执行中心</h3><p>来自会议、通知、审批和 AI 建议的统一任务清单</p></div><span class="tag red">2 项即将逾期</span><button class="link-btn">查看全部</button></div>
+            <div class="card-body" style="padding-top:0">
+              <table class="task-table">
+                <thead><tr><th>任务</th><th>来源</th><th>责任人</th><th>截止时间</th><th>进度</th><th>状态</th></tr></thead>
+                <tbody>
+                  <tr><td><div class="task-title">完成期中考试考场安排</div></td><td>行政会议</td><td><div class="assignee"><span class="mini-avatar">王</span>王老师</div></td><td>7 月 22 日</td><td>60%</td><td><span class="tag orange">即将到期</span></td></tr>
+                  <tr><td><div class="task-title">提交秋季学期教师培训计划</div></td><td>校长办公会</td><td><div class="assignee"><span class="mini-avatar">李</span>李主任</div></td><td>7 月 25 日</td><td>35%</td><td><span class="tag blue">进行中</span></td></tr>
+                  <tr><td><div class="task-title">更新实验室安全管理制度</div></td><td>安全检查</td><td><div class="assignee"><span class="mini-avatar">陈</span>陈老师</div></td><td>7 月 20 日</td><td>90%</td><td><span class="tag red">今日到期</span></td></tr>
+                  <tr><td><div class="task-title">确认暑期值班安排</div></td><td>校办通知</td><td><div class="assignee"><span class="mini-avatar">赵</span>赵主任</div></td><td>7 月 21 日</td><td>100%</td><td><span class="tag green">待确认</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:14px;padding:0 16px">
+            <div class="approval-flow"><div class="flow-node done"><strong>AI 生成初稿</strong><span>已完成 14:02</span></div><span class="flow-arrow">→</span><div class="flow-node done"><strong>教务处复核</strong><span>张老师 14:18</span></div><span class="flow-arrow">→</span><div class="flow-node active"><strong>分管校长审批</strong><span>等待处理</span></div><span class="flow-arrow">→</span><div class="flow-node"><strong>正式发布</strong><span>尚未执行</span></div><span class="flow-arrow">→</span><div class="flow-node"><strong>阅读跟踪</strong><span>尚未开始</span></div></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"><div>✓</div><div><strong id="toastTitle"></strong><span id="toastText"></span></div></div>
+
+  <div class="modal-backdrop" id="publishModal">
+    <div class="modal">
+      <h3>确认发布课表</h3>
+      <p>发布后，教师端和班级端将切换到新版本。系统会保留当前正式课表，可在需要时回退。</p>
+      <div class="modal-summary">
+        <div class="row"><span>方案版本</span><strong>v3.2 综合最优</strong></div>
+        <div class="row"><span>硬冲突</span><strong style="color:var(--red)">1 条未解决</strong></div>
+        <div class="row"><span>涉及对象</span><strong>48 个班级 · 156 位教师</strong></div>
+        <div class="row"><span>发布范围</span><strong>全校</strong></div>
+      </div>
+      <p style="color:var(--red)">当前仍有 1 条硬冲突，建议解决后再发布。演示原型允许继续查看发布流程。</p>
+      <div class="modal-actions"><button class="btn btn-plain" onclick="closePublish()">返回处理冲突</button><button class="btn btn-danger" onclick="confirmPublish()">仍然提交审批</button></div>
+    </div>
+  </div>
+
+  <script>
+    const titles = {
+      home: ['首页总览','掌握学校运行状态，处理今日重点任务'],
+      ai: ['AI 工作台','用自然语言发起跨模块任务，执行前始终由你确认'],
+      schedule: ['智能排课','自动求解、半自动调整、冲突解释和方案发布'],
+      knowledge: ['学校知识助手','基于学校正式资料回答，并提供原文来源'],
+      office: ['校务办公','从文档生成到会议任务执行的完整闭环']
+    };
+
+    function gotoPage(page, prompt) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      const target = document.getElementById('page-' + page);
+      if (target) target.classList.add('active');
+      const nav = document.querySelector(`.nav-item[data-page="${page}"]`);
+      if (nav) nav.classList.add('active');
+      document.getElementById('topTitle').textContent = titles[page][0];
+      document.getElementById('topSub').textContent = titles[page][1];
+      document.querySelector('.content').scrollTop = 0;
+      if (page === 'ai' && prompt) {
+        document.getElementById('aiPrompt').value = prompt;
+        document.getElementById('userPrompt').textContent = prompt;
+      }
+    }
+
+    document.querySelectorAll('.nav-item[data-page]').forEach(btn => {
+      btn.addEventListener('click', () => gotoPage(btn.dataset.page));
+    });
+
+    document.getElementById('globalInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter' && e.target.value.trim()) {
+        gotoPage('ai', e.target.value.trim());
+        document.getElementById('aiPrompt').value = e.target.value.trim();
+        e.target.value = '';
+      }
+    });
+
+    document.querySelectorAll('.template-item[data-prompt]').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.template-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        document.getElementById('aiPrompt').value = item.dataset.prompt;
+      });
+    });
+
+    document.getElementById('sendPrompt').addEventListener('click', () => {
+      const input = document.getElementById('aiPrompt');
+      const prompt = input.value.trim();
+      if (!prompt) return;
+      const body = document.getElementById('chatBody');
+      const user = document.createElement('div');
+      user.className = 'message user';
+      user.innerHTML = `<div class="msg-avatar">张</div><div class="bubble"></div>`;
+      user.querySelector('.bubble').textContent = prompt;
+      body.appendChild(user);
+      const ai = document.createElement('div');
+      ai.className = 'message';
+      ai.innerHTML = `<div class="msg-avatar">AI</div><div class="bubble">我已将这项要求解析为一个可执行任务。接下来会先读取相关数据、检查权限和冲突，再生成预览方案；未经你的确认，不会修改正式业务数据。<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" onclick="showToast('任务分析已开始','原型正在演示 AI 任务构建流程。')">开始分析</button><button class="btn btn-plain">查看执行计划</button></div></div>`;
+      body.appendChild(ai);
+      input.value = '';
+      body.scrollTop = body.scrollHeight;
+    });
+
+    document.querySelectorAll('.switch').forEach(sw => sw.addEventListener('click', () => sw.classList.toggle('on')));
+    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => { document.querySelectorAll('.tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); }));
+    document.querySelectorAll('.view-pill').forEach(pill => pill.addEventListener('click', () => { document.querySelectorAll('.view-pill').forEach(p => p.classList.remove('active')); pill.classList.add('active'); showToast('视图已切换', `当前显示${pill.textContent}课表。`); }));
+
+    function showToast(title, text) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastTitle').textContent = title;
+      document.getElementById('toastText').textContent = text;
+      toast.classList.add('show');
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => toast.classList.remove('show'), 2800);
+    }
+
+    document.getElementById('autoSchedule').addEventListener('click', () => showToast('自动排课任务已创建','系统正在使用约束求解器生成多个方案，当前页面数据不会被覆盖。'));
+    document.getElementById('optimizeSchedule').addEventListener('click', () => showToast('AI 优化建议已更新','预计可减少 1 条硬冲突、12 个教师空堂和 6 处主科集中。'));
+    document.getElementById('validateSchedule').addEventListener('click', () => showToast('校验完成','共检查 27 项规则：通过 21 项、警告 5 项、错误 1 项。'));
+    document.getElementById('revalidate').addEventListener('click', () => showToast('重新校验完成','当前仍存在张老师周三第 3 节的教师冲突。'));
+    document.getElementById('publishSchedule').addEventListener('click', () => document.getElementById('publishModal').classList.add('show'));
+    function closePublish(){ document.getElementById('publishModal').classList.remove('show'); }
+    function confirmPublish(){ closePublish(); showToast('已提交审批','课表方案已进入教务审批流程，尚未正式发布。'); }
+
+    function applyReco(btn, msg){ btn.textContent='已应用'; btn.disabled=true; btn.classList.remove('btn-secondary'); btn.classList.add('btn-green'); showToast(msg,'变更已写入当前草稿，可撤销，正式课表未受影响。'); }
+
+    // Drag and drop: 未排课程池和现有课程均可拖动
+    let dragPayload = null;
+    document.querySelectorAll('.course').forEach(course => {
+      course.addEventListener('dragstart', e => {
+        dragPayload = { type:'course', element:course };
+        e.dataTransfer.effectAllowed = 'move';
+      });
+    });
+    document.querySelectorAll('.pool-item').forEach(item => {
+      item.addEventListener('dragstart', e => {
+        dragPayload = { type:'pool', element:item, course:item.dataset.course, teacher:item.dataset.teacher, color:item.dataset.color };
+        e.dataTransfer.effectAllowed='move';
+      });
+    });
+    document.querySelectorAll('.dropzone').forEach(zone => {
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drop-hover'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('drop-hover'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault(); zone.classList.remove('drop-hover');
+        if (!dragPayload || zone.querySelector('.course')) { showToast('无法放置课程','目标格位已有课程，请先移出或选择空白格位。'); return; }
+        if (dragPayload.type === 'course') {
+          zone.appendChild(dragPayload.element);
+          showToast('课程已移动','实时校验未发现新的硬冲突，变更已保存到草稿。');
+        } else {
+          const div = document.createElement('div');
+          div.className = `course ${dragPayload.color}`;
+          div.draggable = true;
+          div.innerHTML = `<strong>${dragPayload.course}</strong><small>${dragPayload.teacher}</small>`;
+          zone.appendChild(div);
+          dragPayload.element.remove();
+          div.addEventListener('dragstart', ev => { dragPayload = { type:'course', element:div }; ev.dataTransfer.effectAllowed='move'; });
+          showToast('课程已排入课表','系统已完成教师、班级和场地的即时冲突检查。');
+        }
+        dragPayload = null;
+      });
+    });
+
+    document.querySelectorAll('.quick-q').forEach(btn => btn.addEventListener('click', () => { document.getElementById('knowledgeInput').value = btn.textContent; document.getElementById('askKnowledge').click(); }));
+    document.getElementById('askKnowledge').addEventListener('click', () => {
+      const q = document.getElementById('knowledgeInput').value.trim();
+      if (!q) return;
+      document.getElementById('answerTitle').textContent = q;
+      document.getElementById('answerBox').innerHTML = `已在学校知识库中找到与“<strong>${q}</strong>”相关的制度和流程。<br><br>原型演示中，系统会综合当前账号权限内的正式文件，给出结构化回答，并在下方展示文件名、条款位置、发布时间和适用范围。<div class="citation">已检索 723 份可访问文档 · 命中 4 份高相关资料 · 回答内容等待人工核对</div>`;
+      showToast('知识库检索完成','回答已附带来源，点击“查看原文”可定位到具体条款。');
+    });
+
+    document.querySelectorAll('.category').forEach(c => c.addEventListener('click', () => { document.querySelectorAll('.category').forEach(x => x.classList.remove('active')); c.classList.add('active'); }));
+
+    document.getElementById('newDocument').addEventListener('click', () => showToast('已创建文档草稿','请选择模板并补充收件范围、日期和业务数据。'));
+    document.querySelectorAll('.doc-template').forEach(t => t.addEventListener('click', () => showToast('已选择模板', `正在创建“${t.dataset.doc}”草稿，发送前需人工审核。`)));
+
+    document.getElementById('publishModal').addEventListener('click', e => { if(e.target.id==='publishModal') closePublish(); });
+
+    // Keyboard shortcut
+    document.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault(); document.getElementById('globalInput').focus();
+      }
+      if (e.key === 'Escape') closePublish();
+    });
+  </script>
+</body>
+</html>
