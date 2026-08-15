@@ -13,7 +13,7 @@ import pytest
 
 from app.models.leave import AffectedPeriod, AffectedStatus
 from app.models.user import Role
-from tests.api_helpers import create_api_semester
+from tests.api_helpers import create_api_semester, publish_checked_timetable
 from tests.conftest import make_user
 from tests.dates import SEM_END, SEM_START, WED, WED2  # 日期统一由执行当日推算,不硬编
 
@@ -89,7 +89,7 @@ class _World:
         return a["id"], slots[period_idx]["period_no"]
 
     def publish(self):
-        r = self.client.post(f"/api/timetables/{self.tt}/publish?force=true")
+        r = publish_checked_timetable(self.client, self.tt, force=True)
         assert r.status_code == 200, r.json()
         self._published = True
 

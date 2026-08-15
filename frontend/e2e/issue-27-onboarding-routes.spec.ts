@@ -115,6 +115,7 @@ async function mockOnboarding(page: Page, options: MockOptions): Promise<MockSta
     semester_id: currentSemester()?.id ?? DEMO_SEMESTER.id,
     name: state.generated ? '自动排课结果' : '示例课表草稿',
     status: state.published ? 'published' : 'draft',
+    publication_state: state.published ? 'published' : 'draft',
     entry_count: state.generated ? 594 : 0,
   })
 
@@ -236,6 +237,24 @@ async function mockOnboarding(page: Page, options: MockOptions): Promise<MockSta
       result_name: '自动排课结果', error: null, report: null, phase: 'solving',
       partial: false, conflict: null, unscheduled: null,
     })
+    if (/^\/api\/timetables\/\d+\/publication-check$/.test(path) && method === 'POST') {
+      const target = timetable()
+      return fulfillJson(route, {
+        fingerprint: `issue-32-${target.id}`,
+        passed: true,
+        requires_force: false,
+        checked_at: '2026-08-15T12:00:00+08:00',
+        semester: {
+          id: target.semester_id,
+          label: currentSemester()?.label ?? DEMO_SEMESTER.label,
+        },
+        version: { id: target.id, name: target.name, status: target.status },
+        completeness: {
+          complete: true, required: target.entry_count, placed: target.entry_count,
+          remaining: 0, unplaced: [],
+        },
+      })
+    }
     if (/^\/api\/timetables\/\d+\/publish$/.test(path) && method === 'POST') {
       state.published = true
       state.publishWrites += 1
@@ -287,6 +306,7 @@ test('示例路线可运行自动排课并在版本页发布结果', async ({ pa
   await page.goto('/scheduling/versions')
   await expect(page.getByTestId('v-publish')).toBeVisible()
   await page.getByTestId('v-publish').click()
+  await page.getByTestId('v-confirm-publish').click()
   await expect(page.getByTestId('v-status-自动排课结果')).toHaveText('已发布')
   expect(state.routeWrites).toEqual(['demo'])
   expect(state.publishWrites).toBe(1)
@@ -300,6 +320,7 @@ test('正式课表发布前后版本状态可在浏览器中核对', async ({ pa
 
   await expect(page.getByTestId('v-status-示例课表草稿')).toHaveText('草稿')
   await page.getByTestId('v-publish').click()
+  await page.getByTestId('v-confirm-publish').click()
   await expect(page.getByTestId('v-status-示例课表草稿')).toHaveText('已发布')
   expect(state.publishWrites).toBe(1)
 })

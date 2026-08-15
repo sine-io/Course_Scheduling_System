@@ -10,7 +10,7 @@ import pytest
 from app.models.user import Role
 from app.services import notifications as notif_service
 from app.services import settings as app_settings
-from tests.api_helpers import create_api_semester
+from tests.api_helpers import create_api_semester, publish_checked_timetable
 from tests.conftest import make_user
 from tests.dates import SEM_END, SEM_START, WED  # 日期统一由执行当日推算,不硬编
 
@@ -61,7 +61,7 @@ def _publish_wang(client, sid, *, email: str | None = None):
         "teachers": [{"teacher_id": wang}], "block_rules": []}).json()
     client.post(f"/api/timetables/{tt}/entries", json={
         "course_assignment_id": a["id"], "weekday": 3, "period_no": wed[0]["period_no"], "span": 1})
-    client.post(f"/api/timetables/{tt}/publish?force=true")
+    publish_checked_timetable(client, tt, force=True)
     return wang, chen
 
 

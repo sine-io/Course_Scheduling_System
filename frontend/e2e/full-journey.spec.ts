@@ -102,8 +102,7 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   await selectSemester(page, YEAR)
   const row = page.locator('[data-testid="v-row-草稿A 自排结果"]')
   await row.getByTestId('v-publish').click()
-  const force = page.getByTestId('v-force-publish')
-  if (await force.isVisible().catch(() => false)) await force.click()
+  await page.getByTestId('v-confirm-publish').click()
   await expect(page.getByTestId('v-status-草稿A 自排结果')).toHaveText('已发布')
   await page.screenshot({ path: `${SHOTS}/journey-2-published.png` })
 

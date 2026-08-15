@@ -7,6 +7,7 @@
 
 from app.models.timetable import Timetable
 from app.workers.progress import JobStatus
+from tests.api_helpers import publish_checked_timetable
 from tests.solver.test_auto_schedule import _start, sched  # noqa: F401 - 沿用 fixture
 
 
@@ -100,7 +101,7 @@ def test_b_unscheduled_survives_redis_and_publish(sched):  # noqa: F811
     assert any("找不到任何可排的" in u["reason"] for u in stored)
 
     # force 发布后,版本页的完整性报告仍讲得出原因
-    client.post(f"/api/timetables/{result_id}/publish?force=true")
+    publish_checked_timetable(client, result_id, force=True)
     report = client.get(f"/api/timetables/{result_id}/completeness").json()
     art = next(u for u in report["unplaced"] if u["subject"] == "美术")
     assert art["remaining"] == 2

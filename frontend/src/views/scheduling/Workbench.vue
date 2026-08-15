@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  AlertTriangle, CheckCircle2, Clock3, MousePointer2, RefreshCw, Redo2, Save,
-  ShieldCheck, Undo2,
+  AlertTriangle, CheckCircle2, Clock3, MousePointer2, RefreshCw, Redo2, Rocket,
+  Save, ShieldCheck, Undo2,
 } from '@lucide/vue'
 import {
   NAlert, NButton, NRadioButton, NRadioGroup, NSelect, NSpin, NTag,
@@ -768,6 +768,15 @@ function onKey(event: KeyboardEvent) {
             @click="doRedo"
           >
             <template #icon><Redo2 :size="17" aria-hidden="true" /></template>
+          </n-button>
+          <n-button
+            v-if="canEdit"
+            type="primary"
+            data-testid="wb-publish"
+            @click="router.push({ name: 'versions' })"
+          >
+            <template #icon><Rocket :size="16" aria-hidden="true" /></template>
+            {{ '发布课表' }}
           </n-button>
         </div>
       </section>

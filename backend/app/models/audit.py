@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -20,9 +20,14 @@ class AuditLog(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     username: Mapped[str] = mapped_column(String(64), default="")  # 快照,账号删除后仍可识别
+    actor_roles: Mapped[list[str]] = mapped_column(JSON, default=list, server_default="[]")
     action: Mapped[str] = mapped_column(String(64), index=True)    # 如 publish_timetable
     target_type: Mapped[str] = mapped_column(String(32), default="")
     target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    semester_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    target_version: Mapped[str] = mapped_column(String(128), default="", server_default="")
+    result: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    reason: Mapped[str] = mapped_column(String(64), default="", server_default="")
     detail: Mapped[str] = mapped_column(String(500), default="")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -12,7 +12,7 @@ import pytest
 from app.models.leave import AffectedStatus, LeaveRequest, LeaveStatus
 from app.models.notification import Notification, NotificationType
 from app.models.user import Role
-from tests.api_helpers import create_api_semester
+from tests.api_helpers import create_api_semester, publish_checked_timetable
 from tests.conftest import make_user
 
 # 日期统一由执行当日推算(硬编会过期,见 tests/dates.py):
@@ -80,7 +80,7 @@ def school(env):
         assign_and_place(cid, 3, pno)
     assign_and_place(classes[0], 5, fri_slot)  # 周五 701 班一节
 
-    r = client.post(f"/api/timetables/{tt['id']}/publish?force=true")
+    r = publish_checked_timetable(client, tt["id"], force=True)
     assert r.status_code == 200, r.json()
     return client, db, sid, wang["id"]
 

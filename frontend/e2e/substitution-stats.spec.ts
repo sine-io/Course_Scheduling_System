@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { STATS_QUERY, WED } from './dates'
-import { createTestSemester, deleteSemesterByYearTerm, login } from './helpers'
+import {
+  createTestSemester, deleteSemesterByYearTerm, login, publishCheckedTimetable,
+} from './helpers'
 
 const SHOTS = 'e2e/screenshots'
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -66,7 +68,7 @@ async function seed(page: Page, sid: number, chenId: number) {
     await page.request.post(`/api/timetables/${tt}/entries`,
       { data: { course_assignment_id: a.id, weekday: 3, period_no: wed[idx].period_no, span: 1 } })
   }
-  await page.request.post(`/api/timetables/${tt}/publish?force=true`)
+  await publishCheckedTimetable(page, tt, true)
   const aps = (await post(page, `/api/leaves${q}`, {
     teacher_id: wang, leave_type: 'sick', start_date: DAY, end_date: DAY,
   })).affected_periods

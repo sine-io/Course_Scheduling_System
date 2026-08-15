@@ -5,6 +5,7 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
+  publishCheckedTimetable,
   semesterLabel,
 } from './helpers'
 
@@ -72,7 +73,7 @@ async function seed(page: Page, year: number) {
   await place('王师', '语文', '701', 0) // 被请假
   await place('周师', '数学', '703', 2) // 当天在校,第一节空
   await place('吴师', '数学', '704', 0) // 该节有课 → 过滤
-  await page.request.post(`/api/timetables/${tt}/publish?force=true`)
+  await publishCheckedTimetable(page, tt, true)
 
   const leave = await post(page, `/api/leaves?semester_id=${sid}`, {
     teacher_id: T['王师'], leave_type: 'sick',
@@ -156,7 +157,7 @@ test('调课与代课处理:无人可代时提示合班/自习并可直接设置
       data: { course_assignment_id: a.id, weekday: 3, period_no: wed[0].period_no, span: 1 },
     })
   }
-  await page.request.post(`/api/timetables/${tt}/publish?force=true`)
+  await publishCheckedTimetable(page, tt, true)
   await post(page, `/api/leaves?semester_id=${sid}`, {
     teacher_id: wang, leave_type: 'sick', start_date: WED, end_date: WED,
   })

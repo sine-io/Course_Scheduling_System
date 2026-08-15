@@ -242,8 +242,7 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
   await expect(autoRow).toBeVisible({ timeout: 20_000 })
   if (!(await page.locator('tr', { hasText: '已发布' }).count())) {
     await autoRow.getByTestId('v-publish').click()
-    const force = page.getByTestId('v-force-publish')
-    if (await force.isVisible().catch(() => false)) await force.click()
+    await page.getByTestId('v-confirm-publish').click()
     await expect(page.locator('tr', { hasText: '已发布' })).toBeVisible({ timeout: 20_000 })
   }
   await page.waitForTimeout(600)

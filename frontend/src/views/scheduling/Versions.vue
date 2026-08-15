@@ -8,20 +8,20 @@ import {
   useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import { apiErrorMessage, type ApiError } from '@/api/client'
+import { apiErrorMessage } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
-  createTimetable, deleteTimetable, duplicateTimetable, getCompleteness,
-  listTimetables, publishReport, publishTimetable, renameTimetable,
+  checkPublication, createTimetable, deleteTimetable, duplicateTimetable, getCompleteness,
+  listTimetables, publishTimetable, renameTimetable,
 } from '@/api/timetables'
-import type { Completeness, TimetableBrief } from '@/api/timetables'
+import type { PublicationCheck, TimetableBrief } from '@/api/timetables'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling-workspace.css'
 
-type ActionKind = 'create' | 'check' | 'publish' | 'duplicate' | 'rename' | 'delete' | 'force-publish'
+type ActionKind = 'create' | 'check' | 'publish' | 'duplicate' | 'rename' | 'delete' | 'confirm-publish'
 
 const message = useMessage()
 const auth = useAuthStore()
@@ -40,11 +40,15 @@ const actionError = ref<string | null>(null)
 const pending = ref<{ kind: ActionKind; id: number | null } | null>(null)
 const semesterOptions = computed(() => semesters.value.map((s) => ({ label: s.label, value: s.id })))
 
-const statusType: Record<string, 'default' | 'success' | 'warning'> = {
-  draft: 'warning', published: 'success', archived: 'default',
+const statusType: Record<string, 'default' | 'success' | 'warning' | 'info'> = {
+  draft: 'warning', checked: 'info', published: 'success', archived: 'default',
 }
 const timetableStatusLabels: Record<string, string> = {
-  draft: '草稿', published: '已发布', archived: '已归档',
+  draft: '草稿', checked: '检查通过', published: '已发布', archived: '已归档',
+}
+
+function publicationState(timetable: TimetableBrief): string {
+  return timetable.publication_state || timetable.status
 }
 
 function isPending(kind: ActionKind, id: number | null = null) {
@@ -164,8 +168,8 @@ async function onRename() {
   }, '课表改名失败，请稍后重试。')
 }
 
-const warnShow = ref(false)
-const report = ref<Completeness | null>(null)
+const confirmShow = ref(false)
+const checkedPublication = ref<PublicationCheck | null>(null)
 const publishTarget = ref<TimetableBrief | null>(null)
 
 function warnStale(count?: number) {
@@ -179,36 +183,40 @@ function warnStale(count?: number) {
 
 async function onPublish(timetable: TimetableBrief) {
   if (!canEdit.value) return
-  publishTarget.value = timetable
   if (pending.value) return
   pending.value = { kind: 'publish', id: timetable.id }
   actionError.value = null
   try {
-    const result = await publishTimetable(timetable.id)
-    message.success(`已发布“${timetable.name}”`)
-    warnStale(result.stale_affected)
+    checkedPublication.value = await checkPublication(timetable.id)
+    publishTarget.value = timetable
+    confirmShow.value = true
     await reload()
   } catch (error) {
-    const completeness = publishReport((error as ApiError).detail)
-    if (completeness) {
-      report.value = completeness
-      warnShow.value = true
-    } else {
-      actionError.value = apiErrorMessage(error, '发布失败，请稍后重试。')
-      message.error(actionError.value)
-    }
+    actionError.value = apiErrorMessage(error, '发布检查失败，请稍后重试。')
+    message.error(actionError.value)
   } finally {
     pending.value = null
   }
 }
 
-async function onForcePublish() {
+function closePublishConfirmation() {
+  if (pending.value) return
+  confirmShow.value = false
+}
+
+async function onConfirmPublish() {
   const target = publishTarget.value
-  if (!canEdit.value || !target) return
-  await runAction('force-publish', target.id, async () => {
-    const result = await publishTimetable(target.id, true)
-    warnShow.value = false
-    message.success('已强制发布（仍有未排完教学任务）')
+  const checked = checkedPublication.value
+  if (!canEdit.value || !target || !checked) return
+  await runAction('confirm-publish', target.id, async () => {
+    const result = await publishTimetable(target.id, {
+      fingerprint: checked.fingerprint,
+      force: checked.requires_force,
+    })
+    confirmShow.value = false
+    message.success(checked.requires_force
+      ? '已发布（仍有未排完教学任务）'
+      : `已发布“${target.name}”`)
     warnStale(result.stale_affected)
     await reload()
   }, '发布失败，请稍后重试。')
@@ -217,10 +225,14 @@ async function onForcePublish() {
 const checkText = ref('')
 async function onCheck(timetable: TimetableBrief) {
   await runAction('check', timetable.id, async () => {
-    const completeness = await getCompleteness(timetable.id)
+    const currentDraft = canEdit.value && timetable.status === 'draft'
+      && (!semesterContext.authoritative || semesterContext.isCurrent(timetable.semester_id))
+    const publication = currentDraft ? await checkPublication(timetable.id) : null
+    const completeness = publication?.completeness ?? await getCompleteness(timetable.id)
     checkText.value = completeness.complete
       ? `“${timetable.name}”教学任务已排完（${completeness.placed}/${completeness.required} 节）`
       : `“${timetable.name}”尚有 ${completeness.remaining} 节未排（${completeness.placed}/${completeness.required}）`
+    if (publication) await reload()
   }, '完整性检查失败，请稍后重试。')
 }
 </script>
@@ -321,13 +333,13 @@ async function onCheck(timetable: TimetableBrief) {
           aria-label="课表版本列表，可横向滚动"
         >
           <table class="scheduling-data-table versions-data-table">
-            <thead><tr><th>{{ '名称' }}</th><th>{{ '状态' }}</th><th>{{ '已排单元格' }}</th><th>{{ '操作' }}</th></tr></thead>
+            <thead><tr><th>{{ '名称' }}</th><th>{{ '发布状态' }}</th><th>{{ '已排单元格' }}</th><th>{{ '操作' }}</th></tr></thead>
             <tbody>
               <tr v-for="timetable in items" :key="timetable.id" :data-testid="`v-row-${timetable.name}`">
                 <td><strong>{{ timetable.name }}</strong></td>
                 <td>
-                  <n-tag :type="statusType[timetable.status]" size="small" :data-testid="`v-status-${timetable.name}`">
-                    {{ timetableStatusLabels[timetable.status] ?? timetable.status }}
+                  <n-tag :type="statusType[publicationState(timetable)]" size="small" :data-testid="`v-status-${timetable.name}`">
+                    {{ timetableStatusLabels[publicationState(timetable)] ?? publicationState(timetable) }}
                   </n-tag>
                 </td>
                 <td>{{ timetable.entry_count }}</td>
@@ -415,16 +427,42 @@ async function onCheck(timetable: TimetableBrief) {
       </div>
     </n-modal>
 
-    <n-modal v-if="canEdit" v-model:show="warnShow" preset="card" :title="'尚有教学任务未排完'" class="versions-publish-modal">
-      <div class="versions-warning-content">
-        <n-alert type="warning">
-          {{ '共' }} {{ report?.remaining }} {{ '节未排入（已排' }} {{ report?.placed }} / {{ '应排' }} {{ report?.required }} {{ '节）。仍可强制发布，未排教学任务将不出现在课表上。' }}
+    <n-modal
+      v-if="canEdit"
+      v-model:show="confirmShow"
+      preset="card"
+      :title="checkedPublication?.requires_force ? '确认发布未完整课表' : '确认发布课表'"
+      class="versions-publish-modal"
+    >
+      <div class="versions-warning-content" data-testid="v-publish-confirmation">
+        <n-alert :type="checkedPublication?.passed ? 'success' : 'warning'">
+          {{ checkedPublication?.passed
+            ? '发布检查已通过。确认后，此版本将成为当前正式课表。'
+            : '发布检查未通过。确认后仍会发布，未排教学任务不会出现在正式课表中。' }}
         </n-alert>
-        <div class="scheduling-table-scroll" tabindex="0" aria-label="未排教学任务，可横向滚动">
+        <dl class="versions-confirmation-summary">
+          <div><dt>{{ '目标学期' }}</dt><dd>{{ checkedPublication?.semester.label }}</dd></div>
+          <div><dt>{{ '目标版本' }}</dt><dd>{{ checkedPublication?.version.name }}（#{{ checkedPublication?.version.id }}）</dd></div>
+          <div>
+            <dt>{{ '完整性结果' }}</dt>
+            <dd>
+              {{ checkedPublication?.completeness.placed }} / {{ checkedPublication?.completeness.required }} {{ '节已排' }}
+              <span v-if="checkedPublication?.completeness.remaining">
+                {{ `，剩余 ${checkedPublication.completeness.remaining} 节` }}
+              </span>
+            </dd>
+          </div>
+        </dl>
+        <div
+          v-if="checkedPublication?.completeness.unplaced.length"
+          class="scheduling-table-scroll"
+          tabindex="0"
+          aria-label="未排教学任务，可横向滚动"
+        >
           <table class="scheduling-data-table versions-unplaced-table" data-testid="v-unplaced">
             <thead><tr><th>{{ '班级' }}</th><th>{{ '科目' }}</th><th>{{ '教师' }}</th><th>{{ '未排节数' }}</th><th>{{ '原因' }}</th></tr></thead>
             <tbody>
-              <tr v-for="unplaced in report?.unplaced ?? []" :key="unplaced.course_assignment_id">
+              <tr v-for="unplaced in checkedPublication?.completeness.unplaced ?? []" :key="unplaced.course_assignment_id">
                 <td>{{ unplaced.classes.join('、') }}</td><td>{{ unplaced.subject }}</td><td>{{ unplaced.teachers.join('、') }}</td>
                 <td><strong class="versions-danger-text">{{ unplaced.remaining }}</strong> / {{ unplaced.required }}</td>
                 <td>{{ unplaced.reason || '—' }}</td>
@@ -433,15 +471,21 @@ async function onCheck(timetable: TimetableBrief) {
           </table>
         </div>
         <div class="scheduling-modal-actions">
-          <n-button :disabled="!canEdit || pending !== null" @click="warnShow = false">{{ '取消' }}</n-button>
           <n-button
-            type="warning"
-            data-testid="v-force-publish"
-            :loading="isPending('force-publish', publishTarget?.id ?? null)"
+            data-testid="v-publish-cancel"
             :disabled="!canEdit || pending !== null"
-            @click="onForcePublish"
+            @click="closePublishConfirmation"
           >
-            {{ '仍要发布' }}
+            {{ '取消' }}
+          </n-button>
+          <n-button
+            :type="checkedPublication?.requires_force ? 'warning' : 'primary'"
+            data-testid="v-confirm-publish"
+            :loading="isPending('confirm-publish', publishTarget?.id ?? null)"
+            :disabled="!canEdit || pending !== null"
+            @click="onConfirmPublish"
+          >
+            {{ checkedPublication?.requires_force ? '仍要发布' : '确认发布' }}
           </n-button>
         </div>
       </div>
@@ -457,6 +501,10 @@ async function onCheck(timetable: TimetableBrief) {
 .versions-data-table th:nth-child(4) { min-width: 390px; }
 .versions-row-actions { flex-wrap: nowrap; }
 .versions-warning-content { display: grid; gap: 16px; }
+.versions-confirmation-summary { display: grid; gap: 1px; margin: 0; overflow: hidden; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-border); }
+.versions-confirmation-summary > div { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 12px; padding: 10px 12px; background: var(--app-surface); }
+.versions-confirmation-summary dt { color: var(--app-text-muted); font-size: 12px; font-weight: 650; }
+.versions-confirmation-summary dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
 .versions-unplaced-table { min-width: 680px; }
 .versions-danger-text { color: var(--app-danger); }
 :global(.versions-modal) { width: min(420px, calc(100vw - 32px)); }

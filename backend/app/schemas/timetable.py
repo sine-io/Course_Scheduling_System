@@ -1,6 +1,6 @@
 """课表(timetable / schedule_entry)与冲突检查 schema。"""
 
-from datetime import time
+from datetime import datetime, time
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,6 +34,7 @@ class TimetableBrief(BaseModel):
     semester_id: int
     name: str
     status: str
+    publication_state: str = "draft"
     entry_count: int = 0
 
 
@@ -102,6 +103,32 @@ class CompletenessOut(BaseModel):
     remaining: int
     complete: bool
     unplaced: list[UnplacedItem] = []
+
+
+class PublicationTargetOut(BaseModel):
+    id: int
+    name: str
+
+
+class PublicationSemesterOut(BaseModel):
+    id: int
+    label: str
+
+
+class PublicationCheckOut(BaseModel):
+    semester: PublicationSemesterOut
+    version: PublicationTargetOut
+    passed: bool
+    requires_force: bool
+    completeness: CompletenessOut
+    issues: list[dict[str, str]] = []
+    fingerprint: str
+    checked_at: datetime
+
+
+class PublicationConfirmation(BaseModel):
+    fingerprint: str = Field(default="", max_length=64)
+    force: bool = False
 
 
 # ── 全员只读课表查询 ──────────────────

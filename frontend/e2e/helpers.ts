@@ -154,6 +154,19 @@ export async function login(page: Page, user = E2E_USER, pass = E2E_PASS): Promi
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
 }
 
+export async function publishCheckedTimetable(
+  page: Page,
+  timetableId: number,
+  force = false,
+): Promise<APIResponse> {
+  const checked = await responseJson<{ fingerprint: string }>(
+    await page.request.post(`/api/timetables/${timetableId}/publication-check`),
+  )
+  return page.request.post(`/api/timetables/${timetableId}/publish`, {
+    data: { fingerprint: checked.fingerprint, force },
+  })
+}
+
 export async function browserApiRequest(
   page: Page,
   method: 'PATCH' | 'PUT',

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
-import { createTestSemester, deleteSemesterByYearTerm, login } from './helpers'
+import {
+  createTestSemester, deleteSemesterByYearTerm, login, publishCheckedTimetable,
+} from './helpers'
 
 const SHOTS = 'e2e/screenshots'
 const YEARS = [2058]
@@ -27,7 +29,7 @@ async function seed(page: Page, year: number): Promise<number> {
   })
   await page.request.post(`/api/timetables/${tt}/entries`,
     { data: { course_assignment_id: a.id, weekday: 3, period_no: wed[0].period_no, span: 1 } })
-  await page.request.post(`/api/timetables/${tt}/publish?force=true`)
+  await publishCheckedTimetable(page, tt, true)
   return sid
 }
 

@@ -10,7 +10,7 @@ ScheduleEntry:一项教学任务排入的单元格(weekday × period_no,span 表
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,6 +27,15 @@ class TimetableStatus(enum.StrEnum):
 
 class Timetable(Base):
     __tablename__ = "timetables"
+    __table_args__ = (
+        Index(
+            "uq_timetables_one_published_per_semester",
+            "semester_id",
+            unique=True,
+            postgresql_where=text("status = 'published'"),
+            sqlite_where=text("status = 'published'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     semester_id: Mapped[int] = mapped_column(
@@ -34,6 +43,15 @@ class Timetable(Base):
     )
     name: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), default=TimetableStatus.draft.value)
+    publication_check_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    publication_check_passed: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0"
+    )
+    publication_checked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # 部分排课产出时,solver 留下的未排列表(M6-3)。
     # 「哪些教学任务还缺节数」可由 completeness 从 DB 重算,不必存;但**排不下的原因**只有

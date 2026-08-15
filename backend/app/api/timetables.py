@@ -4,13 +4,15 @@
 走班群组:放入/移动/删除/锁定均连动同群组全部教学任务(H7 同时段)。
 """
 
+from typing import NoReturn
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_active_user
 from app.core.db import get_db
-from app.core.permissions import core_editor, core_viewer
+from app.core.permissions import can_publish_timetable, core_editor, core_viewer
 from app.models.assignment import CourseAssignment
 from app.models.basedata import ClassUnit, Room, Teacher
 from app.models.period import PeriodTable
@@ -24,6 +26,10 @@ from app.schemas.timetable import (
     MoveRequest,
     NamedBrief,
     PlaceRequest,
+    PublicationCheckOut,
+    PublicationConfirmation,
+    PublicationSemesterOut,
+    PublicationTargetOut,
     PublicClass,
     PublicPeriodTable,
     PublicSemester,
@@ -113,6 +119,33 @@ def _completeness(report: dict) -> dict:
     return report
 
 
+def _reject_publication(
+    db: Session,
+    user: User,
+    timetable: Timetable | None,
+    timetable_id: int,
+    *,
+    status_code: int,
+    code: str,
+    message: str,
+    extra: dict | None = None,
+) -> NoReturn:
+    pub.record_publication_attempt(
+        db,
+        user,
+        timetable,
+        target_id=timetable_id,
+        result="rejected",
+        reason=code,
+        detail=message,
+    )
+    db.commit()
+    detail = {"code": code, "message": message}
+    if extra:
+        detail.update(extra)
+    raise HTTPException(status_code, detail=detail)
+
+
 def _slot_siblings(
     db: Session, timetable_id: int, unit_id: int, weekday: int, period_no: int
 ) -> list[ScheduleEntry]:
@@ -163,7 +196,7 @@ def list_timetables(
         )
         out.append(TimetableBrief(
             id=tt.id, semester_id=tt.semester_id, name=tt.name, status=tt.status,
-            entry_count=n or 0,
+            publication_state=pub.publication_state(db, tt), entry_count=n or 0,
         ))
     return out
 
@@ -242,16 +275,21 @@ def timetable_completeness(
     return _completeness(pub.completeness(db, tt))
 
 
-@router.post("/timetables/{timetable_id}/publish", response_model=TimetableOut)
-def publish_timetable(
+@router.post(
+    "/timetables/{timetable_id}/publication-check",
+    response_model=PublicationCheckOut,
+)
+def check_timetable_publication(
     timetable_id: int,
-    force: bool = Query(False),
     db: Session = Depends(get_db),
-    user: User = Depends(editor),
+    _: object = Depends(editor),
 ):
-    """draft → published;同学期原 published 转 archived。未排完时需 force=true 才可发布。"""
+    """Check the current draft and persist the exact snapshot eligible for confirmation."""
     tt = _get_timetable(db, timetable_id)
-    semester = _require_writable(db, tt.semester_id)
+    try:
+        semester = semester_context.require_writable(db, tt.semester_id, lock="update")
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
     _require_draft(tt)
     try:
         assert_semester_ready(db, semester)
@@ -266,10 +304,130 @@ def publish_timetable(
             },
         ) from exc
     report = _completeness(pub.completeness(db, tt))
+    fingerprint, checked_at = pub.record_publication_check(
+        db, tt, passed=report["complete"]
+    )
+    db.commit()
+    return PublicationCheckOut(
+        semester=PublicationSemesterOut(id=semester.id, label=semester.label),
+        version=PublicationTargetOut(id=tt.id, name=tt.name),
+        passed=report["complete"],
+        requires_force=not report["complete"],
+        completeness=CompletenessOut(**report),
+        issues=[],
+        fingerprint=fingerprint,
+        checked_at=checked_at,
+    )
+
+
+@router.post("/timetables/{timetable_id}/publish", response_model=TimetableOut)
+def publish_timetable(
+    timetable_id: int,
+    confirmation: PublicationConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
+):
+    """Confirm a checked draft, then atomically replace the published timetable."""
+    tt = db.get(Timetable, timetable_id)
+    if not can_publish_timetable(user):
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=status.HTTP_403_FORBIDDEN,
+            code="publication_permission_denied",
+            message="当前角色没有课表发布权限",
+        )
+    if tt is None:
+        _reject_publication(
+            db,
+            user,
+            None,
+            timetable_id,
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="timetable_not_found",
+            message="找不到课表",
+        )
+    # Semester writes take the context lock before target rows; publication keeps that order.
+    try:
+        semester = semester_context.require_writable(db, tt.semester_id, lock="update")
+    except semester_context.SemesterContextError as exc:
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=exc.status_code,
+            code=exc.code,
+            message=exc.message,
+        )
+    locked_tt = db.scalar(
+        select(Timetable)
+        .where(Timetable.id == timetable_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if locked_tt is None:
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=status.HTTP_404_NOT_FOUND,
+            code="timetable_not_found",
+            message="找不到课表",
+        )
+    tt = locked_tt
+    if tt.status != TimetableStatus.draft.value:
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=status.HTTP_409_CONFLICT,
+            code="publication_already_submitted",
+            message="此课表已经发布或归档，请刷新版本列表",
+        )
+    try:
+        assert_semester_ready(db, semester)
+    except SemesterNotReadyError as exc:
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=status.HTTP_409_CONFLICT,
+            code="semester_not_ready",
+            message=str(exc),
+            extra={"semester_id": exc.semester_id, "issues": exc.issues},
+        )
+    confirmation_error = pub.publication_confirmation_error(
+        db, tt, confirmation.fingerprint if confirmation else ""
+    )
+    if confirmation_error:
+        code, message = confirmation_error
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=status.HTTP_409_CONFLICT,
+            code=code,
+            message=message,
+        )
+    report = _completeness(pub.completeness(db, tt))
+    force = confirmation.force if confirmation else False
     if not report["complete"] and not force:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            detail={"message": "尚有教学任务未排完,确认后可强制发布", "completeness": report},
+        _reject_publication(
+            db,
+            user,
+            tt,
+            timetable_id,
+            status_code=status.HTTP_409_CONFLICT,
+            code="publication_check_failed",
+            message="尚有教学任务未排完，确认后可强制发布",
+            extra={"completeness": report},
         )
     pub.publish(db, tt, user, forced=not report["complete"])
     db.commit()

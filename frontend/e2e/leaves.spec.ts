@@ -5,6 +5,7 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
+  publishCheckedTimetable,
   semesterLabel,
 } from './helpers'
 
@@ -59,7 +60,7 @@ async function seedPublishedSchool(page: Page, year: number) {
       data: { course_assignment_id: a.id, weekday: 3, period_no: wed[i].period_no, span: 1 },
     })
   }
-  await page.request.post(`/api/timetables/${tt.id}/publish?force=true`)
+  await publishCheckedTimetable(page, tt.id, true)
   return { sid, teacherId: wang.id as number }
 }
 

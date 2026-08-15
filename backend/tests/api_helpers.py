@@ -105,3 +105,18 @@ def create_api_semester(
         ready_response = client.post(f"/api/semesters/{semester['id']}/readiness")
         assert ready_response.status_code == 200, ready_response.text
     return client.get(f"/api/semesters/{semester['id']}").json()
+
+
+def publish_checked_timetable(
+    client: TestClient,
+    timetable_id: int,
+    *,
+    force: bool = False,
+):
+    """Run the public publication check and confirm the exact checked snapshot."""
+    checked = client.post(f"/api/timetables/{timetable_id}/publication-check")
+    assert checked.status_code == 200, checked.text
+    return client.post(
+        f"/api/timetables/{timetable_id}/publish",
+        json={"fingerprint": checked.json()["fingerprint"], "force": force},
+    )

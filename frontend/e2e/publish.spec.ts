@@ -6,6 +6,7 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
+  publishCheckedTimetable,
   semesterLabel,
 } from './helpers'
 
@@ -70,7 +71,7 @@ test('版本与发布:未排完出现警告列表,确认后强制发布;发布�
   await page.screenshot({ path: `${SHOTS}/pub-1-warning.png` })
 
   // 确认后仍可强制发布
-  const forcePublish = page.getByTestId('v-force-publish')
+  const forcePublish = page.getByTestId('v-confirm-publish')
   await expect(forcePublish).toHaveCSS('background-color', 'rgb(143, 79, 0)')
   await expect(forcePublish).toHaveCSS('color', 'rgb(255, 255, 255)')
   await forcePublish.click()
@@ -85,7 +86,7 @@ test('版本与发布:未排完出现警告列表,确认后强制发布;发布�
 
   // 发布副本 → 原版转「已归档」
   await copyRow.getByTestId('v-publish').click()
-  await page.getByTestId('v-force-publish').click()
+  await page.getByTestId('v-confirm-publish').click()
   await expect(page.getByTestId('v-status-草稿A 副本')).toHaveText('已发布')
   await expect(page.getByTestId('v-status-草稿A')).toHaveText('已归档')
   await page.screenshot({ path: `${SHOTS}/pub-3-archived.png` })
@@ -146,7 +147,7 @@ test.describe('教师端(手机)', () => {
     await page.request.post(`/api/timetables/${tt.id}/entries`, {
       data: { course_assignment_id: a.id, weekday: 3, period_no: 4, span: 1 },
     })
-    const pubResp = await page.request.post(`/api/timetables/${tt.id}/publish`)
+    const pubResp = await publishCheckedTimetable(page, tt.id)
     expect(pubResp.status()).toBe(200)
 
     // 首登需改密码 → 以 API 一次设置为固定密码(非本卡验收重点);已改过则忽略

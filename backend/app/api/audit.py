@@ -21,9 +21,14 @@ class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     username: str
+    actor_roles: list[str]
     action: str
     target_type: str
     target_id: int | None
+    semester_id: int | None
+    target_version: str
+    result: str
+    reason: str
     detail: str
     created_at: datetime
 

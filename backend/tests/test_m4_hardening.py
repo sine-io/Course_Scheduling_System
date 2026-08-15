@@ -14,7 +14,7 @@ from app.core import clock
 from app.models.leave import AffectedPeriod, AffectedStatus
 from app.models.user import Role
 from app.services.availability import Availability, Interval
-from tests.api_helpers import create_api_semester
+from tests.api_helpers import create_api_semester, publish_checked_timetable
 from tests.conftest import make_user
 from tests.dates import SEM_END, SEM_START, WED, WED2  # 日期统一由执行当日推算,不硬编
 from tests.test_substitutions import _find_entry, _World
@@ -151,7 +151,7 @@ def test_republish_flags_stale_future_affected(w):
 
     # 重新发布另一版课表:响应应提醒有未来的调课与代课依旧课表安排
     tt2 = w.client.post(f"/api/timetables{w.q}", json={"name": "草稿B"}).json()["id"]
-    r = w.client.post(f"/api/timetables/{tt2}/publish?force=true")
+    r = publish_checked_timetable(w.client, tt2, force=True)
     assert r.status_code == 200
     assert r.json()["stale_affected"] >= 1
 
@@ -159,7 +159,7 @@ def test_republish_flags_stale_future_affected(w):
 def test_first_publish_has_no_stale(w):
     w.teacher("王师", ["语文"])
     w.place("王师", "语文", "701", 0)
-    r = w.client.post(f"/api/timetables/{w.tt}/publish?force=true")
+    r = publish_checked_timetable(w.client, w.tt, force=True)
     assert r.status_code == 200
     assert r.json()["stale_affected"] == 0
 

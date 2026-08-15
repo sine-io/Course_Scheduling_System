@@ -13,6 +13,7 @@ from app.models.user import Role, User
 CORE_VIEW_ROLES: tuple[Role, ...] = (Role.scheduler, Role.director)
 CORE_EDIT_ROLES: tuple[Role, ...] = (Role.scheduler,)
 BATCH_EXPORT_ROLES: tuple[Role, ...] = (Role.scheduler,)
+TIMETABLE_PUBLISH_ROLE_NAMES = frozenset({Role.admin.value, Role.scheduler.value})
 
 # 日常运行由排课管理员和教务主任共同负责。admin 由 ``require_roles`` 的
 # 超级用户规则统一放行，不重复写进每一组业务角色，避免角色矩阵漂移。
@@ -44,3 +45,8 @@ daily_user: PermissionDependency = require_roles(*DAILY_USER_ROLES)
 def is_daily_operator(user: User) -> bool:
     """Return whether ``user`` may operate on school-wide daily data."""
     return bool(user.role_names & DAILY_OPERATOR_ROLE_NAMES)
+
+
+def can_publish_timetable(user: User) -> bool:
+    """Return whether the user's fixed-role union includes direct publication."""
+    return bool(user.role_names & TIMETABLE_PUBLISH_ROLE_NAMES)

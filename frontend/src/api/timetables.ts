@@ -25,6 +25,7 @@ export interface TimetableBrief {
   semester_id: number
   name: string
   status: string
+  publication_state: string
   entry_count: number
 }
 export interface Timetable {
@@ -61,6 +62,16 @@ export interface Completeness {
   remaining: number
   complete: boolean
   unplaced: UnplacedItem[]
+}
+export interface PublicationCheck {
+  semester: { id: number; label: string }
+  version: { id: number; name: string }
+  passed: boolean
+  requires_force: boolean
+  completeness: Completeness
+  issues: Array<{ code?: string; message?: string }>
+  fingerprint: string
+  checked_at: string
 }
 
 // ── 全员只读查询 ──
@@ -135,22 +146,18 @@ export const duplicateTimetable = (id: number, name: string) =>
   apiPost<Timetable>(`/timetables/${id}/duplicate`, { name })
 export const getCompleteness = (id: number) =>
   apiGet<Completeness>(`/timetables/${id}/completeness`)
-export const publishTimetable = (id: number, force = false) =>
-  apiPost<Timetable>(`/timetables/${id}/publish${force ? '?force=true' : ''}`)
+export const checkPublication = (id: number) =>
+  apiPost<PublicationCheck>(`/timetables/${id}/publication-check`)
+export const publishTimetable = (
+  id: number,
+  confirmation: { fingerprint: string; force?: boolean },
+) => apiPost<Timetable>(`/timetables/${id}/publish`, confirmation)
 
 export const publishedSemesters = () => apiGet<PublicSemester[]>('/published/semesters')
 export const getPublishedTimetable = (semesterId: number) =>
   apiGet<PublishedTimetable | null>(`/published/timetable?semester_id=${semesterId}`)
 export const getMyTeacher = (semesterId: number) =>
   apiGet<NamedBrief | null>(`/published/my-teacher?semester_id=${semesterId}`)
-
-/** 发布被拒绝(409)时,detail 内含完整性报告。 */
-export function publishReport(detail: unknown): Completeness | null {
-  if (detail && typeof detail === 'object' && 'completeness' in detail) {
-    return (detail as { completeness: Completeness }).completeness
-  }
-  return null
-}
 
 /** place/move 失败时后端回 409,detail 可能是字符串或 { message, conflicts }。 */
 export function conflictText(detail: unknown): string {

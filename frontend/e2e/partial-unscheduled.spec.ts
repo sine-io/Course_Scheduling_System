@@ -84,7 +84,7 @@ test('部分排课:完全排不下的课列入未排列表并说明原因,发布
   await expect(unplaced).toContainText('美术')
   await expect(unplaced).toContainText('找不到任何可排的')
   await page.screenshot({ path: `${SHOTS}/m63-2-publish-warning-reason.png` })
-  await page.getByTestId('v-force-publish').click()
+  await page.getByTestId('v-confirm-publish').click()
 
   // 发布之后再查一次:原因还在(先前这份记录 24h 后就消失了)
   const report = await get(page, `/api/timetables/${result.id}/completeness`)

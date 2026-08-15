@@ -1,7 +1,7 @@
 """首次成功状态与 P0 待办的外部行为。"""
 
 from app.models.user import Role
-from tests.api_helpers import create_api_semester
+from tests.api_helpers import create_api_semester, publish_checked_timetable
 from tests.conftest import make_user
 
 PW = "password123"
@@ -149,8 +149,8 @@ def test_demo_and_formal_publish_are_isolated(env):
         },
     )
     assert placed_demo.status_code == 201, placed_demo.text
-    published_demo = client.post(
-        f"/api/timetables/{demo_timetable['id']}/publish?force=true"
+    published_demo = publish_checked_timetable(
+        client, demo_timetable["id"], force=True
     )
     assert published_demo.status_code == 200, published_demo.text
     assert client.get("/api/onboarding/status").json()["first_success"] is False
@@ -171,7 +171,7 @@ def test_demo_and_formal_publish_are_isolated(env):
         json={"course_assignment_id": assignment["id"], "weekday": 1, "period_no": 2},
     )
     assert placed_formal.status_code == 201, placed_formal.text
-    published_formal = client.post(f"/api/timetables/{timetable['id']}/publish")
+    published_formal = publish_checked_timetable(client, timetable["id"])
     assert published_formal.status_code == 200, published_formal.text
     assert client.get("/api/onboarding/status").json()["first_success"] is True
 
@@ -204,7 +204,7 @@ def test_first_success_is_derived_from_published_complete_timetable(env):
         json={"course_assignment_id": assignment["id"], "weekday": 1, "period_no": 2},
     )
     assert placed.status_code == 201, placed.text
-    published = client.post(f"/api/timetables/{timetable['id']}/publish")
+    published = publish_checked_timetable(client, timetable["id"])
     assert published.status_code == 200, published.text
 
     success = client.get("/api/onboarding/status").json()
@@ -217,7 +217,7 @@ def test_first_success_is_derived_from_published_complete_timetable(env):
     replacement = client.post(
         f"/api/timetables?semester_id={sid}", json={"name": "不完整替代版"}
     ).json()
-    forced = client.post(f"/api/timetables/{replacement['id']}/publish?force=true")
+    forced = publish_checked_timetable(client, replacement["id"], force=True)
     assert forced.status_code == 200, forced.text
     replaced = client.get("/api/onboarding/status").json()
     assert replaced["first_success"] is False
