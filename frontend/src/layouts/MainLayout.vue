@@ -78,13 +78,19 @@ const draftFixed = ref<string[]>([])
 const navigationDialogClose = ref<HTMLButtonElement | null>(null)
 
 const firstSuccess = computed(() => onboarding.value?.first_success ?? false)
+const navigationFirstSuccess = computed<boolean | null>(() => (
+  canManage.value ? onboarding.value?.first_success ?? null : false
+))
 const commonItems = computed(() => commonNavigation(
   userRoles.value,
-  firstSuccess.value,
+  navigationFirstSuccess.value,
   navigationPreference.value,
 ))
 const catalogGroups = computed(() => navigationGroupEntries(userRoles.value))
-const preferenceItems = computed(() => applicableEntries(userRoles.value, firstSuccess.value))
+const preferenceItems = computed(() => applicableEntries(
+  userRoles.value,
+  navigationFirstSuccess.value,
+))
 const nextAction = computed(() => onboarding.value?.next_action ?? null)
 const onboardingSummary = computed(() => {
   if (!onboarding.value) return onboardingError.value
@@ -116,7 +122,7 @@ function isActive(item: NavigationEntry): boolean {
     item,
     routeNavKey.value,
     route.query,
-    firstSuccess.value,
+    navigationFirstSuccess.value,
   )
 }
 

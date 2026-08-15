@@ -222,7 +222,7 @@ export function isNavigationEntryActive(
   item: NavigationEntry,
   routeName: string,
   query: Readonly<Record<string, unknown>>,
-  firstSuccess: boolean,
+  firstSuccess: boolean | null,
 ): boolean {
   if (!isNavigationEntryApplicable(item, firstSuccess)) return false
 
@@ -252,16 +252,17 @@ export function accessibleEntries(
 
 export function isNavigationEntryApplicable(
   item: NavigationEntry,
-  firstSuccess: boolean,
+  firstSuccess: boolean | null,
 ): boolean {
-  if (item.phase === 'before-first-success') return !firstSuccess
-  if (item.phase === 'after-first-success') return firstSuccess
+  if (item.phase && firstSuccess === null) return false
+  if (item.phase === 'before-first-success') return firstSuccess === false
+  if (item.phase === 'after-first-success') return firstSuccess === true
   return true
 }
 
 export function applicableEntries(
   roles: readonly string[] | null | undefined,
-  firstSuccess: boolean,
+  firstSuccess: boolean | null,
 ): NavigationEntry[] {
   return accessibleEntries(roles).filter((item) => (
     isNavigationEntryApplicable(item, firstSuccess)
@@ -270,11 +271,11 @@ export function applicableEntries(
 
 export function commonNavigation(
   roles: readonly string[] | null | undefined,
-  firstSuccess: boolean,
+  firstSuccess: boolean | null,
   preference: NavigationPreference,
 ): NavigationEntry[] {
   const allowed = new Set<string>(applicableEntries(roles, firstSuccess).map((item) => item.key))
-  const defaults = defaultNavigationKeys(roles, firstSuccess)
+  const defaults = defaultNavigationKeys(roles, firstSuccess === true).filter((key) => allowed.has(key))
   const fixed = preference.fixed.filter((key) => allowed.has(key))
   const recent = preference.recent.filter((key) => allowed.has(key))
 

@@ -52,6 +52,16 @@ async function mockOnboarding(page: Page, firstSuccess: boolean): Promise<void> 
   })
 }
 
+async function mockOnboardingFailure(page: Page): Promise<void> {
+  await page.route('**/api/onboarding/status', async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ detail: '暂不可用' }),
+    })
+  })
+}
+
 async function commonKeys(page: Page): Promise<string[]> {
   const items = page.locator('.app-nav-common [data-nav-key]')
   await expect(items.first()).toBeVisible()
@@ -91,6 +101,24 @@ test.describe('Issue #31 常用入口个人偏好', () => {
     await page.getByTestId('nav-manage').click()
     await expect(page.getByTestId('nav-choice-current-todo')).toHaveCount(0)
     await expect(page.locator('.app-nav-fixed-item')).toHaveCount(0)
+  })
+
+  test('阶段未知时忽略阶段专属入口且保留可用入口', async ({ page }) => {
+    await mockOnboardingFailure(page)
+    await login(page, 'e2e_scheduler', 'e2etest1234')
+    await putPreference(page, ['current-todo'])
+
+    await reloadWithoutLocalPreference(page)
+
+    await expect(page.getByTestId('shell-onboarding')).toContainText('首次成功阶段暂时无法读取')
+    await expect(page.locator('.app-nav-common [data-nav-key="current-todo"]')).toHaveCount(0)
+    await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(4)
+    expect(await commonKeys(page)).toEqual([
+      'assignments',
+      'auto-schedule',
+      'workbench',
+      'versions',
+    ])
   })
 
   test('固定、取消固定和排序在刷新及重新登录后保持，并可恢复阶段默认', async ({ page }) => {
