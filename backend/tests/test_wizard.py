@@ -30,7 +30,7 @@ def test_initial_state_is_step0_incomplete(scheduler):
 
 
 def test_management_user_can_select_and_resume_formal_route(scheduler):
-    """路线选择属于单校引导状态，刷新/重新登录后仍能恢复原步骤。"""
+    """路线选择属于单校引导状态，刷新/重新登录后仍能回到原步骤。"""
     route = scheduler.put("/api/onboarding/route", json={"route": "formal"})
     assert route.status_code == 200, route.text
     assert route.json()["route"] == "formal"

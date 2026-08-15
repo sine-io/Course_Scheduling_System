@@ -240,7 +240,7 @@ def copy_to_new_semester(
         db, source, body.academic_year, body.term, opts,
         start_date=body.start_date, end_date=body.end_date,
     )
-    # 复制学期产生的是正式学期；从示例体验进入这里也应锁定正式路线。
+    # 复制学期创建的是正式学期；从示例体验进入这里也应锁定正式路线。
     onboarding_route.choose_route(db, "formal")
     semester_context.set_initial_current(db, new)
     if semester_context.read_context(db)[0].current_semester_id == new.id:

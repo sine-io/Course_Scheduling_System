@@ -85,7 +85,7 @@ def choose_route(db: Session, route: str) -> WizardState:
         state.route = route
 
     if route == WizardRoute.demo.value and demo_semester is not None:
-        # 重选已有示例路线时恢复原演示上下文，不重复生成或覆盖数据。
+        # 重选已有示例路线时重新进入演示上下文，不重复生成或覆盖数据。
         state.semester_id = demo_semester.id
         state.current_step = TOTAL_STEPS - 1
         state.completed = True
