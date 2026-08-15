@@ -34,7 +34,7 @@ def test_core_viewer_can_read_drafts_and_templates_but_teacher_cannot(env):
     _switch_user(client, db, "director", (Role.director,))
     assert client.get(f"/api/subjects?semester_id={semester_id}").status_code == 200
     assert client.get(f"/api/timetables?semester_id={semester_id}").status_code == 200
-    # 模板是只读参考资料，主任可以下载，但不能上传导入。
+    # 模板是只读参考文件，主任可以下载，但不能上传导入。
     assert client.get("/api/import/templates/subjects").status_code == 200
     assert client.post(
         f"/api/import/subjects?semester_id={semester_id}",
