@@ -11,3 +11,8 @@ RUN npm run build
 FROM caddy:2-alpine
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
+# Only the user-facing manual and its deployment pages ship with the web
+# image; architecture, agent, ADR, and requirements documents stay private.
+COPY docs/index.html /srv/docs/index.html
+COPY docs/deploy/*.html /srv/docs/deploy/
+COPY docs/manual-img/*.png /srv/docs/manual-img/

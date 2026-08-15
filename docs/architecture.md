@@ -197,7 +197,7 @@ erDiagram
 | `affected_period` | 受影响节次 | 请假展开后的每一节课;状态机见 §5.3 |
 | `substitution` | 调课与代课处理方式 | 类型:`substitute`(代课)/`swap`(调课)/`merge`(合班)/`self_study`(自习)/`cancel`(不处理);代课教师、是否计课时、经费来源标记 |
 | `notification` | 通知 | 站内通知和电子邮件（v2 可通过渠道适配器增加 webhook）；类型、收件人、已读状态 |
-| `user` / `user_role` | 账号与角色 | 本地账号和密码(bcrypt);角色:admin / director(教务主任)/ scheduler(排课管理员)/ teacher |
+| `user` / `user_role` | 账号、角色与用户偏好 | 本地账号和密码(bcrypt);角色:admin / director(教务主任)/ scheduler(排课管理员)/ teacher；`navigation_preference` JSON 按账号保存固定及最近入口，只影响显示顺序，不参与授权判断 |
 | `audit_log` | 操作轨迹 | 谁在何时改了什么(排课变更、调课与代课指派必记) |
 | `constraint_config` | 软约束权重 | 每学期一组 key/value；保存 S1–S8 权重和 H10 上限等参数，复制新学期时可选择一并复制 |
 | `wizard_state` | 设置向导进度 | 单条记录：首次设置路线（示例体验/正式建校）、当前步骤、完成状态和正在设置的学期；未完成时路由守卫会引导管理人员返回向导 |

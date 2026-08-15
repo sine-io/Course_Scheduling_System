@@ -25,6 +25,7 @@ from app.api import (
     exports,
     imports,
     leaves,
+    navigation,
     notifications,
     onboarding,
     semesters,
@@ -98,6 +99,7 @@ def env():
     application.include_router(substitution_log.router, prefix="/api")
     application.include_router(substitution_stats.router, prefix="/api")
     application.include_router(notifications.router, prefix="/api")
+    application.include_router(navigation.router, prefix="/api")
     application.include_router(onboarding.router, prefix="/api")
     application.include_router(settings_api.router, prefix="/api")
     application.include_router(backups.router, prefix="/api")

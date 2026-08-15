@@ -1,7 +1,14 @@
 # web 镜像的构建 context 为项目根目录,排除不需要的大型/无关文件
 .git/
 .github/
-docs/
+docs/*
+!docs/index.html
+!docs/deploy/
+docs/deploy/*
+!docs/deploy/*.html
+!docs/manual-img/
+docs/manual-img/*
+!docs/manual-img/*.png
 **/node_modules/
 **/dist/
 **/.venv/

@@ -4,6 +4,7 @@
 - 教务主任账号 e2e_director / e2edirector1234(验证只读管理视角)
 - 教师账号 e2e_teacher / e2eteacher1234(供测试绑定「陈老师」)
 - 系统管理员账号 e2e_admin / e2eadmin1234(系统管理页的备份/SMTP 卡片只有 admin 看得到)
+- 兼任账号 e2e_scheduler_teacher / e2ecombined1234(验证管理视角与本人入口并存)
 - **首次登录账号** e2e_newuser / e2enewuser1234(`must_change_password=True`)
 - 将设置向导标记为已完成(否则路由守卫会把排课管理员导回 /wizard,
   wizard.spec 会自行 reset 再走完整流程,不受影响)
@@ -21,11 +22,17 @@ from app.models.user import Role, User
 from app.models.wizard import SINGLETON_ID, WizardState
 from app.services.users import create_user
 
-_ACCOUNTS: list[tuple[str, str, Role, str]] = [
-    ("e2e_scheduler", "e2etest1234", Role.scheduler, "E2E 排课管理员"),
-    ("e2e_director", "e2edirector1234", Role.director, "E2E 教务主任"),
-    ("e2e_teacher", "e2eteacher1234", Role.teacher, "E2E 教师"),
-    ("e2e_admin", "e2eadmin1234", Role.admin, "E2E 系统管理员"),
+_ACCOUNTS: list[tuple[str, str, tuple[Role, ...], str]] = [
+    ("e2e_scheduler", "e2etest1234", (Role.scheduler,), "E2E 排课管理员"),
+    ("e2e_director", "e2edirector1234", (Role.director,), "E2E 教务主任"),
+    ("e2e_teacher", "e2eteacher1234", (Role.teacher,), "E2E 教师"),
+    ("e2e_admin", "e2eadmin1234", (Role.admin,), "E2E 系统管理员"),
+    (
+        "e2e_scheduler_teacher",
+        "e2ecombined1234",
+        (Role.scheduler, Role.teacher),
+        "E2E 兼任排课管理员",
+    ),
 ]
 
 NEW_USER = ("e2e_newuser", "e2enewuser1234", Role.scheduler, "E2E 首次登录用户")
@@ -49,15 +56,15 @@ def _reset_first_login_account(db) -> None:
 
 def seed() -> None:
     with SessionLocal() as db:
-        for username, password, role, display in _ACCOUNTS:
+        for username, password, roles, display in _ACCOUNTS:
             if db.scalar(select(User).where(User.username == username)):
                 print(f"账号已存在,跳过:{username}")
                 continue
             create_user(
-                db, username, password, [role],
+                db, username, password, list(roles),
                 display_name=display, must_change_password=False,
             )
-            print(f"已创建账号:{username}({role.value})")
+            print(f"已创建账号:{username}({','.join(role.value for role in roles)})")
 
         _reset_first_login_account(db)
 

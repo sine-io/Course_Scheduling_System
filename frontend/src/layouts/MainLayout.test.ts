@@ -56,6 +56,7 @@ function makeRouter() {
       },
       { path: '/wizard', name: 'wizard', component: { template: '<main />' } },
       { path: '/timetable-query', name: 'timetable-query', component: { template: '<main />' } },
+      { path: '/notifications', name: 'notifications', component: { template: '<main />' } },
       { path: '/leaves', name: 'leaves', component: { template: '<main />' } },
       { path: '/substitution-stats', name: 'substitution-stats', component: { template: '<main />' } },
       { path: '/settings/semesters', name: 'semesters', component: { template: '<main />' } },
@@ -112,9 +113,14 @@ describe('MainLayout', () => {
 
     expect(wrapper.find('[data-testid="app-shell"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
-    expect(wrapper.get('[data-testid="shell-breadcrumb"]').text()).toContain('仪表盘')
+    expect(wrapper.get('[data-testid="shell-breadcrumb"]').text()).toContain('当前待办')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('系统管理')
+    expect(wrapper.get('.app-nav-common').text()).toContain('当前待办')
+    expect(wrapper.get('.app-nav-common').text()).toContain('教学任务')
+    expect(wrapper.findAll('.app-nav-common a')).toHaveLength(5)
+    expect(wrapper.get('[data-testid="shell-school-context"]').text()).toContain('示范学校')
+    expect(wrapper.get('[data-testid="shell-help"]').attributes('href')).toBe('/docs/index.html')
     expect(wrapper.get('[data-testid="shell-logout"]').text()).toContain('退出登录')
     expect(wrapper.find('input[placeholder*="搜索"]').exists()).toBe(false)
 
@@ -133,6 +139,8 @@ describe('MainLayout', () => {
     expect(teacherNav).toContain('我的代课课时')
     expect(teacherNav).not.toContain('排课工作台')
     expect(teacherNav).not.toContain('系统管理')
+    expect(teacherLayout.wrapper.get('.app-nav-common').text()).toContain('通知')
+    expect(teacherLayout.wrapper.get('.app-nav-common').text()).toContain('我的代课课时')
   })
 
   it('opens the mobile drawer, moves focus into it, and restores focus on escape', async () => {

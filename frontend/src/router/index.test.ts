@@ -23,6 +23,9 @@ describe('router role boundaries', () => {
 
     await router.push('/settings/system')
     expect(router.currentRoute.value.name).toBe('dashboard')
+
+    await router.push('/scheduling/auto')
+    expect(router.currentRoute.value.name).toBe('auto-schedule')
   })
 
   it('keeps pure teachers on personal daily pages and blocks management links', async () => {
@@ -44,8 +47,12 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('timetable-query')
     await router.push('/leaves')
     expect(router.currentRoute.value.name).toBe('leaves')
+    await router.push('/notifications')
+    expect(router.currentRoute.value.name).toBe('notifications')
     await router.push('/substitution-stats')
     expect(router.currentRoute.value.name).toBe('substitution-stats')
+    await router.push('/scheduling/workbench')
+    expect(router.currentRoute.value.name).toBe('timetable-query')
   })
 
   it('keeps a scheduler-teacher union in the daily management view', async () => {

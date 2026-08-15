@@ -79,6 +79,12 @@ const routes = [
         meta: { allowedRoles: ALL_DAILY_ROLES },
       },
       {
+        path: 'notifications',
+        name: 'notifications',
+        component: () => import('@/views/Notifications.vue'),
+        meta: { allowedRoles: ALL_DAILY_ROLES },
+      },
+      {
         path: 'scheduling/workbench',
         name: 'workbench',
         component: () => import('@/views/scheduling/Workbench.vue'),

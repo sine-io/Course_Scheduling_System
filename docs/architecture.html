@@ -777,8 +777,8 @@
       </tr>
       <tr>
       <td><code>user</code> / <code>user_role</code></td>
-      <td>账号与角色</td>
-      <td>本地账号和密码(bcrypt);角色:admin / director(教务主任)/ scheduler(排课管理员)/ teacher</td>
+      <td>账号、角色与用户偏好</td>
+      <td>本地账号和密码(bcrypt);角色:admin / director(教务主任)/ scheduler(排课管理员)/ teacher；<code>navigation_preference</code> JSON 按账号保存固定及最近入口，只影响显示顺序，不参与授权判断</td>
       </tr>
       <tr>
       <td><code>audit_log</code></td>

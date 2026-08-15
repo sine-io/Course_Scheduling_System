@@ -8,6 +8,7 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     DateTime,
     ForeignKey,
@@ -45,6 +46,11 @@ class User(Base):
     # 登录失败锁定机制
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # NULL 表示从未保存，可用于从旧版浏览器 localStorage 迁移；空对象表示明确恢复默认。
+    navigation_preference: Mapped[dict[str, list[str]] | None] = mapped_column(
+        JSON,
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

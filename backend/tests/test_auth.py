@@ -61,6 +61,51 @@ def test_me_authenticated(env):
     assert resp.json()["username"] == "scheduler1"
 
 
+def test_navigation_preference_is_persisted_per_user(env):
+    client, db = env
+    make_user(db, "scheduler1", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler2", PW, roles=[Role.scheduler])
+
+    client.post("/api/auth/login", json={"username": "scheduler1", "password": PW})
+    saved = client.put(
+        "/api/navigation-preference",
+        json={
+            "fixed": ["notifications", "timetable-query"],
+            "recent": ["notifications", "versions"],
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["fixed"] == ["notifications", "timetable-query"]
+
+    client.post("/api/auth/login", json={"username": "scheduler2", "password": PW})
+    assert client.get("/api/navigation-preference").json() is None
+
+    client.post("/api/auth/login", json={"username": "scheduler1", "password": PW})
+    assert client.get("/api/navigation-preference").json()["recent"] == [
+        "notifications",
+        "versions",
+    ]
+
+    reset = client.put(
+        "/api/navigation-preference",
+        json={"fixed": [], "recent": []},
+    )
+    assert reset.status_code == 200
+    assert client.get("/api/navigation-preference").json() == {"fixed": [], "recent": []}
+
+
+def test_navigation_preference_rejects_more_than_five_fixed_entries(env):
+    client, db = env
+    make_user(db, "scheduler1", PW, roles=[Role.scheduler])
+    client.post("/api/auth/login", json={"username": "scheduler1", "password": PW})
+
+    response = client.put(
+        "/api/navigation-preference",
+        json={"fixed": [f"entry-{index}" for index in range(6)], "recent": []},
+    )
+    assert response.status_code == 422
+
+
 def test_logout_clears_session(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])

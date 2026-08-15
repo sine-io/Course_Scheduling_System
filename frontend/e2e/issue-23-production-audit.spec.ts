@@ -18,6 +18,7 @@ const SCHEDULER_ROUTES = [
   ['/basedata', '基础数据'],
   ['/scheduling/assignments', '教学任务管理'],
   ['/timetable-query', '课表查询'],
+  ['/notifications', '通知'],
   ['/scheduling/workbench', '排课工作台'],
   ['/scheduling/auto', '自动排课'],
   ['/leaves', '请假登记'],
@@ -34,6 +35,7 @@ const SCHEDULER_ROUTES = [
 const TEACHER_ROUTES = [
   ['/timetable-query', '课表查询'],
   ['/leaves', '请假登记'],
+  ['/notifications', '通知'],
   ['/substitution-stats', '我的代课课时'],
 ] as const
 
@@ -198,10 +200,14 @@ test('教师导航只显示允许页面且受限直达 URL 在加载业务数据
 
   await page.getByTestId('shell-menu').click()
   const navigation = page.getByTestId('shell-nav')
-  await expect(navigation.getByRole('link')).toHaveCount(3)
-  await expect(navigation.getByRole('link', { name: '课表查询' })).toBeVisible()
-  await expect(navigation.getByRole('link', { name: '请假登记' })).toBeVisible()
-  await expect(navigation.getByRole('link', { name: '我的代课课时' })).toBeVisible()
+  const common = navigation.locator('.app-nav-common')
+  await expect(common.getByRole('link')).toHaveCount(4)
+  await expect(common.getByRole('link', { name: '课表查询' })).toBeVisible()
+  await expect(common.getByRole('link', { name: '请假登记' })).toBeVisible()
+  await expect(common.getByRole('link', { name: '通知' })).toBeVisible()
+  await expect(common.getByRole('link', { name: '我的代课课时' })).toBeVisible()
+  await expect(navigation.locator('.app-nav-catalog').getByRole('link', { name: '排课工作台' })).toHaveCount(0)
+  await expect(navigation.locator('.app-nav-catalog').getByRole('link', { name: '系统管理' })).toHaveCount(0)
   await page.keyboard.press('Escape')
 
   page.on('request', (request) => {

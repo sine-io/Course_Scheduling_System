@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { login } from './helpers'
+import { browserApiRequest, login } from './helpers'
 
 const viewports = [
   { width: 1920, height: 1080, sidebarWidth: 228 },
@@ -10,7 +10,12 @@ const viewports = [
 test.describe('生产应用壳层', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
+    expect(await browserApiRequest(
+      page,
+      'PATCH',
+      '/api/wizard/state',
+      { completed: true },
+    )).toBe(200)
   })
 
   for (const viewport of viewports) {
@@ -23,7 +28,14 @@ test.describe('生产应用壳层', () => {
       await expect(shell).toBeVisible()
       await expect(sidebar).toBeVisible()
       await expect(page.getByTestId('product-identity')).toBeVisible()
-      await expect(page.getByTestId('shell-breadcrumb')).toContainText('仪表盘')
+      await expect(page.getByTestId('shell-breadcrumb')).toContainText(/当前待办|仪表盘/)
+      await expect(page.getByTestId('shell-school-context')).toBeVisible()
+      await expect(page.getByTestId('semester-context')).toBeVisible()
+      await expect(page.getByTestId('shell-help')).toBeVisible()
+      await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(5)
+      await expect(page.locator('.app-topbar').getByRole('button', { name: /发布|删除|备份|恢复|权限/ })).toHaveCount(0)
+      const helpResponse = await page.request.get('/docs/index.html')
+      expect(helpResponse.ok()).toBe(true)
       await expect(page.getByTestId('shell-menu')).toBeHidden()
       await expect(page.getByTestId('shell-close')).toBeHidden()
       await expect(page.getByPlaceholder(/搜索/)).toHaveCount(0)
@@ -70,13 +82,21 @@ test.describe('生产应用壳层', () => {
     await expect(menu).toBeFocused()
 
     await menu.click()
-    const queryLink = page.getByRole('link', { name: '课表查询' })
+    const queryLink = drawer.locator('.app-nav-catalog [data-nav-key="timetable-query"]').first()
     await queryLink.focus()
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/timetable-query$/)
     await expect(menu).toBeFocused()
 
     await menu.click()
+    await expect(close).toBeFocused()
+    await drawer.getByTestId('nav-manage').focus()
+    await expect(drawer.getByTestId('nav-manage')).toBeFocused()
+    await page.keyboard.press('Enter')
+    await expect(drawer.getByTestId('nav-preferences')).toBeVisible()
+    await expect(drawer.getByTestId('nav-preferences-close')).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(drawer.getByTestId('nav-preferences')).toBeHidden()
     await page.getByTestId('shell-scrim').click({ position: { x: 370, y: 400 } })
     await expect(drawer).toBeHidden()
 

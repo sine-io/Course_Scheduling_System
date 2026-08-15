@@ -1,43 +1,46 @@
 <script setup lang="ts">
 import {
-  Bell,
-  BookOpen,
-  CalendarCheck2,
   CalendarDays,
-  ChartNoAxesColumnIncreasing,
-  ClipboardClock,
-  ClipboardList,
-  History,
-  LayoutDashboard,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  CircleHelp,
   LogOut,
   Menu,
-  Settings2,
-  Shuffle,
-  Table2,
+  RotateCcw,
+  SlidersHorizontal,
   Users,
-  WandSparkles,
   X,
-  ChevronRight,
 } from '@lucide/vue'
-import type { Component } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import NotificationBell from '@/components/NotificationBell.vue'
+import {
+  getUserNavigationPreference,
+  updateUserNavigationPreference,
+} from '@/api/navigation'
+import { getOnboardingStatus } from '@/api/onboarding'
+import type { OnboardingStatus } from '@/api/onboarding'
+import {
+  accessibleEntries,
+  commonNavigation,
+  emptyNavigationPreference,
+  getNavigationEntry,
+  isNavigationEntryActive,
+  loadNavigationPreference,
+  navigationTarget,
+  navigationGroupEntries,
+  normalizeNavigationPreference,
+  recordNavigationVisit,
+  saveNavigationPreference,
+  type NavigationEntry,
+  type NavigationPreference,
+} from '@/navigation'
 import { canOperateDaily } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
-
-interface NavItem {
-  key: string
-  label: string
-  icon: Component
-}
-
-interface NavGroup {
-  label: string
-  items: NavItem[]
-}
 
 const auth = useAuthStore()
 const appConfig = useAppConfigStore()
@@ -53,97 +56,197 @@ const drawer = ref<HTMLElement | null>(null)
 let mobileQuery: MediaQueryList | null = null
 let originalBodyOverflow = ''
 let drawerFocusFrame: number | null = null
+let navigationWriteTail: Promise<void> = Promise.resolve()
 
 const roleLabels = computed(() => (auth.user?.roles ?? []).map((role) => auth.roleLabel(role)))
+const userRoles = computed(() => auth.user?.roles ?? [])
 const schoolName = computed(() => appConfig.config.school_name)
 const userInitial = computed(() => auth.user?.display_name.trim().charAt(0) || '用')
 const semesterOptions = computed(() => semesterContext.semesters.map((semester) => ({
   label: semester.is_demo ? `${semester.label}（示例）` : semester.label,
   value: semester.id,
 })))
+const canManage = computed(() => canOperateDaily(userRoles.value))
+const onboarding = ref<OnboardingStatus | null>(null)
+const onboardingLoading = ref(false)
+const onboardingError = ref('')
+const navigationPreference = ref<NavigationPreference>(emptyNavigationPreference())
+const navigationPreferenceError = ref('')
+const navigationSaving = ref(false)
+const navigationSettingsOpen = ref(false)
+const draftFixed = ref<string[]>([])
+const navigationDialogClose = ref<HTMLButtonElement | null>(null)
 
-// This predicate mirrors the router guard. Navigation visibility and direct-route access stay aligned.
-const canManage = computed(() => (
-  canOperateDaily(auth.user?.roles)
+const firstSuccess = computed(() => onboarding.value?.first_success ?? false)
+const commonItems = computed(() => commonNavigation(
+  userRoles.value,
+  firstSuccess.value,
+  navigationPreference.value,
 ))
-
-function navItem(key: string, label: string, icon: Component): NavItem {
-  return { key, label, icon }
-}
-
-const navGroups = computed<NavGroup[]>(() => {
-  const query = navItem('timetable-query', '课表查询', Table2)
-  const leaves = navItem('leaves', '请假登记', ClipboardClock)
-  const stats = navItem(
-    'substitution-stats',
-    canManage.value ? '代课课时统计' : '我的代课课时',
-    ChartNoAxesColumnIncreasing,
-  )
-
-  if (!canManage.value) {
-    return [{ label: '常用', items: [query, leaves, stats] }]
-  }
-
-  const groups: NavGroup[] = [
-    {
-      label: '概览',
-      items: [
-        navItem('dashboard', '仪表盘', LayoutDashboard),
-        navItem('wizard', '设置向导', Settings2),
-        query,
-      ],
-    },
-    {
-      label: '基础数据',
-      items: [
-        navItem('semesters', '学期与作息时间表', CalendarDays),
-        navItem('calendar', '校历与排课准备', CalendarCheck2),
-        navItem('basedata', '教师、班级、科目和教室/场地', Users),
-      ],
-    },
-    {
-      label: '排课作业',
-      items: [
-        navItem('assignments', '教学任务', ClipboardList),
-        navItem('workbench', '排课工作台', BookOpen),
-        navItem('auto-schedule', '自动排课', WandSparkles),
-        navItem('versions', '版本与发布', History),
-        navItem('timetable-demo', '课表组件（演示）', Table2),
-      ],
-    },
-    {
-      label: '调课与代课',
-      items: [
-        leaves,
-        navItem('substitutions', '调课与代课处理', Shuffle),
-        navItem('daily-board', '今日调课与代课', CalendarDays),
-        navItem('substitution-log', '调课与代课记录', History),
-        stats,
-        navItem('notification-board', '通知确认看板', Bell),
-      ],
-    },
-  ]
-  if (auth.hasRole('admin')) {
-    groups.push({
-      label: '系统管理',
-      items: [navItem('system', '系统管理', Settings2)],
-    })
-  }
-  return groups
+const catalogGroups = computed(() => navigationGroupEntries(userRoles.value))
+const preferenceItems = computed(() => accessibleEntries(userRoles.value))
+const nextAction = computed(() => onboarding.value?.next_action ?? null)
+const onboardingSummary = computed(() => {
+  if (!onboarding.value) return onboardingError.value
+  if (onboarding.value.first_success) return '首次成功已完成'
+  return `首次成功进行中 · 待完成 ${onboarding.value.p0_todos.length} 项`
 })
 
-const routeNavKey = computed(() => (
-  route.name === 'period-table-editor' ? 'semesters' : String(route.name ?? '')
+function writeNavigationPreference(
+  preference: NavigationPreference,
+): Promise<NavigationPreference | null> {
+  const userId = auth.user?.id
+  if (!userId) return Promise.resolve(null)
+  const payload = {
+    fixed: [...preference.fixed],
+    recent: [...preference.recent],
+  }
+  const write = navigationWriteTail.then(async () => {
+    if (auth.user?.id !== userId) return null
+    return updateUserNavigationPreference(payload)
+  })
+  navigationWriteTail = write.then(() => undefined, () => undefined)
+  return write
+}
+
+const routeNavKey = computed(() => String(route.name ?? ''))
+
+function isActive(item: NavigationEntry): boolean {
+  return isNavigationEntryActive(
+    item,
+    routeNavKey.value,
+    route.query,
+    firstSuccess.value,
+  )
+}
+
+const activeItem = computed(() => {
+  const all = [...commonItems.value, ...catalogGroups.value.flatMap((group) => group.items)]
+  return all.find((item) => isActive(item))
+    ?? getNavigationEntry(routeNavKey.value)
+})
+const activeGroup = computed(() => (
+  catalogGroups.value.find((group) => group.items.some((item) => isActive(item)))
 ))
-const activeItem = computed(() => navGroups.value
-  .flatMap((group) => group.items)
-  .find((item) => item.key === routeNavKey.value))
-const activeGroup = computed(() => navGroups.value
-  .find((group) => group.items.some((item) => item.key === routeNavKey.value)))
 const currentModule = computed(() => activeItem.value?.label || String(route.name ?? '工作台'))
 
-function isActive(item: NavItem): boolean {
-  return item.key === routeNavKey.value
+async function loadNavigationState() {
+  const id = auth.user?.id
+  if (!id) {
+    navigationPreference.value = emptyNavigationPreference()
+    return
+  }
+
+  const roles = [...userRoles.value]
+  const local = loadNavigationPreference(id, roles)
+  navigationPreference.value = local
+  try {
+    const remoteValue = await getUserNavigationPreference()
+    const remote = normalizeNavigationPreference(remoteValue, roles)
+    if (auth.user?.id !== id) return
+    const hasLocal = local.fixed.length > 0 || local.recent.length > 0
+    const resolved = remoteValue === null && hasLocal
+      ? normalizeNavigationPreference(await writeNavigationPreference(local), roles)
+      : remote
+    if (auth.user?.id !== id) return
+    navigationPreference.value = saveNavigationPreference(id, resolved, roles)
+    navigationPreferenceError.value = ''
+  } catch {
+    if (auth.user?.id === id) {
+      navigationPreferenceError.value = '导航偏好暂时仅保存在此设备。'
+    }
+  }
+}
+
+async function loadOnboardingStatus() {
+  if (!canManage.value || onboardingLoading.value) return
+  onboardingLoading.value = true
+  try {
+    onboarding.value = await getOnboardingStatus()
+    onboardingError.value = ''
+  } catch {
+    onboardingError.value = '首次成功阶段暂时无法读取'
+  } finally {
+    onboardingLoading.value = false
+  }
+}
+
+function openNavigationSettings() {
+  draftFixed.value = [...navigationPreference.value.fixed]
+  navigationSettingsOpen.value = true
+  void nextTick(() => navigationDialogClose.value?.focus())
+}
+
+function closeNavigationSettings() {
+  navigationSettingsOpen.value = false
+}
+
+function toggleFixed(key: string) {
+  const index = draftFixed.value.indexOf(key)
+  if (index >= 0) {
+    draftFixed.value.splice(index, 1)
+    return
+  }
+  if (draftFixed.value.length >= 5) return
+  draftFixed.value.push(key)
+}
+
+function moveFixed(index: number, delta: number) {
+  const target = index + delta
+  if (target < 0 || target >= draftFixed.value.length) return
+  const [item] = draftFixed.value.splice(index, 1)
+  draftFixed.value.splice(target, 0, item)
+}
+
+async function saveNavigationSettings() {
+  const id = auth.user?.id
+  if (!id) return closeNavigationSettings()
+  const saved = saveNavigationPreference(id, {
+    ...navigationPreference.value,
+    fixed: [...draftFixed.value],
+  }, userRoles.value)
+  navigationPreference.value = saved
+  navigationSaving.value = true
+  try {
+    await writeNavigationPreference(saved)
+    navigationPreferenceError.value = ''
+  } catch {
+    navigationPreferenceError.value = '偏好已保存在此设备，连接恢复后请再次保存以同步到账号。'
+  } finally {
+    navigationSaving.value = false
+    closeNavigationSettings()
+  }
+}
+
+async function resetNavigationSettings() {
+  const id = auth.user?.id
+  if (!id) return
+  const saved = saveNavigationPreference(id, {
+    fixed: [],
+    recent: [],
+  }, userRoles.value)
+  navigationPreference.value = saved
+  draftFixed.value = []
+  navigationSaving.value = true
+  try {
+    await writeNavigationPreference(saved)
+    navigationPreferenceError.value = ''
+  } catch {
+    navigationPreferenceError.value = '默认入口已在此设备恢复，账号同步暂时失败。'
+  } finally {
+    navigationSaving.value = false
+  }
+}
+
+function onNavClick(item?: NavigationEntry) {
+  if (item && auth.user?.id) {
+    navigationPreference.value = recordNavigationVisit(auth.user.id, item.key, userRoles.value)
+    const preference = navigationPreference.value
+    void writeNavigationPreference(preference).catch(() => {
+      navigationPreferenceError.value = '最近访问已保存在此设备，账号同步暂时失败。'
+    })
+  }
+  closeDrawer(isMobile.value)
 }
 
 function scheduleFrame(callback: FrameRequestCallback): number {
@@ -196,11 +299,13 @@ function closeDrawer(restoreFocus = true) {
   if (restoreFocus) void nextTick(() => menuButton.value?.focus())
 }
 
-function onNavClick() {
-  closeDrawer(isMobile.value)
-}
-
 function onDrawerKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && navigationSettingsOpen.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    closeNavigationSettings()
+    return
+  }
   if (event.key === 'Escape') {
     event.preventDefault()
     closeDrawer()
@@ -247,14 +352,26 @@ async function onSemesterChange(event: Event) {
   }
 }
 
-watch(() => route.fullPath, () => closeDrawer(false))
+watch(() => route.fullPath, () => {
+  closeDrawer(false)
+  if (canManage.value) void loadOnboardingStatus()
+})
+watch(() => semesterContext.revision, () => {
+  if (canManage.value) void loadOnboardingStatus()
+})
+watch(() => auth.user?.id, () => {
+  void loadNavigationState()
+  void loadOnboardingStatus()
+})
 watch(drawerOpen, (open) => {
   if (typeof document === 'undefined') return
   document.body.style.overflow = open && isMobile.value ? 'hidden' : originalBodyOverflow
 })
 
 onMounted(() => {
+  void loadNavigationState()
   void semesterContext.load()
+  void loadOnboardingStatus()
   originalBodyOverflow = document.body.style.overflow
   mobileQuery = typeof window.matchMedia === 'function'
     ? window.matchMedia('(max-width: 767px)')
@@ -324,32 +441,218 @@ onBeforeUnmount(() => {
       </div>
 
       <nav class="app-nav" aria-label="功能导航" data-testid="shell-nav">
-        <section
-          v-for="(group, groupIndex) in navGroups"
-          :key="group.label"
-          class="app-nav-group"
-          :aria-labelledby="`nav-group-${groupIndex}`"
-        >
-          <p :id="`nav-group-${groupIndex}`" class="app-nav-label">{{ group.label }}</p>
+        <section class="app-nav-common" aria-labelledby="common-nav-title">
+          <header class="app-nav-section-heading">
+            <div>
+              <p id="common-nav-title" class="app-nav-label">常用</p>
+              <span class="app-nav-section-hint">最多 5 项</span>
+            </div>
+            <button
+              type="button"
+              class="app-nav-settings"
+              aria-label="管理常用入口"
+              title="管理常用入口"
+              data-testid="nav-manage"
+              @click="openNavigationSettings"
+            >
+              <SlidersHorizontal :size="15" :stroke-width="1.9" aria-hidden="true" />
+            </button>
+          </header>
           <RouterLink
-            v-for="item in group.items"
+            v-for="item in commonItems"
             :key="item.key"
-            :to="{ name: item.key }"
-            class="app-nav-link"
+            :to="navigationTarget(item, nextAction?.href)"
+            class="app-nav-link app-nav-link-common"
             :class="{ 'is-active': isActive(item) }"
             :aria-current="isActive(item) ? 'page' : undefined"
             :aria-label="item.label"
-            :title="item.label"
+            :title="item.description"
             :data-nav-key="item.key"
-            @click="onNavClick"
+            @click="onNavClick(item)"
           >
             <span class="app-nav-icon" aria-hidden="true">
               <component :is="item.icon" :size="18" :stroke-width="1.8" />
             </span>
             <span class="app-nav-text">{{ item.label }}</span>
           </RouterLink>
+          <p v-if="!commonItems.length" class="app-nav-empty">暂无可用入口</p>
+          <p
+            v-if="navigationPreferenceError"
+            class="app-nav-sync-warning"
+            role="status"
+            data-testid="nav-sync-warning"
+          >
+            {{ navigationPreferenceError }}
+          </p>
         </section>
+
+        <section
+          v-if="canManage && (onboarding || onboardingError)"
+          class="app-onboarding-context"
+          data-testid="shell-onboarding"
+          role="status"
+          aria-live="polite"
+        >
+          <div class="app-onboarding-heading">
+            <span
+              class="app-onboarding-dot"
+              :class="{ 'is-complete': firstSuccess, 'is-error': onboardingError && !onboarding }"
+              aria-hidden="true"
+            >
+              <Check v-if="firstSuccess" :size="13" />
+              <span v-else />
+            </span>
+            <strong>{{ onboardingSummary }}</strong>
+          </div>
+          <RouterLink
+            v-if="!firstSuccess && nextAction"
+            class="app-onboarding-next"
+            :to="nextAction.href"
+            data-testid="shell-next-action"
+            @click="onNavClick()"
+          >
+            <span>{{ nextAction.label }}</span>
+            <ChevronRight :size="14" aria-hidden="true" />
+          </RouterLink>
+          <button
+            v-if="onboardingError"
+            type="button"
+            class="app-onboarding-retry"
+            :disabled="onboardingLoading"
+            data-testid="shell-onboarding-retry"
+            @click="loadOnboardingStatus"
+          >
+            {{ onboardingLoading ? '正在重试' : '重新读取阶段与待办' }}
+          </button>
+        </section>
+
+        <details class="app-nav-catalog" open>
+          <summary class="app-nav-catalog-summary">
+            <span class="app-nav-label">完整功能</span>
+            <ChevronDown :size="15" class="app-nav-catalog-chevron" aria-hidden="true" />
+          </summary>
+          <section
+            v-for="(group, groupIndex) in catalogGroups"
+            :key="group.label"
+            class="app-nav-group"
+            :aria-labelledby="`catalog-nav-group-${groupIndex}`"
+          >
+            <p :id="`catalog-nav-group-${groupIndex}`" class="app-nav-label">{{ group.label }}</p>
+            <RouterLink
+              v-for="item in group.items"
+              :key="item.key"
+              :to="item.route"
+              class="app-nav-link"
+              :class="{ 'is-active': isActive(item) }"
+              :aria-current="isActive(item) ? 'page' : undefined"
+              :aria-label="item.label"
+              :title="item.description"
+              :data-nav-key="item.key"
+              @click="onNavClick(item)"
+            >
+              <span class="app-nav-icon" aria-hidden="true">
+                <component :is="item.icon" :size="18" :stroke-width="1.8" />
+              </span>
+              <span class="app-nav-text">{{ item.label }}</span>
+            </RouterLink>
+          </section>
+        </details>
       </nav>
+
+      <section
+        v-if="navigationSettingsOpen"
+        class="app-nav-preferences"
+        role="dialog"
+        aria-labelledby="nav-preferences-title"
+        data-testid="nav-preferences"
+      >
+        <header class="app-nav-preferences-heading">
+          <div>
+            <p class="app-nav-label">常用入口</p>
+            <h2 id="nav-preferences-title">管理常用入口</h2>
+          </div>
+          <button
+            ref="navigationDialogClose"
+            type="button"
+            class="app-icon-button"
+            aria-label="关闭常用入口设置"
+            title="关闭"
+            data-testid="nav-preferences-close"
+            @click="closeNavigationSettings"
+          >
+            <X :size="17" aria-hidden="true" />
+          </button>
+        </header>
+        <p class="app-nav-preferences-copy">固定的入口会优先显示；未占满的空位由当前阶段推荐和最近访问补充。</p>
+        <div class="app-nav-fixed-list" aria-label="已固定入口">
+          <p class="app-nav-preferences-label">已固定 {{ draftFixed.length }}/5</p>
+          <p v-if="!draftFixed.length" class="app-nav-empty">尚未固定，当前使用角色默认入口。</p>
+          <div v-for="(key, index) in draftFixed" :key="key" class="app-nav-fixed-item">
+            <span class="app-nav-fixed-position">{{ index + 1 }}</span>
+            <span class="app-nav-fixed-name">{{ getNavigationEntry(key)?.label ?? key }}</span>
+            <button
+              type="button"
+              class="app-icon-button app-nav-order-button"
+              :disabled="index === 0"
+              :aria-label="`将${getNavigationEntry(key)?.label ?? key}上移`"
+              title="上移"
+              @click="moveFixed(index, -1)"
+            >
+              <ChevronUp :size="15" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              class="app-icon-button app-nav-order-button"
+              :disabled="index === draftFixed.length - 1"
+              :aria-label="`将${getNavigationEntry(key)?.label ?? key}下移`"
+              title="下移"
+              @click="moveFixed(index, 1)"
+            >
+              <ChevronDown :size="15" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+        <div class="app-nav-choice-list" aria-label="可固定入口">
+          <p class="app-nav-preferences-label">选择入口</p>
+          <label v-for="item in preferenceItems" :key="item.key" class="app-nav-choice">
+            <input
+              type="checkbox"
+              :checked="draftFixed.includes(item.key)"
+              :disabled="!draftFixed.includes(item.key) && draftFixed.length >= 5"
+              :data-testid="`nav-choice-${item.key}`"
+              @change="toggleFixed(item.key)"
+            >
+            <span class="app-nav-choice-copy">
+              <strong>{{ item.label }}</strong>
+              <small>{{ item.description }}</small>
+            </span>
+          </label>
+        </div>
+        <footer class="app-nav-preferences-actions">
+          <button
+            type="button"
+            class="app-text-button"
+            :disabled="navigationSaving"
+            data-testid="nav-reset"
+            @click="resetNavigationSettings"
+          >
+            <RotateCcw :size="15" aria-hidden="true" />
+            恢复默认
+          </button>
+          <div>
+            <button type="button" class="app-secondary-button" :disabled="navigationSaving" @click="closeNavigationSettings">取消</button>
+            <button
+              type="button"
+              class="app-primary-button"
+              :disabled="navigationSaving"
+              data-testid="nav-save"
+              @click="saveNavigationSettings"
+            >
+              {{ navigationSaving ? '正在保存' : '保存' }}
+            </button>
+          </div>
+        </footer>
+      </section>
 
       <div class="app-sidebar-footer">
         <span class="app-school-icon" aria-hidden="true">
@@ -359,6 +662,16 @@ onBeforeUnmount(() => {
           <strong>{{ schoolName }}</strong>
           <small>教学运行工作台</small>
         </span>
+        <a
+          class="app-sidebar-help"
+          href="/docs/index.html"
+          target="_blank"
+          rel="noreferrer"
+          aria-label="打开帮助文档"
+          title="帮助文档"
+        >
+          <CircleHelp :size="18" :stroke-width="1.9" aria-hidden="true" />
+        </a>
       </div>
     </aside>
 
@@ -388,13 +701,24 @@ onBeforeUnmount(() => {
 
         <div class="app-topbar-actions">
           <div
+            class="app-school-context"
+            data-testid="shell-school-context"
+            :title="schoolName"
+            :aria-label="`当前学校：${schoolName}`"
+          >
+            <Users :size="16" :stroke-width="1.9" aria-hidden="true" />
+            <span class="app-school-context-copy">{{ schoolName }}</span>
+          </div>
+
+          <div
             v-if="semesterContext.loaded"
             class="app-semester-context"
             :class="{ 'is-switching': semesterContext.switching }"
             data-testid="semester-context"
-            :title="semesterContext.error || '当前工作学期'"
+            :title="semesterContext.error || (semesterContext.canSwitch ? '当前工作学期，可切换' : '当前工作学期，只读')"
           >
             <CalendarDays :size="16" :stroke-width="1.9" aria-hidden="true" />
+            <span class="app-semester-caption">当前学期</span>
             <label class="sr-only" for="current-semester-select">当前工作学期</label>
             <select
               v-if="semesterContext.canSwitch"
@@ -418,9 +742,29 @@ onBeforeUnmount(() => {
                 ? `${semesterContext.currentSemester.label}${semesterContext.currentSemester.is_demo ? '（示例）' : ''}`
                 : '未选择学期' }}
             </span>
+            <span
+              class="app-semester-status"
+              :class="{ 'is-writable': semesterContext.canSwitch }"
+              data-testid="semester-access-mode"
+            >
+              {{ semesterContext.canSwitch ? '可切换' : '只读' }}
+            </span>
           </div>
 
           <NotificationBell />
+
+          <a
+            class="app-help-link"
+            href="/docs/index.html"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="打开帮助文档"
+            title="帮助文档"
+            data-testid="shell-help"
+          >
+            <CircleHelp :size="18" :stroke-width="1.9" aria-hidden="true" />
+            <span class="app-action-label">帮助</span>
+          </a>
 
           <div
             v-if="auth.user"
@@ -533,6 +877,7 @@ onBeforeUnmount(() => {
 .app-profile-copy small { color: var(--app-text-muted); font-size: 11px; }
 
 .app-nav {
+  position: relative;
   min-height: 0;
   flex: 1;
   overflow-x: hidden;
@@ -541,7 +886,187 @@ onBeforeUnmount(() => {
   scrollbar-width: thin;
 }
 
-.app-nav-group + .app-nav-group { margin-top: var(--app-space-3); }
+.app-nav-common {
+  padding-bottom: var(--app-space-3);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.app-nav-section-heading {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+}
+
+.app-nav-section-heading .app-nav-label { padding-bottom: 0; }
+
+.app-nav-section-hint {
+  display: block;
+  margin-top: 2px;
+  padding: 0 var(--app-space-2);
+  color: var(--app-text-faint);
+  font-size: 10px;
+}
+
+.app-nav-settings {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--app-radius-sm);
+  background: transparent;
+  color: var(--app-text-muted);
+  cursor: pointer;
+}
+
+.app-nav-settings:hover {
+  border-color: var(--app-border);
+  background: var(--app-surface-muted);
+  color: var(--app-primary-strong);
+}
+
+.app-nav-link-common { margin-top: 3px; }
+
+.app-nav-empty {
+  margin: var(--app-space-2) 0 0;
+  padding: 0 var(--app-space-2);
+  color: var(--app-text-faint);
+  font-size: 12px;
+}
+
+.app-nav-sync-warning {
+  margin: var(--app-space-2) var(--app-space-2) 0;
+  color: var(--app-warning);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.app-onboarding-context {
+  display: grid;
+  gap: var(--app-space-2);
+  margin: var(--app-space-3) 0;
+  padding: var(--app-space-2) var(--app-space-3);
+  border: 1px solid var(--app-primary-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-primary-soft);
+}
+
+.app-onboarding-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--app-space-2);
+  color: var(--app-primary-strong);
+  font-size: 11px;
+}
+
+.app-onboarding-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-onboarding-dot {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--app-primary-border);
+  border-radius: 50%;
+  background: var(--app-surface);
+  color: var(--app-primary-strong);
+}
+
+.app-onboarding-dot:not(.is-complete) span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--app-warning);
+}
+
+.app-onboarding-dot.is-complete {
+  border-color: #a9d9bf;
+  background: var(--app-success-soft);
+  color: var(--app-success);
+}
+
+.app-onboarding-dot.is-error {
+  border-color: var(--app-danger-border);
+  background: var(--app-danger-soft);
+}
+
+.app-onboarding-dot.is-error span { background: var(--app-danger); }
+
+.app-onboarding-next {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+  color: var(--app-primary-strong);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-onboarding-next span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-onboarding-next:hover { text-decoration: underline; }
+
+.app-onboarding-retry {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-primary-strong);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.app-onboarding-retry:hover { text-decoration: underline; }
+.app-onboarding-retry:disabled { cursor: wait; opacity: 0.62; }
+
+.app-nav-catalog {
+  margin-top: var(--app-space-2);
+}
+
+.app-nav-catalog-summary {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+  padding: 0 var(--app-space-2);
+  border-radius: var(--app-radius-sm);
+  cursor: pointer;
+  list-style: none;
+}
+
+.app-nav-catalog-summary::-webkit-details-marker { display: none; }
+.app-nav-catalog-summary:hover { background: var(--app-surface-muted); }
+
+.app-nav-catalog-chevron {
+  color: var(--app-text-faint);
+  transition: transform var(--app-motion-duration) var(--app-motion-ease);
+}
+
+.app-nav-catalog[open] .app-nav-catalog-chevron { transform: rotate(180deg); }
+
+.app-nav-group + .app-nav-group {
+  margin-top: var(--app-space-3);
+}
 
 .app-nav-label {
   margin: 0;
@@ -613,6 +1138,177 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.app-nav-preferences {
+  position: fixed;
+  z-index: 40;
+  top: var(--app-space-4);
+  left: calc(228px + var(--app-space-4));
+  display: grid;
+  width: min(430px, calc(100vw - 260px));
+  max-height: calc(100dvh - 32px);
+  gap: var(--app-space-3);
+  overflow-y: auto;
+  padding: var(--app-space-5);
+  border: 1px solid var(--app-border-strong);
+  border-radius: var(--app-radius-md);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-lg);
+}
+
+.app-nav-preferences-heading,
+.app-nav-preferences-actions,
+.app-nav-fixed-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-2);
+}
+
+.app-nav-preferences-heading h2 {
+  margin: 2px 0 0;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.app-nav-preferences-copy {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.app-nav-preferences-label {
+  margin: 0 0 var(--app-space-2);
+  color: var(--app-text-faint);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.app-nav-fixed-list,
+.app-nav-choice-list {
+  min-width: 0;
+}
+
+.app-nav-fixed-item {
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 3px 0;
+}
+
+.app-nav-fixed-position {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--app-primary-soft);
+  color: var(--app-primary-strong);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.app-nav-fixed-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-nav-order-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+}
+
+.app-nav-order-button:disabled { cursor: not-allowed; opacity: 0.38; }
+
+.app-nav-choice-list {
+  display: grid;
+  max-height: 290px;
+  overflow-y: auto;
+  padding-top: var(--app-space-2);
+  border-top: 1px solid var(--app-border);
+}
+
+.app-nav-choice {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: var(--app-space-2);
+  padding: var(--app-space-2) 0;
+  cursor: pointer;
+}
+
+.app-nav-choice input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+  accent-color: var(--app-primary);
+}
+
+.app-nav-choice-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.app-nav-choice-copy strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.app-nav-choice-copy small {
+  color: var(--app-text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.app-nav-preferences-actions {
+  align-items: center;
+  padding-top: var(--app-space-2);
+  border-top: 1px solid var(--app-border);
+}
+
+.app-nav-preferences-actions > div {
+  display: flex;
+  gap: var(--app-space-2);
+}
+
+.app-text-button,
+.app-secondary-button,
+.app-primary-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--app-space-1);
+  padding: 0 var(--app-space-3);
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+  color: var(--app-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.app-text-button { border-color: transparent; }
+.app-text-button:hover,
+.app-secondary-button:hover { border-color: var(--app-primary-border); color: var(--app-primary-strong); }
+
+.app-primary-button {
+  border-color: var(--app-primary);
+  background: var(--app-primary);
+  color: var(--app-on-primary);
+}
+
+.app-primary-button:hover { background: var(--app-primary-hover); }
+
 .app-sidebar-footer {
   display: flex;
   min-height: 62px;
@@ -641,6 +1337,8 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.app-sidebar-help { display: none; }
 
 .app-main {
   display: grid;
@@ -681,7 +1379,8 @@ onBeforeUnmount(() => {
 }
 
 .app-icon-button:hover,
-.app-logout-button:hover {
+.app-logout-button:hover,
+.app-help-link:hover {
   border-color: var(--app-primary-border);
   background: var(--app-primary-soft);
   color: var(--app-primary-strong);
@@ -711,6 +1410,23 @@ onBeforeUnmount(() => {
 
 .app-breadcrumb-separator { flex: 0 0 auto; color: var(--app-text-faint); }
 
+.app-school-context {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 190px;
+  align-items: center;
+  gap: var(--app-space-1);
+  color: var(--app-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.app-school-context-copy {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-topbar-actions {
   display: flex;
   min-width: 0;
@@ -735,6 +1451,26 @@ onBeforeUnmount(() => {
 
 .app-semester-context.is-switching { opacity: 0.62; }
 
+.app-semester-caption {
+  color: var(--app-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.app-semester-status {
+  padding: 2px 5px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-xs);
+  color: var(--app-text-faint);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.app-semester-status.is-writable {
+  border-color: var(--app-primary-border);
+  color: var(--app-primary-strong);
+}
+
 .app-semester-select,
 .app-semester-label {
   min-width: 0;
@@ -746,6 +1482,23 @@ onBeforeUnmount(() => {
   font: inherit;
   font-size: 12px;
   font-weight: 650;
+}
+
+.app-help-link {
+  display: inline-flex;
+  min-width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--app-space-1);
+  border: 1px solid transparent;
+  border-radius: var(--app-radius-md);
+  color: var(--app-text-muted);
+  text-decoration: none;
+  transition:
+    border-color var(--app-motion-duration) var(--app-motion-ease),
+    background-color var(--app-motion-duration) var(--app-motion-ease),
+    color var(--app-motion-duration) var(--app-motion-ease);
 }
 
 .app-semester-select { cursor: pointer; }
@@ -817,7 +1570,13 @@ onBeforeUnmount(() => {
   .app-nav-label,
   .app-nav-text,
   .app-school-copy { display: none; }
+  .app-nav-section-hint,
+  .app-onboarding-context,
+  .app-nav-catalog-summary { display: none; }
   .app-nav { padding: var(--app-space-2) 7px; }
+  .app-nav-common { padding-bottom: var(--app-space-2); }
+  .app-nav-settings { width: 38px; height: 32px; margin: 0 auto; }
+  .app-nav-catalog { margin-top: var(--app-space-2); }
   .app-nav-group + .app-nav-group {
     margin-top: var(--app-space-2);
     padding-top: var(--app-space-2);
@@ -828,6 +1587,11 @@ onBeforeUnmount(() => {
   .app-nav-icon { width: 38px; height: 32px; }
   .app-sidebar-footer { justify-content: center; padding: var(--app-space-2); }
   .app-topbar { padding: 0 var(--app-space-4); }
+  .app-school-context { max-width: 34px; }
+  .app-school-context-copy,
+  .app-semester-caption,
+  .app-semester-status { display: none; }
+  .app-nav-preferences { left: 80px; width: min(430px, calc(100vw - 96px)); }
 }
 
 @media (max-width: 900px) {
@@ -866,9 +1630,21 @@ onBeforeUnmount(() => {
   .app-breadcrumb-group + .app-breadcrumb-separator { display: none; }
   .app-profile-copy { max-width: 76px; }
   .app-profile-copy small { font-size: 10px; }
+  .app-school-context { max-width: 34px; }
+  .app-school-context-copy,
+  .app-semester-caption,
+  .app-semester-status { display: none; }
   .app-semester-context { max-width: 170px; }
   .app-semester-select,
   .app-semester-label { max-width: 118px; }
+  .app-nav-preferences {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: auto;
+    max-height: none;
+  }
 }
 
 @media (max-width: 420px) {
@@ -879,5 +1655,18 @@ onBeforeUnmount(() => {
   .app-semester-context { max-width: 132px; padding: 0 var(--app-space-1); }
   .app-semester-select,
   .app-semester-label { max-width: 85px; }
+  .app-school-context,
+  .app-help-link { display: none; }
+  .app-sidebar-help {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    flex: 0 0 auto;
+    margin-left: auto;
+    place-items: center;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-md);
+    color: var(--app-text-muted);
+  }
 }
 </style>

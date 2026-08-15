@@ -154,6 +154,23 @@ export async function login(page: Page, user = E2E_USER, pass = E2E_PASS): Promi
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
 }
 
+export async function browserApiRequest(
+  page: Page,
+  method: 'PATCH' | 'PUT',
+  path: string,
+  data: unknown,
+): Promise<number> {
+  return page.evaluate(async ({ requestMethod, requestPath, requestData }) => {
+    const response = await fetch(requestPath, {
+      method: requestMethod,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(requestData),
+    })
+    return response.status
+  }, { requestMethod: method, requestPath: path, requestData: data })
+}
+
 /** 删除指定学年学期(idempotent),避免测试数据残留或冲突。 */
 export async function deleteSemesterByYearTerm(page: Page, year: number, term: number): Promise<void> {
   const resp = await page.request.get('/api/semesters')
