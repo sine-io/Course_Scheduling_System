@@ -106,6 +106,34 @@ def test_navigation_preference_rejects_more_than_five_fixed_entries(env):
     assert response.status_code == 422
 
 
+def test_navigation_preference_requires_authentication(env):
+    client, _ = env
+
+    assert client.get("/api/navigation-preference").status_code == 401
+    assert (
+        client.put(
+            "/api/navigation-preference",
+            json={"fixed": ["workbench"], "recent": []},
+        ).status_code
+        == 401
+    )
+
+
+def test_navigation_preference_does_not_change_roles_or_authorization(env):
+    client, db = env
+    make_user(db, "teacher1", PW, roles=[Role.teacher])
+    client.post("/api/auth/login", json={"username": "teacher1", "password": PW})
+
+    response = client.put(
+        "/api/navigation-preference",
+        json={"fixed": ["workbench", "removed-entry"], "recent": []},
+    )
+
+    assert response.status_code == 200
+    assert client.get("/api/auth/me").json()["roles"] == ["teacher"]
+    assert client.get("/api/_scheduler").status_code == 403
+
+
 def test_logout_clears_session(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])

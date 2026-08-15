@@ -23,7 +23,7 @@ import {
 import { getOnboardingStatus } from '@/api/onboarding'
 import type { OnboardingStatus } from '@/api/onboarding'
 import {
-  accessibleEntries,
+  applicableEntries,
   commonNavigation,
   emptyNavigationPreference,
   getNavigationEntry,
@@ -84,7 +84,7 @@ const commonItems = computed(() => commonNavigation(
   navigationPreference.value,
 ))
 const catalogGroups = computed(() => navigationGroupEntries(userRoles.value))
-const preferenceItems = computed(() => accessibleEntries(userRoles.value))
+const preferenceItems = computed(() => applicableEntries(userRoles.value, firstSuccess.value))
 const nextAction = computed(() => onboarding.value?.next_action ?? null)
 const onboardingSummary = computed(() => {
   if (!onboarding.value) return onboardingError.value
@@ -172,7 +172,8 @@ async function loadOnboardingStatus() {
 }
 
 function openNavigationSettings() {
-  draftFixed.value = [...navigationPreference.value.fixed]
+  const applicable = new Set<string>(preferenceItems.value.map((item) => item.key))
+  draftFixed.value = navigationPreference.value.fixed.filter((key) => applicable.has(key))
   navigationSettingsOpen.value = true
   void nextTick(() => navigationDialogClose.value?.focus())
 }

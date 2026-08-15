@@ -224,8 +224,7 @@ export function isNavigationEntryActive(
   query: Readonly<Record<string, unknown>>,
   firstSuccess: boolean,
 ): boolean {
-  if (item.phase === 'before-first-success' && firstSuccess) return false
-  if (item.phase === 'after-first-success' && !firstSuccess) return false
+  if (!isNavigationEntryApplicable(item, firstSuccess)) return false
 
   const routeObject = typeof item.route === 'object' ? item.route : null
   const configuredName = routeObject && 'name' in routeObject ? String(routeObject.name) : ''
@@ -251,12 +250,30 @@ export function accessibleEntries(
   return NAVIGATION_CATALOG.filter((item) => hasNavigationAccess(roles, item))
 }
 
+export function isNavigationEntryApplicable(
+  item: NavigationEntry,
+  firstSuccess: boolean,
+): boolean {
+  if (item.phase === 'before-first-success') return !firstSuccess
+  if (item.phase === 'after-first-success') return firstSuccess
+  return true
+}
+
+export function applicableEntries(
+  roles: readonly string[] | null | undefined,
+  firstSuccess: boolean,
+): NavigationEntry[] {
+  return accessibleEntries(roles).filter((item) => (
+    isNavigationEntryApplicable(item, firstSuccess)
+  ))
+}
+
 export function commonNavigation(
   roles: readonly string[] | null | undefined,
   firstSuccess: boolean,
   preference: NavigationPreference,
 ): NavigationEntry[] {
-  const allowed = new Set<string>(accessibleEntries(roles).map((item) => item.key))
+  const allowed = new Set<string>(applicableEntries(roles, firstSuccess).map((item) => item.key))
   const defaults = defaultNavigationKeys(roles, firstSuccess)
   const fixed = preference.fixed.filter((key) => allowed.has(key))
   const recent = preference.recent.filter((key) => allowed.has(key))
