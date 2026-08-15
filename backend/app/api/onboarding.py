@@ -6,10 +6,11 @@ from sqlalchemy.orm import Session
 from app.core.auth import require_roles
 from app.core.db import get_db
 from app.core.permissions import core_editor, core_viewer
+from app.models.semester import Semester
 from app.models.user import Role
 from app.schemas.onboarding import OnboardingStatusOut
 from app.schemas.wizard import OnboardingRouteOut, OnboardingRouteRequest
-from app.services import onboarding_route
+from app.services import onboarding_route, semester_context
 from app.services.onboarding import build_status
 
 router = APIRouter(tags=["onboarding"])
@@ -42,7 +43,13 @@ def _choose_route(
     body: OnboardingRouteRequest, db: Session
 ) -> OnboardingRouteOut:
     try:
-        onboarding_route.choose_route(db, body.route)
+        state = onboarding_route.choose_route(db, body.route)
+        # Re-selecting the demo route restores its existing context without
+        # regenerating or overwriting any demo data.
+        if body.route == "demo" and state.semester_id is not None:
+            semester = db.get(Semester, state.semester_id)
+            if semester is not None:
+                semester_context.set_initial_current(db, semester)
     except onboarding_route.OnboardingRouteError as exc:
         raise HTTPException(exc.status_code, exc.message) from exc
     db.commit()
@@ -55,14 +62,4 @@ def choose_onboarding_route(
     db: Session = Depends(get_db),
     _: object = Depends(route_editor),
 ) -> OnboardingRouteOut:
-    return _choose_route(body, db)
-
-
-@router.post("/onboarding/route", response_model=OnboardingRouteOut)
-def choose_onboarding_route_alias(
-    body: OnboardingRouteRequest,
-    db: Session = Depends(get_db),
-    _: object = Depends(route_editor),
-) -> OnboardingRouteOut:
-    """POST 兼容首次入口客户端，语义与 PUT 相同。"""
     return _choose_route(body, db)

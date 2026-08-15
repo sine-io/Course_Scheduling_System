@@ -183,10 +183,23 @@ async function confirmRoute() {
   actionError.value = null
   busy.value = true
   try {
-    routeStatus.value = await chooseOnboardingRoute(selectedRoute.value)
+    const route = selectedRoute.value
+    const chosen = await chooseOnboardingRoute(route)
+    routeStatus.value = chosen
     await wizard.fetch()
     routeChoiceOpen.value = false
-    if (selectedRoute.value === 'demo') await onLoadDemo()
+    if (route === 'demo') {
+      if (chosen.has_demo_semester) {
+        // A re-selection must resume the existing demo context, never POST a
+        // second copy of the fixture data.
+        await semesterContext.load()
+        await refreshOnboarding()
+        message.success('已恢复示例学期，可以继续试用自动排课。', { duration: 8000 })
+        await router.push({ name: 'auto-schedule' })
+      } else {
+        await onLoadDemo()
+      }
+    }
   } catch (error) {
     actionError.value = apiErrorMessage(error, '路线选择失败，请稍后重试。')
   } finally {

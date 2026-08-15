@@ -101,7 +101,7 @@ export const getSchedulingSettings = () =>
 export const saveSchedulingSettings = (body: SchedulingSettings) =>
   apiPut<SchedulingSettings>('/settings/scheduling', body)
 
-// ── 示例数据（管理员，仅限全新系统）──
+// ── 示例数据（首次设置路线选择后可用，仅限全新系统）──
 export interface DemoDataStatus {
   available: boolean
   reason: string

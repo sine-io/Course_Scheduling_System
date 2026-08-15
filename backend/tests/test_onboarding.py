@@ -82,6 +82,7 @@ def test_wizard_completion_does_not_end_first_success(env):
 def test_demo_semester_is_not_formal_first_success_context(env):
     client, db = env
     _login(client, db, username="admin", roles=(Role.admin,))
+    assert client.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
 
     demo = client.post("/api/demo-data")
 
@@ -96,6 +97,7 @@ def test_demo_semester_is_not_formal_first_success_context(env):
 def test_creating_formal_semester_after_demo_switches_current_context(env):
     client, db = env
     _login(client, db, username="admin", roles=(Role.admin,))
+    assert client.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
 
     demo = client.post("/api/demo-data")
     assert demo.status_code == 201, demo.text

@@ -23,6 +23,9 @@ const assignmentMocks = vi.hoisted(() => ({
   saveSchedulingSettings: vi.fn(),
   saveSchoolSettings: vi.fn(),
 }))
+const onboardingMocks = vi.hoisted(() => ({
+  chooseOnboardingRoute: vi.fn(),
+}))
 const notificationMocks = vi.hoisted(() => ({
   getSmtp: vi.fn(),
   saveSmtp: vi.fn(),
@@ -34,6 +37,7 @@ const wizardMocks = vi.hoisted(() => ({
 
 vi.mock('@/api/backups', () => ({ ...backupMocks }))
 vi.mock('@/api/assignments', () => ({ ...assignmentMocks }))
+vi.mock('@/api/onboarding', () => ({ ...onboardingMocks }))
 vi.mock('@/api/notifications', () => ({ ...notificationMocks }))
 vi.mock('@/api/wizard', () => ({ ...wizardMocks }))
 
@@ -108,6 +112,11 @@ describe('System', () => {
     backupMocks.createBackup.mockResolvedValue(backup)
     backupMocks.deleteBackup.mockResolvedValue({ deleted: backup.name })
     wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, semester_id: null, total_steps: 4, has_semesters: false })
+    onboardingMocks.chooseOnboardingRoute.mockResolvedValue({
+      route: 'demo', demo_available: false, demo_school_name: '示例初中',
+      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
+      resume_step: 0, resume_semester_id: null,
+    })
   })
 
   it('非管理员保持原有可见性，只显示设置向导且不读取管理员接口', async () => {
@@ -136,6 +145,25 @@ describe('System', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="system-error"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(true)
+  })
+
+  it('管理员加载示例数据前先持久化示例路线', async () => {
+    assignmentMocks.demoDataStatus.mockResolvedValue({
+      available: true, reason: '', school_name: '示例初中',
+    })
+    assignmentMocks.loadDemoData.mockResolvedValue({
+      semester_id: 12, school_name: '示例初中', classes: 18, teachers: 49,
+      subjects: 16, rooms: 26, assignments: 252, total_periods: 594,
+      max_overtime_used: 0, under_target: 0,
+    })
+    const wrapper = await mountSystem('admin')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="demo-load"]').trigger('click')
+    await flushPromises()
+
+    expect(onboardingMocks.chooseOnboardingRoute).toHaveBeenCalledWith('demo')
+    expect(assignmentMocks.loadDemoData).toHaveBeenCalledTimes(1)
   })
 
   it('重启向导进行中时重复确认只发送一次请求', async () => {

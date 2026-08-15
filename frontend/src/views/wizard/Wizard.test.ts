@@ -234,6 +234,33 @@ describe('Wizard', () => {
     expect(router.currentRoute.value.name).toBe('auto-schedule')
   })
 
+  it('重选已有示例路线时恢复上下文且不重复生成数据', async () => {
+    const demoState: WizardState = {
+      ...baseState, route: 'demo', current_step: 4, completed: true, semester_id: 9,
+    }
+    mocks.getWizardState.mockResolvedValue(demoState)
+    mocks.getOnboardingRoute.mockResolvedValue({
+      route: 'demo', demo_available: false, demo_school_name: '示例初中',
+      has_demo_semester: true, has_formal_semester: false, can_reselect: true,
+      resume_step: 4, resume_semester_id: 9,
+    })
+    mocks.chooseOnboardingRoute.mockResolvedValue({
+      route: 'demo', demo_available: false, demo_school_name: '示例初中',
+      has_demo_semester: true, has_formal_semester: false, can_reselect: true,
+      resume_step: 4, resume_semester_id: 9,
+    })
+    const { router, wrapper } = await mountWizard(demoState)
+
+    await wrapper.get('[data-testid="route-reselect"]').trigger('click')
+    await wrapper.get('[data-testid="route-demo"]').trigger('click')
+    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('demo')
+    expect(mocks.loadDemoData).not.toHaveBeenCalled()
+    expect(router.currentRoute.value.name).toBe('auto-schedule')
+  })
+
   it('读取中显示明确状态', async () => {
     let resolveTemplates!: (value: typeof template[]) => void
     mocks.listTemplates.mockReturnValue(new Promise((resolve) => { resolveTemplates = resolve }))

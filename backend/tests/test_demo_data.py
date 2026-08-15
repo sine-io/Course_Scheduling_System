@@ -22,6 +22,8 @@ def admin_client(env):
     client, db = env
     make_user(db, "adm", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "adm", "password": PW})
+    selected = client.put("/api/onboarding/route", json={"route": "demo"})
+    assert selected.status_code == 200, selected.text
     return client, db
 
 

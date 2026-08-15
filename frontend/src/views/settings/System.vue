@@ -18,6 +18,7 @@ import {
   demoDataStatus, getSchedulingSettings, getSchoolSettings, loadDemoData,
   saveSchedulingSettings, saveSchoolSettings,
 } from '@/api/assignments'
+import { chooseOnboardingRoute } from '@/api/onboarding'
 import { getSmtp, saveSmtp } from '@/api/notifications'
 import { resetWizard } from '@/api/wizard'
 import { useAuthStore } from '@/stores/auth'
@@ -275,6 +276,7 @@ async function onLoadDemo() {
   if (loadingDemo.value) return
   loadingDemo.value = true
   try {
+    await chooseOnboardingRoute('demo')
     const result = await loadDemoData()
     schoolName.value = result.school_name
     demoAvailable.value = false

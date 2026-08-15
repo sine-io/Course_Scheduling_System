@@ -1,9 +1,10 @@
-"""示例数据：一键创建一所完整的虚构初中，仅限管理员。
+"""示例数据：一键创建一所完整的虚构初中。
 
 全新系统没有业务数据，用户通常需要先创建大量班级、教师和教学任务才能体验
 自动排课。本接口用于生成一组可直接排课的演示数据。
 
-安全限制：仅在系统完全没有任何学期时允许执行，避免污染已开始配置的正式环境。
+首次设置向导中，排课管理员或系统管理员必须先选择示例路线；系统管理页仍仅限系统
+管理员。只在系统完全没有任何学期时允许执行，避免污染已开始配置的正式环境。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,7 +15,7 @@ from app.core.db import get_db
 from app.core.permissions import core_editor, core_viewer
 from app.models.audit import AuditLog
 from app.models.semester import Semester
-from app.models.user import Role, User
+from app.models.user import User
 from app.models.wizard import WizardRoute
 from app.services import demo_data, semester_context
 from app.services.onboarding_route import effective_route
@@ -64,7 +65,7 @@ def create_demo_data(db: Session = Depends(get_db), user: User = Depends(route_e
         raise HTTPException(
             status.HTTP_409_CONFLICT, "已选择正式建校路线，示例数据不会写入正式环境"
         )
-    if Role.admin.value not in user.role_names and route != WizardRoute.demo.value:
+    if route != WizardRoute.demo.value:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "请先选择示例体验路线")
     if demo_data.any_semester_exists(db):
         raise HTTPException(

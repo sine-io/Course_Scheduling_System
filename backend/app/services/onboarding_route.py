@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.semester import Semester
-from app.models.wizard import SINGLETON_ID, WizardRoute, WizardState
+from app.models.wizard import SINGLETON_ID, TOTAL_STEPS, WizardRoute, WizardState
 from app.services import demo_data
 
 
@@ -58,6 +58,7 @@ def choose_route(db: Session, route: str) -> WizardState:
 
     state = get_or_create_state(db)
     semesters = _semesters(db)
+    demo_semester = next((semester for semester in semesters if semester.is_demo), None)
     has_formal = any(not semester.is_demo for semester in semesters)
     current = effective_route(db, state)
 
@@ -77,6 +78,12 @@ def choose_route(db: Session, route: str) -> WizardState:
     elif state.route is None:
         # 迁移前的数据库推导出路线后，把选择显式固化，保证刷新/重登一致。
         state.route = route
+
+    if route == WizardRoute.demo.value and demo_semester is not None:
+        # 重选已有示例路线时恢复原演示上下文，不重复生成或覆盖数据。
+        state.semester_id = demo_semester.id
+        state.current_step = TOTAL_STEPS - 1
+        state.completed = True
 
     # 没有正式数据时可以在两条空白路线之间重选；正式学期存在后锁定路线。
     if route == WizardRoute.formal.value and has_formal and state.route != route:
@@ -100,12 +107,10 @@ def route_snapshot(db: Session, state: WizardState | None = None) -> dict[str, o
         "has_demo_semester": has_demo,
         "has_formal_semester": has_formal,
         "can_reselect": not has_formal,
-        "resume_step": (
-            state.current_step if state is not None and route == WizardRoute.formal.value else 0
-        ),
+        "resume_step": state.current_step if state is not None and route is not None else 0,
         "resume_semester_id": (
             state.semester_id
-            if state is not None and route == WizardRoute.formal.value
+            if state is not None and route is not None
             else None
         ),
     }

@@ -1,4 +1,4 @@
-import { apiGet, apiPut, apiPost } from '@/api/client'
+import { apiGet, apiPut } from '@/api/client'
 import type { WizardRoute } from '@/api/wizard'
 
 export type { WizardRoute }
@@ -48,6 +48,3 @@ export const getOnboardingStatus = () => apiGet<OnboardingStatus>('/onboarding/s
 export const getOnboardingRoute = () => apiGet<OnboardingRouteStatus>('/onboarding/route')
 export const chooseOnboardingRoute = (route: WizardRoute) =>
   apiPut<OnboardingRouteStatus>('/onboarding/route', { route })
-// POST keeps the entry point usable for clients that submit a first-use form.
-export const chooseOnboardingRoutePost = (route: WizardRoute) =>
-  apiPost<OnboardingRouteStatus>('/onboarding/route', { route })
