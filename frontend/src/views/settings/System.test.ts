@@ -162,6 +162,37 @@ describe('System', () => {
     expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(true)
   })
 
+  it('审计表以简体中文展示和搜索内部代码', async () => {
+    auditMocks.listAuditLogs.mockResolvedValue([{
+      id: 1,
+      operation_id: 'operation-1',
+      username: 'scheduler',
+      actor_roles: ['scheduler'],
+      action: 'delete_subject',
+      target_type: 'subject',
+      target_id: 23,
+      semester_id: 8,
+      target_version: '',
+      result: 'rejected',
+      reason: '权限不足',
+      detail: '',
+      created_at: '2042-08-01T00:00:00Z',
+    }])
+
+    const wrapper = await mountSystem('admin')
+    await flushPromises()
+
+    const row = wrapper.get('[data-testid="audit-row"]')
+    expect(row.text()).toContain('排课管理员')
+    expect(row.text()).toContain('删除科目')
+    expect(row.text()).toContain('科目 #23')
+    expect(row.text()).toContain('已拒绝')
+    expect(row.text()).not.toContain('delete_subject')
+
+    await wrapper.get('[data-testid="audit-search"] input').setValue('删除科目')
+    expect(wrapper.find('[data-testid="audit-row"]').exists()).toBe(true)
+  })
+
   it('管理员加载示例数据前先持久化示例路线', async () => {
     assignmentMocks.demoDataStatus.mockResolvedValue({
       available: true, reason: '', school_name: '示例初中',

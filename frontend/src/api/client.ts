@@ -5,14 +5,36 @@ export interface ApiError extends Error {
   detail?: unknown
 }
 
+function apiDetailMessage(detail: unknown): string {
+  if (typeof detail === 'string' && detail) return detail
+  if (detail && typeof detail === 'object' && 'message' in detail) {
+    const message = (detail as { message?: unknown }).message
+    if (typeof message === 'string' && message) return message
+  }
+  return ''
+}
+
 export function apiErrorMessage(error: unknown, fallback: string): string {
   const value = error as Partial<ApiError> & { message?: unknown; detail?: unknown } | null
-  if (typeof value?.detail === 'string' && value.detail) return value.detail
-  if (value?.detail && typeof value.detail === 'object' && 'message' in value.detail) {
-    const detailMessage = (value.detail as { message?: unknown }).message
-    if (typeof detailMessage === 'string' && detailMessage) return detailMessage
-  }
+  const detailMessage = apiDetailMessage(value?.detail)
+  if (detailMessage) return detailMessage
   return typeof value?.message === 'string' && value.message ? value.message : fallback
+}
+
+export async function apiErrorFromResponse(
+  response: Response,
+  fallback: string,
+): Promise<ApiError> {
+  let detail: unknown
+  try {
+    detail = (await response.json())?.detail
+  } catch {
+    detail = undefined
+  }
+  const error = new Error(apiDetailMessage(detail) || fallback) as ApiError
+  error.status = response.status
+  error.detail = detail
+  return error
 }
 
 // 全域 401 处理器(由 main.ts 注册):session 过期/被撤销时清除登录状态并导回登录页。
@@ -30,24 +52,10 @@ export async function request<T>(method: string, path: string, body?: unknown): 
     body: body !== undefined ? JSON.stringify(body) : undefined,
   })
   if (!resp.ok) {
-    let detail: unknown
-    try {
-      detail = (await resp.json())?.detail
-    } catch {
-      detail = undefined
-    }
     if (resp.status === 401 && !path.startsWith('/auth/')) {
       unauthorizedHandler?.()
     }
-    const detailMessage = typeof detail === 'string'
-      ? detail
-      : detail && typeof detail === 'object' && 'message' in detail
-        ? String((detail as { message?: unknown }).message ?? '')
-        : ''
-    const err = new Error(detailMessage || `API 错误 ${resp.status}`) as ApiError
-    err.status = resp.status
-    err.detail = detail
-    throw err
+    throw await apiErrorFromResponse(resp, `API 错误 ${resp.status}`)
   }
   if (resp.status === 204) return undefined as T
   return resp.json() as Promise<T>

@@ -52,10 +52,13 @@ const filteredAuditLogs = computed(() => {
   if (!query) return auditLogs.value
   return auditLogs.value.filter((log) => [
     log.username,
-    ...log.actor_roles,
+    ...log.actor_roles.map((role) => auth.roleLabel(role)),
     log.action,
+    auditActionLabel(log.action),
+    auditTargetLabel(log.target_type),
     log.target_version,
     log.result,
+    auditResultLabel(log.result),
     log.reason,
     log.detail,
   ].some((value) => value.toLowerCase().includes(query)))
@@ -125,8 +128,67 @@ function humanSize(size: number): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
+const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
+  assign_substitution: '安排调课与代课',
+  auto_schedule: '自动排课',
+  bind_teacher_account: '绑定教师账号',
+  bulk_create_accounts: '批量创建教师账号',
+  cancel_leave: '撤销请假',
+  confirm_semester_readiness: '确认排课准备',
+  create_account: '创建账号',
+  create_backup: '创建备份',
+  create_calendar_exception: '新增特殊日期',
+  create_demo_data: '创建示例数据',
+  create_leave: '登记请假',
+  delete_assignment: '删除教学任务',
+  delete_backup: '删除备份',
+  delete_calendar_exception: '删除特殊日期',
+  delete_class_unit: '删除班级',
+  delete_period_table: '删除作息时间表',
+  delete_room: '删除教室/场地',
+  delete_scheduling_unit: '删除排课单元',
+  delete_semester: '删除学期',
+  delete_subject: '删除科目',
+  delete_teacher: '删除教师',
+  delete_timetable: '删除课表版本',
+  publish_timetable: '发布课表',
+  restore_backup: '恢复备份',
+  revoke_semester_readiness: '撤回排课准备确认',
+  update_account: '更新账号',
+  update_calendar_exception: '修改特殊日期',
+  update_school_name: '更新学校名称',
+  update_scheduling_settings: '更新排课设置',
+  update_smtp: '更新邮件设置',
+}
+
+const AUDIT_TARGET_LABELS: Readonly<Record<string, string>> = {
+  account: '账号',
+  affected_period: '受影响节次',
+  app_setting: '系统设置',
+  assignment: '教学任务',
+  backup: '备份',
+  class_unit: '班级',
+  leave_request: '请假记录',
+  period_table: '作息时间表',
+  room: '教室/场地',
+  scheduling_unit: '排课单元',
+  semester: '学期',
+  semester_calendar_exception: '特殊日期',
+  subject: '科目',
+  teacher: '教师',
+  timetable: '课表版本',
+}
+
+function auditActionLabel(action: string): string {
+  return AUDIT_ACTION_LABELS[action] ?? '其他操作'
+}
+
+function auditTargetLabel(targetType: string): string {
+  return AUDIT_TARGET_LABELS[targetType] ?? '其他对象'
+}
+
 function auditResultLabel(result: string): string {
-  return { success: '成功', rejected: '已拒绝', failed: '失败', pending: '处理中' }[result] ?? result
+  return { success: '成功', rejected: '已拒绝', failed: '失败', pending: '处理中' }[result] ?? '其他结果'
 }
 
 function auditResultType(result: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
@@ -839,8 +901,8 @@ async function onResetWizard() {
                   <div class="settings-field-hint">{{ log.actor_roles.map((role) => auth.roleLabel(role)).join('、') }}</div>
                 </td>
                 <td>
-                  <strong>{{ log.action }}</strong>
-                  <div class="settings-field-hint">{{ log.target_version || `${log.target_type} #${log.target_id ?? '—'}` }}</div>
+                  <strong>{{ auditActionLabel(log.action) }}</strong>
+                  <div class="settings-field-hint">{{ log.target_version || `${auditTargetLabel(log.target_type)} #${log.target_id ?? '—'}` }}</div>
                 </td>
                 <td><n-tag :type="auditResultType(log.result)" size="small">{{ auditResultLabel(log.result) }}</n-tag></td>
                 <td>{{ log.detail || log.reason || '—' }}</td>

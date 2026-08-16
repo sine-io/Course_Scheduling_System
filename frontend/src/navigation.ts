@@ -187,8 +187,8 @@ export function navigationPerspective(
   roles: readonly string[] | null | undefined,
 ): 'admin' | 'scheduler' | 'director' | 'teacher' | null {
   if (!roles?.length) return null
-  if (roles.includes('admin')) return 'admin'
   if (roles.includes('scheduler')) return 'scheduler'
+  if (roles.includes('admin')) return 'admin'
   if (roles.includes('director')) return 'director'
   if (roles.includes('teacher')) return 'teacher'
   return null

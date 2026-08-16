@@ -1,6 +1,7 @@
 // Excel 导入 API:模板下载、上传导入。
 
 import type { HighRiskConfirmation } from '@/api/highRisk'
+import { apiErrorFromResponse } from '@/api/client'
 
 export type ImportEntity = 'subjects' | 'teachers' | 'classes' | 'assignments'
 
@@ -49,13 +50,7 @@ export async function uploadImport(
   if (createAccounts) url += '&create_accounts=true'
   const resp = await fetch(url, { method: 'POST', credentials: 'include', body: form })
   if (!resp.ok) {
-    let detail = '导入失败'
-    try {
-      detail = (await resp.json())?.detail ?? detail
-    } catch {
-      /* 无需处理解析失败，调用方会显示原始错误。 */
-    }
-    throw new Error(detail)
+    throw await apiErrorFromResponse(resp, '导入失败')
   }
   return resp.json() as Promise<ImportResult>
 }

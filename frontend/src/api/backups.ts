@@ -1,6 +1,6 @@
 // 数据库备份与恢复(M5-2,管理员专用)。
 
-import { apiDelete, apiGet, apiPost } from '@/api/client'
+import { apiDelete, apiErrorFromResponse, apiGet, apiPost } from '@/api/client'
 import type { HighRiskConfirmation } from '@/api/highRisk'
 
 export interface Backup {
@@ -41,9 +41,7 @@ export async function restoreUpload(
   const resp = await fetch('/api/backups/restore-upload',
     { method: 'POST', credentials: 'include', body: fd })
   if (!resp.ok) {
-    let detail: string | undefined
-    try { detail = (await resp.json())?.detail } catch { detail = undefined }
-    throw new Error(detail || `恢复失败(${resp.status})`)
+    throw await apiErrorFromResponse(resp, `恢复失败(${resp.status})`)
   }
   return resp.json()
 }

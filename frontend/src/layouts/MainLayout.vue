@@ -37,7 +37,7 @@ import {
   type NavigationEntry,
   type NavigationPreference,
 } from '@/navigation'
-import { canOperateDaily } from '@/permissions'
+import { canEditCore } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
@@ -66,7 +66,7 @@ const semesterOptions = computed(() => semesterContext.semesters.map((semester) 
   label: semester.is_demo ? `${semester.label}（示例）` : semester.label,
   value: semester.id,
 })))
-const canManage = computed(() => canOperateDaily(userRoles.value))
+const canManageOnboarding = computed(() => canEditCore(userRoles.value))
 const onboarding = ref<OnboardingStatus | null>(null)
 const onboardingLoading = ref(false)
 const onboardingError = ref('')
@@ -79,7 +79,7 @@ const navigationDialogClose = ref<HTMLButtonElement | null>(null)
 
 const firstSuccess = computed(() => onboarding.value?.first_success ?? false)
 const navigationFirstSuccess = computed<boolean | null>(() => (
-  canManage.value ? onboarding.value?.first_success ?? null : false
+  canManageOnboarding.value ? onboarding.value?.first_success ?? null : false
 ))
 const commonItems = computed(() => commonNavigation(
   userRoles.value,
@@ -165,7 +165,7 @@ async function loadNavigationState() {
 }
 
 async function loadOnboardingStatus() {
-  if (!canManage.value || onboardingLoading.value) return
+  if (!canManageOnboarding.value || onboardingLoading.value) return
   onboardingLoading.value = true
   try {
     onboarding.value = await getOnboardingStatus()
@@ -361,10 +361,10 @@ async function onSemesterChange(event: Event) {
 
 watch(() => route.fullPath, () => {
   closeDrawer(false)
-  if (canManage.value) void loadOnboardingStatus()
+  if (canManageOnboarding.value) void loadOnboardingStatus()
 })
 watch(() => semesterContext.revision, () => {
-  if (canManage.value) void loadOnboardingStatus()
+  if (canManageOnboarding.value) void loadOnboardingStatus()
 })
 watch(() => auth.user?.id, () => {
   void loadNavigationState()
@@ -494,7 +494,7 @@ onBeforeUnmount(() => {
         </section>
 
         <section
-          v-if="canManage && (onboarding || onboardingError)"
+          v-if="canManageOnboarding && (onboarding || onboardingError)"
           class="app-onboarding-context"
           data-testid="shell-onboarding"
           role="status"

@@ -14,9 +14,12 @@ import { getOnboardingStatus } from '@/api/onboarding'
 import type { OnboardingStatus } from '@/api/onboarding'
 import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
+import { canEditCore } from '@/permissions'
+import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import OnboardingChecklist from '@/components/OnboardingChecklist.vue'
 
+const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 const semester = ref<SemesterListItem | null>(null)
 const summary = ref<SemesterSummary | null>(null)
@@ -28,6 +31,7 @@ const summaryError = ref<string | null>(null)
 const summaryLoading = ref(false)
 const boardError = ref<string | null>(null)
 const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+const canManageOnboarding = computed(() => canEditCore(auth.user?.roles))
 
 const boardDateLabel = computed(() => (
   board.value ? `${board.value.date}（${weekdays[board.value.weekday % 7]}）` : ''
@@ -61,9 +65,11 @@ async function loadDashboard() {
   try {
     await semesterContext.load()
     semester.value = semesterContext.currentSemester
-    const onboardingResult = await getOnboardingStatus().catch(() => null)
-    if (onboardingResult && Array.isArray(onboardingResult.stages)) {
-      onboarding.value = onboardingResult
+    if (canManageOnboarding.value) {
+      const onboardingResult = await getOnboardingStatus().catch(() => null)
+      if (onboardingResult && Array.isArray(onboardingResult.stages)) {
+        onboarding.value = onboardingResult
+      }
     }
     if (!semester.value) return
     const [summaryResult, boardResult] = await Promise.allSettled([
@@ -193,7 +199,7 @@ onMounted(loadDashboard)
 
       <section v-else class="dashboard-panel dashboard-empty-panel">
         <n-empty :description="'尚未创建任何学期数据'">
-          <template #extra>
+          <template v-if="canManageOnboarding" #extra>
             <RouterLink class="dashboard-primary-link" :to="{ name: 'wizard' }">
               {{ '前往设置向导' }}
             </RouterLink>

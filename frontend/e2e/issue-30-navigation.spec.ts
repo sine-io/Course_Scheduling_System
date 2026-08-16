@@ -141,6 +141,10 @@ test.describe('Issue #30 阶段化角色导航', () => {
       await page.goto('/')
 
       await expectCommonNavigation(page, roleCase.before)
+      if (roleCase.username === 'e2e_director') {
+        await expect(page.getByTestId('shell-onboarding')).toHaveCount(0)
+        await expect(page.getByTestId('onboarding-status')).toHaveCount(0)
+      }
 
       if (roleCase.after) {
         firstSuccess = true

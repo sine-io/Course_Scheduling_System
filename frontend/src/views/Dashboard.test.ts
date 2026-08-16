@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import type { OnboardingStatus } from '@/api/onboarding'
+import { useAuthStore } from '@/stores/auth'
 import Dashboard from './Dashboard.vue'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -37,6 +38,20 @@ function makeRouter() {
   })
 }
 
+function makePinia(roles: string[] = ['scheduler']) {
+  const pinia = createPinia()
+  const auth = useAuthStore(pinia)
+  auth.user = {
+    id: 1,
+    username: roles.join('-'),
+    display_name: '测试用户',
+    roles,
+    must_change_password: false,
+  }
+  auth.loaded = true
+  return pinia
+}
+
 describe('Dashboard', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse([]))))
@@ -47,7 +62,7 @@ describe('Dashboard', () => {
     vi.stubGlobal('fetch', vi.fn(() => request.promise))
 
     const wrapper = mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await nextTick()
 
@@ -59,12 +74,37 @@ describe('Dashboard', () => {
 
   it('无学期时显示空状态与前往向导', async () => {
     const wrapper = mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('仪表盘')
     expect(wrapper.text()).toContain('尚未创建任何学期数据')
     expect(wrapper.get('a[href="/wizard"]').text()).toContain('前往设置向导')
+  })
+
+  it('教务主任首页不显示首次成功配置引导', async () => {
+    const onboarding: OnboardingStatus = {
+      first_success: false,
+      wizard_completed: false,
+      current_semester: null,
+      stages: [],
+      p0_todos: [],
+      next_action: null,
+    }
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url).includes('/onboarding/status')) {
+        return Promise.resolve(jsonResponse(onboarding)) as never
+      }
+      return Promise.resolve(jsonResponse([])) as never
+    })
+
+    const wrapper = mount(Dashboard, {
+      global: { plugins: [makePinia(['director']), makeRouter()] },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="onboarding-status"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/wizard"]').exists()).toBe(false)
   })
 
   it('显示当前学期的真实摘要、今日变动和可用快捷入口', async () => {
@@ -113,7 +153,7 @@ describe('Dashboard', () => {
     })
 
     const wrapper = mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
 
@@ -176,7 +216,7 @@ describe('Dashboard', () => {
     })
 
     const wrapper = mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
 
@@ -203,7 +243,7 @@ describe('Dashboard', () => {
     })
 
     mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
 
@@ -236,7 +276,7 @@ describe('Dashboard', () => {
     })
 
     const wrapper = mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
 
@@ -267,7 +307,7 @@ describe('Dashboard', () => {
     })
 
     const wrapper = mount(Dashboard, {
-      global: { plugins: [createPinia(), makeRouter()] },
+      global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
 

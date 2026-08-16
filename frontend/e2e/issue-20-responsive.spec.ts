@@ -87,6 +87,19 @@ async function mockSession(page: Page, currentSemester: () => typeof SEMESTER | 
     stages: [],
     next_action: null,
   }))
+  await page.route('**/api/semesters/44/summary', (route) => fulfillJson(route, {
+    subjects: 8,
+    teachers: 12,
+    classes: 6,
+    rooms: 7,
+  }))
+  await page.route('**/api/daily-board**', (route) => fulfillJson(route, {
+    date: '2042-09-01',
+    weekday: 1,
+    school_name: '设置工作面验收学校',
+    semester_label: SEMESTER.label,
+    entries: [],
+  }))
   await page.route('**/api/semester-context', (route) => {
     const semester = currentSemester()
     return fulfillJson(route, {

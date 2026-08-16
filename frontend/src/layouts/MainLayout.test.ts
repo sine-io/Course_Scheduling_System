@@ -39,6 +39,14 @@ const teacher = {
   must_change_password: false,
 }
 
+const adminScheduler = {
+  id: 5,
+  username: 'admin-scheduler',
+  display_name: '兼任管理员',
+  roles: ['admin', 'scheduler'],
+  must_change_password: false,
+}
+
 const mounted: VueWrapper[] = []
 
 afterEach(() => {
@@ -131,6 +139,12 @@ describe('MainLayout', () => {
     const directorNav = directorLayout.wrapper.get('[data-testid="shell-nav"]').text()
     expect(directorNav).toContain('版本与发布')
     expect(directorNav).not.toContain('系统管理')
+    expect(directorLayout.wrapper.find('[data-testid="shell-onboarding"]').exists()).toBe(false)
+
+    const combinedLayout = await mountLayout(adminScheduler)
+    const combinedCommon = combinedLayout.wrapper.get('.app-nav-common').text()
+    expect(combinedCommon).toContain('教学任务')
+    expect(combinedCommon).not.toContain('系统管理')
 
     const teacherLayout = await mountLayout(teacher)
     const teacherNav = teacherLayout.wrapper.get('[data-testid="shell-nav"]').text()
