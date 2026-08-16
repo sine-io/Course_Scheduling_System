@@ -29,19 +29,6 @@ router = APIRouter(tags=["backups"])
 admin_only = require_roles(Role.admin)
 
 
-def _finish_rejected(
-    db: Session,
-    attempt_id: int,
-    *,
-    reason: str,
-    detail: str,
-    status_code: int,
-) -> None:
-    db.rollback()
-    high_risk.finish(db, attempt_id, result="rejected", reason=reason, detail=detail)
-    raise HTTPException(status_code, detail)
-
-
 def _out(info: backup_service.BackupInfo) -> BackupOut:
     return BackupOut.of(info.name, info.size_bytes, info.created_at, info.reason)
 
@@ -131,7 +118,7 @@ def delete_backup(
     try:
         info = _get_backup(name)
     except HTTPException as exc:
-        _finish_rejected(
+        high_risk_http.reject_detail(
             db,
             attempt.id,
             reason="backup_not_found",
@@ -171,7 +158,7 @@ def _restore(
     # 排课进行中不可恢复:pg_restore --clean 覆盖整个数据库,而排课中的 worker 正要把
     # 结果写回同一个库;写回的草稿会落进一个刚被抹掉的世界(Fable 5 M5 复审 A)。
     if job_queue.solver_busy():
-        _finish_rejected(
+        high_risk_http.reject_detail(
             db,
             attempt.id,
             reason="solver_busy",
@@ -254,7 +241,7 @@ def restore_backup(
     try:
         _get_backup(name)
     except HTTPException as exc:
-        _finish_rejected(
+        high_risk_http.reject_detail(
             db,
             attempt.id,
             reason="backup_not_found",

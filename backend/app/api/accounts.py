@@ -1,8 +1,6 @@
 """系统管理员账号与固定角色管理。"""
 
-from typing import NoReturn
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -19,25 +17,6 @@ from app.services.users import create_user
 router = APIRouter(tags=["accounts"])
 
 admin_only = require_roles(Role.admin)
-
-
-def _reject(
-    db: Session,
-    attempt_id: int,
-    *,
-    code: str,
-    message: str,
-    status_code: int = status.HTTP_409_CONFLICT,
-) -> NoReturn:
-    db.rollback()
-    high_risk.finish(
-        db,
-        attempt_id,
-        result="rejected",
-        reason=code,
-        detail=message,
-    )
-    raise HTTPException(status_code, {"code": code, "message": message})
 
 
 def _role_values(roles: list[Role]) -> list[str]:
@@ -73,7 +52,7 @@ def create_account(
         impact=f"创建账号 {body.username} 并授予角色：{'、'.join(roles)}",
     )
     if db.scalar(select(User.id).where(User.username == body.username)) is not None:
-        _reject(
+        high_risk_http.reject_code(
             db,
             attempt.id,
             code="account_username_exists",
@@ -100,7 +79,7 @@ def create_account(
             detail=f"已创建账号 {body.username}；角色：{'、'.join(roles)}",
         )
     except IntegrityError:
-        _reject(
+        high_risk_http.reject_code(
             db,
             attempt.id,
             code="account_username_exists",
@@ -142,7 +121,7 @@ def update_account(
     )
     account = db.get(User, account_id)
     if account is None:
-        _reject(
+        high_risk_http.reject_code(
             db,
             attempt.id,
             code="account_not_found",
@@ -160,7 +139,7 @@ def update_account(
     )
     deactivates = body.is_active is False and account.is_active
     if account.id == actor.id and (removes_admin or deactivates):
-        _reject(
+        high_risk_http.reject_code(
             db,
             attempt.id,
             code="current_admin_protected",
@@ -168,7 +147,7 @@ def update_account(
         )
     if (removes_admin or deactivates) and Role.admin.value in account.role_names:
         if _active_admin_count(db) <= 1:
-            _reject(
+            high_risk_http.reject_code(
                 db,
                 attempt.id,
                 code="last_admin_protected",
@@ -188,7 +167,7 @@ def update_account(
         account.is_active = body.is_active
     if body.temporary_password is not None:
         if account.auth_provider != "local":
-            _reject(
+            high_risk_http.reject_code(
                 db,
                 attempt.id,
                 code="external_account_password",

@@ -6,6 +6,7 @@
 - 系统管理员账号 e2e_admin / e2eadmin1234(系统管理页的备份/SMTP 卡片只有 admin 看得到)
 - 兼任账号 e2e_scheduler_teacher / e2ecombined1234(验证管理视角与本人入口并存)
 - **首次登录账号** e2e_newuser / e2enewuser1234(`must_change_password=True`)
+- 清理 Issue #33 浏览器测试创建的归档学期夹具
 - 将设置向导标记为已完成(否则路由守卫会把排课管理员导回 /wizard,
   wizard.spec 会自行 reset 再走完整流程,不受影响)
 
@@ -18,6 +19,8 @@ from sqlalchemy import select
 
 from app.core.db import SessionLocal
 from app.core.security import hash_password
+from app.models.basedata import Subject
+from app.models.semester import Semester
 from app.models.user import Role, User
 from app.models.wizard import SINGLETON_ID, WizardState
 from app.services.users import create_user
@@ -36,6 +39,28 @@ _ACCOUNTS: list[tuple[str, str, tuple[Role, ...], str]] = [
 ]
 
 NEW_USER = ("e2e_newuser", "e2enewuser1234", Role.scheduler, "E2E 首次登录用户")
+ISSUE_33_ARCHIVED_YEAR = 2068
+ISSUE_33_ARCHIVED_SUBJECT = "归档学期保留科目"
+
+
+def _cleanup_issue_33_archived_fixture(db) -> None:
+    """只删除带专用标记科目的 E2E 归档夹具，避免触碰同年份真实数据。"""
+    semesters = db.scalars(
+        select(Semester).where(Semester.academic_year == ISSUE_33_ARCHIVED_YEAR)
+    ).all()
+    removed = 0
+    for semester in semesters:
+        marker = db.scalar(
+            select(Subject.id).where(
+                Subject.semester_id == semester.id,
+                Subject.name == ISSUE_33_ARCHIVED_SUBJECT,
+            )
+        )
+        if marker is not None:
+            db.delete(semester)
+            removed += 1
+    if removed:
+        print(f"已清理 Issue #33 归档学期夹具:{removed}")
 
 
 def _reset_first_login_account(db) -> None:
@@ -56,6 +81,7 @@ def _reset_first_login_account(db) -> None:
 
 def seed() -> None:
     with SessionLocal() as db:
+        _cleanup_issue_33_archived_fixture(db)
         for username, password, roles, display in _ACCOUNTS:
             if db.scalar(select(User).where(User.username == username)):
                 print(f"账号已存在,跳过:{username}")

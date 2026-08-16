@@ -49,7 +49,13 @@ def begin_spec(
         raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
 
 
-def reject(db: Session, attempt_id: int, exc: HTTPException) -> NoReturn:
+def reject(
+    db: Session,
+    attempt_id: int,
+    exc: HTTPException,
+    *,
+    audit_reason: str | None = None,
+) -> NoReturn:
     # 业务校验可能发生在目标名称/学期补齐之后。回滚业务写入时保留这些审计快照，
     # 否则只读或引用规则拒绝会退回成难以查询的纯 ID。
     audit = db.get(AuditLog, attempt_id)
@@ -71,10 +77,43 @@ def reject(db: Session, attempt_id: int, exc: HTTPException) -> NoReturn:
         db,
         attempt_id,
         result="rejected",
-        reason=reason,
+        reason=audit_reason or reason,
         detail=message,
     )
     raise exc
+
+
+def reject_code(
+    db: Session,
+    attempt_id: int,
+    *,
+    code: str,
+    message: str,
+    status_code: int = 409,
+) -> NoReturn:
+    """以结构化业务错误拒绝命令，并统一完成审计回滚。"""
+    reject(
+        db,
+        attempt_id,
+        HTTPException(status_code, {"code": code, "message": message}),
+    )
+
+
+def reject_detail(
+    db: Session,
+    attempt_id: int,
+    *,
+    reason: str,
+    detail: str,
+    status_code: int,
+) -> NoReturn:
+    """保留纯文本 HTTP 响应，同时用稳定原因码完成拒绝审计。"""
+    reject(
+        db,
+        attempt_id,
+        HTTPException(status_code, detail),
+        audit_reason=reason,
+    )
 
 
 def complete_delete(

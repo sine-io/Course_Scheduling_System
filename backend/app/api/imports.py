@@ -13,6 +13,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
 from app.core.auth import get_active_user
 from app.core.db import get_db
 from app.core.permissions import can_edit_core, core_viewer
@@ -91,21 +92,17 @@ async def upload_import(
             expected_target=f"semester:{semester_id}:teacher-accounts",
             impact=f"导入教师并为学期 #{semester_id} 批量创建登录账号",
         )
-        try:
-            attempt = high_risk.begin(db, user, spec, confirmation)
-        except high_risk.HighRiskError as exc:
-            raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
+        attempt = high_risk_http.begin_spec(db, user, confirmation, spec)
     try:
         semester_context.require_writable(db, semester_id)
     except semester_context.SemesterContextError as exc:
         if attempt is not None:
-            db.rollback()
-            high_risk.finish(
+            high_risk_http.reject_code(
                 db,
                 attempt.id,
-                result="rejected",
-                reason=exc.code,
-                detail=exc.message,
+                code=exc.code,
+                message=exc.message,
+                status_code=exc.status_code,
             )
         raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
     content = await file.read()

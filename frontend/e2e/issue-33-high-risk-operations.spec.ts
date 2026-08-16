@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import {
   createTestSemester,
   deleteSemesterByYearTerm,
@@ -9,6 +9,40 @@ import {
 } from './helpers'
 
 const YEAR = 2066
+const ARCHIVED_YEAR = YEAR + 2
+const ARCHIVED_SUBJECT = '归档学期保留科目'
+
+async function ensureArchivedSubject(page: Page): Promise<{ semesterId: number; subjectId: number }> {
+  const semesters = await (await page.request.get('/api/semesters')).json() as Array<{
+    id: number
+    academic_year: number
+    term: number
+    status: string
+  }>
+  const existing = semesters.find((item) => (
+    item.academic_year === ARCHIVED_YEAR && item.term === 1 && item.status === 'archived'
+  ))
+  if (existing) {
+    const subjects = await (await page.request.get(
+      `/api/subjects?semester_id=${existing.id}`,
+    )).json() as Array<{ id: number; name: string }>
+    const subject = subjects.find((item) => item.name === ARCHIVED_SUBJECT)
+    expect(subject, '归档学期夹具应保留标记科目').toBeDefined()
+    return { semesterId: existing.id, subjectId: subject!.id }
+  }
+
+  const semester = await createTestSemester(page, ARCHIVED_YEAR, { subjects: [] })
+  const created = await page.request.post(`/api/subjects?semester_id=${semester.id}`, {
+    data: { name: ARCHIVED_SUBJECT },
+  })
+  expect(created.ok()).toBeTruthy()
+  const subject = await created.json() as { id: number }
+  const archived = await page.request.patch(`/api/semesters/${semester.id}`, {
+    data: { status: 'archived' },
+  })
+  expect(archived.ok()).toBeTruthy()
+  return { semesterId: semester.id, subjectId: subject.id }
+}
 
 test.describe('Issue #33 管理员高风险操作保护与审计', () => {
   test.afterEach(async ({ page }) => {
@@ -128,7 +162,7 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     expect(restoreCalls).toBe(1)
   })
 
-  test('管理员确认后可删除，历史学期入口隐藏且接口拒绝', async ({ page }) => {
+  test('管理员确认后可删除，历史/归档学期入口隐藏且接口拒绝', async ({ page }) => {
     await login(page, E2E_ADMIN_USER, E2E_ADMIN_PASS)
     await deleteSemesterByYearTerm(page, YEAR + 1, 1)
     await deleteSemesterByYearTerm(page, YEAR, 1)
@@ -184,5 +218,24 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
       `/api/subjects?semester_id=${semester.id}`,
     )).json() as Array<{ id: number }>
     expect(historicalSubjects.some((item) => item.id === historicalSubject.id)).toBeTruthy()
+
+    const archivedFixture = await ensureArchivedSubject(page)
+    await page.goto('/settings/semesters')
+    const archivedRow = page.getByTestId(`semester-${archivedFixture.semesterId}`)
+    await expect(archivedRow).toContainText('已归档')
+    await expect(
+      archivedRow.getByTestId(`semester-delete-${archivedFixture.semesterId}`),
+    ).toHaveCount(0)
+
+    const archivedRejected = await page.request.delete(
+      `/api/subjects/${archivedFixture.subjectId}`,
+      { data: highRiskData(`subject:${archivedFixture.subjectId}`) },
+    )
+    expect(archivedRejected.status()).toBe(409)
+    expect((await archivedRejected.json()).detail.code).toBe('semester_read_only')
+    const archivedSubjects = await (await page.request.get(
+      `/api/subjects?semester_id=${archivedFixture.semesterId}`,
+    )).json() as Array<{ id: number }>
+    expect(archivedSubjects.some((item) => item.id === archivedFixture.subjectId)).toBeTruthy()
   })
 })
