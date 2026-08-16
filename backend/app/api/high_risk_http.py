@@ -55,6 +55,7 @@ def reject(
     exc: HTTPException,
     *,
     audit_reason: str | None = None,
+    fallback_reason: str = "business_rule_rejected",
 ) -> NoReturn:
     # 业务校验可能发生在目标名称/学期补齐之后。回滚业务写入时保留这些审计快照，
     # 否则只读或引用规则拒绝会退回成难以查询的纯 ID。
@@ -68,10 +69,10 @@ def reject(
         audit.semester_id = semester_id
     detail = exc.detail
     if isinstance(detail, dict):
-        reason = str(detail.get("code", "business_rule_rejected"))
+        reason = str(detail.get("code", fallback_reason))
         message = str(detail.get("message", detail))
     else:
-        reason = "business_rule_rejected"
+        reason = fallback_reason
         message = str(detail)
     high_risk.finish(
         db,

@@ -192,54 +192,6 @@ def _validate_teacher_user(
         raise HTTPException(status.HTTP_409_CONFLICT, "此账号在本学期已绑定其他教师")
 
 
-def _begin_account_binding(
-    db: Session,
-    user: User,
-    *,
-    confirmation,
-    target_id: int | None,
-    semester_id: int,
-    target_version: str,
-    expected_target: str,
-    impact: str,
-):
-    spec = high_risk.AttemptSpec(
-        action="bind_teacher_account",
-        target_type="teacher",
-        target_id=target_id,
-        semester_id=semester_id,
-        target_version=target_version,
-        expected_target=expected_target,
-        impact=impact,
-    )
-    try:
-        return high_risk.begin(db, user, spec, confirmation)
-    except high_risk.HighRiskError as exc:
-        raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
-
-
-def _reject_account_binding(db: Session, attempt_id: int, exc: HTTPException) -> None:
-    db.rollback()
-    detail = (
-        str(exc.detail.get("message", exc.detail))
-        if isinstance(exc.detail, dict)
-        else str(exc.detail)
-    )
-    reason = (
-        str(exc.detail.get("code", "teacher_account_binding_rejected"))
-        if isinstance(exc.detail, dict)
-        else "teacher_account_binding_rejected"
-    )
-    high_risk.finish(
-        db,
-        attempt_id,
-        result="rejected",
-        reason=reason,
-        detail=detail,
-    )
-    raise exc
-
-
 # ── 教师 ──────────────────────────────
 @router.get("/teachers/bindable-accounts", response_model=list[BindableAccount])
 def list_bindable_accounts(
@@ -296,10 +248,12 @@ def create_teacher(
 ) -> Teacher:
     attempt = None
     if body.user_id is not None:
-        attempt = _begin_account_binding(
+        attempt = high_risk_http.begin(
             db,
             user,
-            confirmation=body.account_confirmation,
+            body.account_confirmation,
+            action="bind_teacher_account",
+            target_type="teacher",
             target_id=None,
             semester_id=semester_id,
             target_version=f"{body.name} -> 账号 #{body.user_id}",
@@ -315,7 +269,12 @@ def create_teacher(
         _validate_teacher_user(db, semester_id, body.user_id)
     except HTTPException as exc:
         if attempt is not None:
-            _reject_account_binding(db, attempt.id, exc)
+            high_risk_http.reject(
+                db,
+                attempt.id,
+                exc,
+                fallback_reason="teacher_account_binding_rejected",
+            )
         raise
     teacher = Teacher(
         semester_id=semester_id,
@@ -376,10 +335,12 @@ def update_teacher(
     attempt = None
     if body.user_id != teacher.user_id:
         account_target = str(body.user_id) if body.user_id is not None else "none"
-        attempt = _begin_account_binding(
+        attempt = high_risk_http.begin(
             db,
             user,
-            confirmation=body.account_confirmation,
+            body.account_confirmation,
+            action="bind_teacher_account",
+            target_type="teacher",
             target_id=teacher.id,
             semester_id=teacher.semester_id,
             target_version=teacher.name,
@@ -401,7 +362,12 @@ def update_teacher(
         )
     except HTTPException as exc:
         if attempt is not None:
-            _reject_account_binding(db, attempt.id, exc)
+            high_risk_http.reject(
+                db,
+                attempt.id,
+                exc,
+                fallback_reason="teacher_account_binding_rejected",
+            )
         raise
     teacher.name = body.name
     teacher.id_last4 = body.id_last4
