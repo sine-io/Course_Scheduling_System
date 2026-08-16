@@ -1,13 +1,15 @@
 import { expect, test } from '@playwright/test'
 import type { Page, Route } from '@playwright/test'
 import { browserApiRequest, login } from './helpers'
+import { expectCommonNavigation } from './navigation-assertions'
+import type { ExpectedNavigationLink } from './navigation-assertions'
 
 type RoleCase = {
   title: string
   username: string
   password: string
-  before: string[]
-  after?: string[]
+  before: ExpectedNavigationLink[]
+  after?: ExpectedNavigationLink[]
 }
 
 const ROLE_CASES: RoleCase[] = [
@@ -15,27 +17,62 @@ const ROLE_CASES: RoleCase[] = [
     title: '排课管理员',
     username: 'e2e_scheduler',
     password: 'e2etest1234',
-    before: ['current-todo', 'assignments', 'auto-schedule', 'workbench', 'versions'],
-    after: ['dashboard', 'timetable-query', 'daily-board', 'substitutions', 'versions'],
+    before: [
+      { label: '当前待办', href: '/wizard' },
+      { label: '教学任务', href: '/scheduling/assignments' },
+      { label: '自动排课', href: '/scheduling/auto' },
+      { label: '排课工作台', href: '/scheduling/workbench' },
+      { label: '版本与发布', href: '/scheduling/versions' },
+    ],
+    after: [
+      { label: '仪表盘', href: '/' },
+      { label: '课表查询', href: '/timetable-query' },
+      { label: '今日看板', href: '/daily-board' },
+      { label: '调课与代课', href: '/substitutions' },
+      { label: '版本与发布', href: '/scheduling/versions' },
+    ],
   },
   {
     title: '教务主任',
     username: 'e2e_director',
     password: 'e2edirector1234',
-    before: ['dashboard', 'timetable-query', 'daily-board', 'versions', 'substitution-stats'],
+    before: [
+      { label: '仪表盘', href: '/' },
+      { label: '课表查询', href: '/timetable-query' },
+      { label: '今日看板', href: '/daily-board' },
+      { label: '版本与发布', href: '/scheduling/versions' },
+      { label: '代课课时统计', href: '/substitution-stats' },
+    ],
   },
   {
     title: '教师',
     username: 'e2e_teacher',
     password: 'e2eteacher1234',
-    before: ['timetable-query', 'leaves', 'notifications', 'substitution-stats-mine'],
+    before: [
+      { label: '课表查询', href: '/timetable-query' },
+      { label: '请假登记', href: '/leaves' },
+      { label: '通知', href: '/notifications' },
+      { label: '我的代课课时', href: '/substitution-stats' },
+    ],
   },
   {
     title: '系统管理员',
     username: 'e2e_admin',
     password: 'e2eadmin1234',
-    before: ['dashboard', 'system', 'backup', 'account-permissions', 'help-guide'],
-    after: ['dashboard', 'system', 'backup', 'account-permissions', 'timetable-query'],
+    before: [
+      { label: '仪表盘', href: '/' },
+      { label: '系统管理', href: '/settings/system' },
+      { label: '备份恢复', href: '/settings/system?section=backup' },
+      { label: '账号权限', href: '/settings/system?section=accounts' },
+      { label: '上手指南', href: '/wizard' },
+    ],
+    after: [
+      { label: '仪表盘', href: '/' },
+      { label: '系统管理', href: '/settings/system' },
+      { label: '备份恢复', href: '/settings/system?section=backup' },
+      { label: '账号权限', href: '/settings/system?section=accounts' },
+      { label: '课表查询', href: '/timetable-query' },
+    ],
   },
 ]
 
@@ -77,12 +114,6 @@ async function mockOnboarding(page: Page, firstSuccess: () => boolean): Promise<
   })
 }
 
-async function commonKeys(page: Page): Promise<string[]> {
-  return page.locator('.app-nav-common [data-nav-key]').evaluateAll((items) => (
-    items.map((item) => item.getAttribute('data-nav-key') ?? '')
-  ))
-}
-
 async function resetNavigationPreference(page: Page): Promise<void> {
   expect(await browserApiRequest(
     page,
@@ -109,14 +140,12 @@ test.describe('Issue #30 阶段化角色导航', () => {
       }
       await page.goto('/')
 
-      await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(roleCase.before.length)
-      expect(await commonKeys(page)).toEqual(roleCase.before)
+      await expectCommonNavigation(page, roleCase.before)
 
       if (roleCase.after) {
         firstSuccess = true
         await page.reload()
-        await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(roleCase.after.length)
-        expect(await commonKeys(page)).toEqual(roleCase.after)
+        await expectCommonNavigation(page, roleCase.after)
       }
     })
   }
@@ -133,10 +162,16 @@ test.describe('Issue #30 阶段化角色导航', () => {
     )).toBe(200)
     await page.goto('/')
 
-    await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(5)
-    expect((await commonKeys(page))[0]).toBe('current-todo')
-    await expect(page.locator('.app-nav-catalog [data-nav-key="notifications"]')).toBeVisible()
-    await expect(page.locator('.app-nav-catalog [data-nav-key="leaves"]')).toBeVisible()
+    await expectCommonNavigation(page, ROLE_CASES[0].before)
+    const dailyOperations = page.getByRole('region', { name: '日常运行' })
+    await expect(dailyOperations.getByRole('link', { name: '通知', exact: true })).toHaveAttribute(
+      'href',
+      '/notifications',
+    )
+    await expect(dailyOperations.getByRole('link', { name: '请假登记', exact: true })).toHaveAttribute(
+      'href',
+      '/leaves',
+    )
   })
 
   test('排课管理员可以固定、排序并恢复常用入口', async ({ page }) => {
@@ -145,50 +180,42 @@ test.describe('Issue #30 阶段化角色导航', () => {
     await resetNavigationPreference(page)
     await page.goto('/')
 
-    await page.getByTestId('nav-manage').click()
-    await page.getByTestId('nav-choice-timetable-query').check()
-    await page.getByTestId('nav-choice-notifications').check()
-    await page.locator('.app-nav-fixed-item').nth(1).getByRole('button', { name: /上移/ }).click()
+    await page.getByRole('button', { name: '管理常用入口' }).click()
+    await page.getByRole('checkbox', { name: /^课表查询/ }).check()
+    await page.getByRole('checkbox', {
+      name: '通知 阅读通知并确认本人收到的消息。',
+      exact: true,
+    }).check()
+    await page.getByRole('button', { name: '将通知上移' }).click()
     await Promise.all([
       page.waitForResponse((response) => (
         response.url().includes('/api/navigation-preference')
         && response.request().method() === 'PUT'
       )),
-      page.getByTestId('nav-save').click(),
+      page.getByRole('button', { name: '保存', exact: true }).click(),
     ])
 
-    expect((await commonKeys(page)).slice(0, 2)).toEqual(['notifications', 'timetable-query'])
+    const pinned = [
+      { label: '通知', href: '/notifications' },
+      { label: '课表查询', href: '/timetable-query' },
+    ]
+    await expectCommonNavigation(page, pinned, false)
     await page.evaluate(() => window.localStorage.clear())
     await page.reload()
-    await expect(page.locator('.app-nav-common [data-nav-key]').nth(0)).toHaveAttribute(
-      'data-nav-key',
-      'notifications',
-    )
-    await expect(page.locator('.app-nav-common [data-nav-key]').nth(1)).toHaveAttribute(
-      'data-nav-key',
-      'timetable-query',
-    )
-    expect((await commonKeys(page)).slice(0, 2)).toEqual(['notifications', 'timetable-query'])
+    await expectCommonNavigation(page, pinned, false)
 
-    await page.getByTestId('nav-manage').click()
+    await page.getByRole('button', { name: '管理常用入口' }).click()
     await Promise.all([
       page.waitForResponse((response) => (
         response.url().includes('/api/navigation-preference')
         && response.request().method() === 'PUT'
       )),
-      page.getByTestId('nav-reset').click(),
+      page.getByRole('button', { name: '恢复默认' }).click(),
     ])
-    await page.getByTestId('nav-preferences-close').click()
+    await page.getByRole('button', { name: '关闭常用入口设置' }).click()
     await page.evaluate(() => window.localStorage.clear())
     await page.reload()
-    await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(5)
-    await expect(page.locator('.app-nav-common [data-nav-key]').nth(0)).toHaveAttribute(
-      'data-nav-key',
-      'current-todo',
-    )
-    expect(await commonKeys(page)).toEqual([
-      'current-todo', 'assignments', 'auto-schedule', 'workbench', 'versions',
-    ])
+    await expectCommonNavigation(page, ROLE_CASES[0].before)
   })
 
   test('教师不能通过直达地址进入排课或系统页面，且当前学期明确只读', async ({ page }) => {

@@ -7,6 +7,7 @@ import {
   login,
   semesterLabel,
 } from './helpers'
+import { expectCommonNavigation } from './navigation-assertions'
 
 // M5-4 验收①(UI 连续场景):一个学期从创建 → 自动排课 → 发布 → 请假 → 代课 → 月结,
 // 一路走完,证明各关卡的页面能对接成真实的教务生命周期。个别旅程的细节由各自 spec
@@ -32,20 +33,6 @@ const SCHEDULER_AFTER_FIRST_SUCCESS = [
 const post = async (page: Page, url: string, data: object) =>
   (await page.request.post(url, { data })).json()
 const get = async (page: Page, url: string) => (await page.request.get(url)).json()
-
-async function expectCommonNavigation(
-  page: Page,
-  expected: ReadonlyArray<{ label: string; href: string }>,
-) {
-  const links = page.getByRole('region', { name: '常用' }).getByRole('link')
-  await expect(links).toHaveCount(expected.length)
-  for (const [index, item] of expected.entries()) {
-    const link = links.nth(index)
-    await expect(link).toBeVisible()
-    await expect(link).toHaveAccessibleName(item.label)
-    await expect(link).toHaveAttribute('href', item.href)
-  }
-}
 
 async function selectSemester(page: Page, year: number) {
   await page.locator('.n-base-selection').first().click()

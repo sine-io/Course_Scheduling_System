@@ -1,21 +1,22 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { browserApiRequest, login } from './helpers'
+import { expectCommonNavigation } from './navigation-assertions'
 
 const SCHEDULER_AFTER_FIRST_SUCCESS = [
-  'dashboard',
-  'timetable-query',
-  'daily-board',
-  'substitutions',
-  'versions',
+  { label: '仪表盘', href: '/' },
+  { label: '课表查询', href: '/timetable-query' },
+  { label: '今日看板', href: '/daily-board' },
+  { label: '调课与代课', href: '/substitutions' },
+  { label: '版本与发布', href: '/scheduling/versions' },
 ]
 
 const SCHEDULER_BEFORE_FIRST_SUCCESS = [
-  'current-todo',
-  'assignments',
-  'auto-schedule',
-  'workbench',
-  'versions',
+  { label: '当前待办', href: '/wizard' },
+  { label: '教学任务', href: '/scheduling/assignments' },
+  { label: '自动排课', href: '/scheduling/auto' },
+  { label: '排课工作台', href: '/scheduling/workbench' },
+  { label: '版本与发布', href: '/scheduling/versions' },
 ]
 
 async function mockOnboarding(page: Page, firstSuccess: boolean): Promise<void> {
@@ -62,14 +63,6 @@ async function mockOnboardingFailure(page: Page): Promise<void> {
   })
 }
 
-async function commonKeys(page: Page): Promise<string[]> {
-  const items = page.locator('.app-nav-common [data-nav-key]')
-  await expect(items.first()).toBeVisible()
-  return items.evaluateAll((items) => (
-    items.map((item) => item.getAttribute('data-nav-key') ?? '')
-  ))
-}
-
 async function putPreference(
   page: Page,
   fixed: string[],
@@ -96,11 +89,10 @@ test.describe('Issue #31 常用入口个人偏好', () => {
 
     await reloadWithoutLocalPreference(page)
 
-    await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(5)
-    expect(await commonKeys(page)).toEqual(SCHEDULER_AFTER_FIRST_SUCCESS)
-    await page.getByTestId('nav-manage').click()
-    await expect(page.getByTestId('nav-choice-current-todo')).toHaveCount(0)
-    await expect(page.locator('.app-nav-fixed-item')).toHaveCount(0)
+    await expectCommonNavigation(page, SCHEDULER_AFTER_FIRST_SUCCESS)
+    await page.getByRole('button', { name: '管理常用入口' }).click()
+    await expect(page.getByRole('checkbox', { name: /^当前待办/ })).toHaveCount(0)
+    await expect(page.getByText('尚未固定，当前使用角色默认入口。')).toBeVisible()
   })
 
   test('阶段未知时忽略阶段专属入口且保留可用入口', async ({ page }) => {
@@ -111,13 +103,11 @@ test.describe('Issue #31 常用入口个人偏好', () => {
     await reloadWithoutLocalPreference(page)
 
     await expect(page.getByTestId('shell-onboarding')).toContainText('首次成功阶段暂时无法读取')
-    await expect(page.locator('.app-nav-common [data-nav-key="current-todo"]')).toHaveCount(0)
-    await expect(page.locator('.app-nav-common [data-nav-key]')).toHaveCount(4)
-    expect(await commonKeys(page)).toEqual([
-      'assignments',
-      'auto-schedule',
-      'workbench',
-      'versions',
+    await expectCommonNavigation(page, [
+      { label: '教学任务', href: '/scheduling/assignments' },
+      { label: '自动排课', href: '/scheduling/auto' },
+      { label: '排课工作台', href: '/scheduling/workbench' },
+      { label: '版本与发布', href: '/scheduling/versions' },
     ])
   })
 
@@ -127,37 +117,41 @@ test.describe('Issue #31 常用入口个人偏好', () => {
     await putPreference(page, [])
     await reloadWithoutLocalPreference(page)
 
-    await page.getByTestId('nav-manage').click()
-    await page.getByTestId('nav-choice-timetable-query').check()
-    await page.getByTestId('nav-choice-notifications').check()
-    await page.locator('.app-nav-fixed-item').nth(1).getByRole('button', { name: /上移/ }).click()
-    await page.getByTestId('nav-save').click()
-    await expect(page.locator('.app-nav-common [data-nav-key]').nth(0)).toHaveAttribute(
-      'data-nav-key',
-      'notifications',
-    )
-    expect((await commonKeys(page)).slice(0, 2)).toEqual(['notifications', 'timetable-query'])
+    await page.getByRole('button', { name: '管理常用入口' }).click()
+    await page.getByRole('checkbox', { name: /^课表查询/ }).check()
+    await page.getByRole('checkbox', {
+      name: '通知 阅读通知并确认本人收到的消息。',
+      exact: true,
+    }).check()
+    await page.getByRole('button', { name: '将通知上移' }).click()
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    const pinned = [
+      { label: '通知', href: '/notifications' },
+      { label: '课表查询', href: '/timetable-query' },
+    ]
+    await expectCommonNavigation(page, pinned, false)
 
     await reloadWithoutLocalPreference(page)
-    expect((await commonKeys(page)).slice(0, 2)).toEqual(['notifications', 'timetable-query'])
+    await expectCommonNavigation(page, pinned, false)
     await page.getByTestId('shell-logout').click()
     await expect(page).toHaveURL(/\/login$/)
     await login(page, 'e2e_scheduler', 'e2etest1234')
-    expect((await commonKeys(page)).slice(0, 2)).toEqual(['notifications', 'timetable-query'])
+    await expectCommonNavigation(page, pinned, false)
 
-    await page.getByTestId('nav-manage').click()
-    await page.getByTestId('nav-choice-notifications').uncheck()
-    await page.getByTestId('nav-save').click()
-    await expect(page.locator('.app-nav-common [data-nav-key]').nth(0)).toHaveAttribute(
-      'data-nav-key',
-      'timetable-query',
-    )
-    expect(await commonKeys(page)).not.toContain('notifications')
+    await page.getByRole('button', { name: '管理常用入口' }).click()
+    await page.getByRole('checkbox', {
+      name: '通知 阅读通知并确认本人收到的消息。',
+      exact: true,
+    }).uncheck()
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expectCommonNavigation(page, [{ label: '课表查询', href: '/timetable-query' }], false)
+    const common = page.getByRole('region', { name: '常用' })
+    await expect(common.getByRole('link', { name: '通知', exact: true })).toHaveCount(0)
 
-    await page.getByTestId('nav-manage').click()
-    await page.getByTestId('nav-reset').click()
-    await page.getByTestId('nav-preferences-close').click()
-    expect(await commonKeys(page)).toEqual(SCHEDULER_BEFORE_FIRST_SUCCESS)
+    await page.getByRole('button', { name: '管理常用入口' }).click()
+    await page.getByRole('button', { name: '恢复默认' }).click()
+    await page.getByRole('button', { name: '关闭常用入口设置' }).click()
+    await expectCommonNavigation(page, SCHEDULER_BEFORE_FIRST_SUCCESS)
   })
 
   test('无权限和已删除入口被忽略，最近访问不覆盖阶段推荐', async ({ page }) => {
@@ -171,17 +165,16 @@ test.describe('Issue #31 常用入口个人偏好', () => {
 
     await reloadWithoutLocalPreference(page)
 
-    expect(await commonKeys(page)).toEqual([
-      'notifications',
-      'current-todo',
-      'assignments',
-      'auto-schedule',
-      'workbench',
+    await expectCommonNavigation(page, [
+      { label: '通知', href: '/notifications' },
+      { label: '当前待办', href: '/wizard' },
+      { label: '教学任务', href: '/scheduling/assignments' },
+      { label: '自动排课', href: '/scheduling/auto' },
+      { label: '排课工作台', href: '/scheduling/workbench' },
     ])
-    await expect(page.locator('.app-nav-common [data-nav-key="removed-entry"]')).toHaveCount(0)
-    await expect(page.locator('.app-nav-common [data-nav-key="system"]')).toHaveCount(0)
-    await expect(page.locator('.app-nav-common [data-nav-key="account-permissions"]')).toHaveCount(0)
-    await expect(page.locator('.app-nav-common a[href=""]')).toHaveCount(0)
+    const common = page.getByRole('region', { name: '常用' })
+    await expect(common.getByRole('link', { name: '系统管理', exact: true })).toHaveCount(0)
+    await expect(common.getByRole('link', { name: '账号权限', exact: true })).toHaveCount(0)
   })
 
   test('多角色账号使用管理视角且保留本人事务入口', async ({ page }) => {
@@ -191,15 +184,25 @@ test.describe('Issue #31 常用入口个人偏好', () => {
 
     await reloadWithoutLocalPreference(page)
 
-    expect(await commonKeys(page)).toEqual([
-      'notifications',
-      'leaves',
-      'current-todo',
-      'assignments',
-      'auto-schedule',
+    await expectCommonNavigation(page, [
+      { label: '通知', href: '/notifications' },
+      { label: '请假登记', href: '/leaves' },
+      { label: '当前待办', href: '/wizard' },
+      { label: '教学任务', href: '/scheduling/assignments' },
+      { label: '自动排课', href: '/scheduling/auto' },
     ])
-    await expect(page.locator('.app-nav-catalog [data-nav-key="notifications"]')).toBeVisible()
-    await expect(page.locator('.app-nav-catalog [data-nav-key="leaves"]')).toBeVisible()
-    await expect(page.locator('.app-nav-catalog [data-nav-key="workbench"]')).toBeVisible()
+    const dailyOperations = page.getByRole('region', { name: '日常运行' })
+    await expect(dailyOperations.getByRole('link', { name: '通知', exact: true })).toHaveAttribute(
+      'href',
+      '/notifications',
+    )
+    await expect(dailyOperations.getByRole('link', { name: '请假登记', exact: true })).toHaveAttribute(
+      'href',
+      '/leaves',
+    )
+    await expect(
+      page.getByRole('region', { name: '排课主流程' })
+        .getByRole('link', { name: '排课工作台', exact: true }),
+    ).toHaveAttribute('href', '/scheduling/workbench')
   })
 })
