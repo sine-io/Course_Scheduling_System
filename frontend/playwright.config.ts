@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
 // E2E 验收:对「执行中的 Docker 全栈」(http://localhost)驱动真实浏览器。
-// 一般执行（CI/无头）：npm run e2e → chromium 回归测试
+// 一般执行（本机/无头）：npm run e2e → chromium 回归测试
+// 规格收口（CI/可重复）：npm run e2e:acceptance → 同一套完整 chromium 验收
 // 有头 + 放慢动作(给人观看):npm run e2e:headed
 // 压测 / 手册截图(非回归,CI 不跑):npm run e2e:perf / npm run e2e:manual
 const headed = process.env.HEADED === '1'

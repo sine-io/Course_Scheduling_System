@@ -74,6 +74,19 @@
 6. 排课管理员兼教师时，权限取并集并默认进入管理视角。
 7. 历史/归档学期默认只读，不能误发布。
 
+## 可重复验收
+
+Issue #34 以公开用户界面和后端 HTTP 动作边界完成规格收口，不检查组件内部状态或权限实现函数。`cd frontend && npm run e2e:acceptance` 是本机与 CI 共用的完整浏览器验收入口；后端授权场景由 CI 的完整 `pytest` 入口执行。
+
+| 场景 | 浏览器用户旅程 | 后端 HTTP 边界 |
+|---|---|---|
+| 示例/正式双路线与首次成功隔离 | `frontend/e2e/issue-27-onboarding-routes.spec.ts`、`frontend/e2e/full-journey.spec.ts` | `backend/tests/test_onboarding.py`、`backend/tests/test_demo_data.py` |
+| 正式 P0、首次发布与发布后常用入口 | `frontend/e2e/full-journey.spec.ts`、`frontend/e2e/issue-30-navigation.spec.ts` | `backend/tests/test_onboarding.py`、`backend/tests/test_publish.py` |
+| 四个固定角色与多角色权限并集 | `frontend/e2e/issue-30-navigation.spec.ts`、`frontend/e2e/issue-31-navigation-preferences.spec.ts` | `backend/tests/test_core_rbac.py`、`backend/tests/test_daily_rbac.py` |
+| 当前/历史/归档学期 | `frontend/e2e/semester-context.spec.ts`、`frontend/e2e/issue-33-high-risk-operations.spec.ts` | `backend/tests/test_semester_context.py`、`backend/tests/test_semesters.py` |
+| 发布保护、管理员高风险操作与审计 | `frontend/e2e/issue-32-publication-protection.spec.ts`、`frontend/e2e/issue-33-high-risk-operations.spec.ts` | `backend/tests/test_publish.py`、`backend/tests/test_high_risk_deletions.py`、`backend/tests/test_high_risk_accounts.py` |
+| 桌面、平板、手机、键盘与状态消息 | `frontend/e2e/app-shell.spec.ts`、`frontend/e2e/a11y.spec.ts` 及 `frontend/e2e/issue-16-responsive.spec.ts` 至 `issue-22-responsive.spec.ts` | 不适用 |
+
 ## 明确不纳入第一阶段
 
 自定义角色编辑器、发布审批流、复杂组织架构权限、完全自由的菜单布局编辑器，以及把高风险动作变成一键执行。

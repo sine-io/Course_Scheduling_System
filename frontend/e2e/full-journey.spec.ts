@@ -14,9 +14,21 @@ import {
 
 const SHOTS = 'e2e/screenshots'
 const YEAR = 2059
+const SCHEDULER_BEFORE_FIRST_SUCCESS = [
+  'current-todo', 'assignments', 'auto-schedule', 'workbench', 'versions',
+]
+const SCHEDULER_AFTER_FIRST_SUCCESS = [
+  'dashboard', 'timetable-query', 'daily-board', 'substitutions', 'versions',
+]
 const post = async (page: Page, url: string, data: object) =>
   (await page.request.post(url, { data })).json()
 const get = async (page: Page, url: string) => (await page.request.get(url)).json()
+
+async function commonNavigationKeys(page: Page): Promise<string[]> {
+  return page.locator('.app-nav-common [data-nav-key]').evaluateAll((items) => (
+    items.map((item) => item.getAttribute('data-nav-key') ?? '')
+  ))
+}
 
 async function selectSemester(page: Page, year: number) {
   await page.locator('.n-base-selection').first().click()
@@ -61,6 +73,10 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   test.setTimeout(240_000)
   await login(page)
   await page.request.patch('/api/wizard/state', { data: { completed: true } })
+  const preference = await page.request.put('/api/navigation-preference', {
+    data: { fixed: [], recent: [] },
+  })
+  expect(preference.ok()).toBeTruthy()
   await deleteSemesterByYearTerm(page, YEAR, 1)
 
   // ── 1) 建学期 + 基础数据(API 准备)──
@@ -74,6 +90,7 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   await expect(page.getByTestId('onboarding-status')).toBeVisible()
   await expect(page.getByTestId('onboarding-stage-basedata')).toContainText('基础数据')
   await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/basedata')
+  expect(await commonNavigationKeys(page)).toEqual(SCHEDULER_BEFORE_FIRST_SUCCESS)
 
   await seedSchool(page, sem.id)
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
@@ -111,6 +128,7 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   expect(success.p0_todos).toHaveLength(0)
   await page.goto('/')
   await expect(page.getByTestId('onboarding-success')).toBeVisible()
+  expect(await commonNavigationKeys(page)).toEqual(SCHEDULER_AFTER_FIRST_SUCCESS)
 
   // ── 4) 课表查询:已发布课表在只读查询页可见(UI)──
   await page.goto(`/timetable-query?semester_id=${sem.id}`)

@@ -552,7 +552,7 @@
                 <div class="todo-item"><i class="todo-dot" style="background:var(--red)"></i><div><strong>确认七年级排课方案</strong><span>今天 17:00 前 · 教务中心</span></div><div class="todo-count">2</div></div>
                 <div class="todo-item"><i class="todo-dot" style="background:var(--orange)"></i><div><strong>处理教师请假影响课程</strong><span>涉及 3 位教师、11 节课程</span></div><div class="todo-count">8</div></div>
                 <div class="todo-item"><i class="todo-dot" style="background:var(--primary)"></i><div><strong>审核期中考试工作通知</strong><span>王老师提交 · 13:42</span></div><div class="todo-count">1</div></div>
-                <div class="todo-item"><i class="todo-dot" style="background:var(--teal)"></i><div><strong>确认下周场地维护安排</strong><span>体育馆、实验室 2</span></div><div class="todo-count">3</div></div>
+                <div class="todo-item"><i class="todo-dot" style="background:var(--teal)"></i><div><strong>确认下周教室/场地维护安排</strong><span>体育馆、实验室 2</span></div><div class="todo-count">3</div></div>
               </div>
             </div>
 
@@ -574,7 +574,7 @@
             <div class="card-header"><div><h3>AI 主动建议</h3><p>基于学校运行数据和业务规则生成，应用前需人工确认</p></div><span class="tag purple">今日 4 条</span></div>
             <div class="card-body suggestion-grid">
               <div class="suggestion"><div class="s-head">✦ 排课冲突建议</div><strong>优先处理七年级教师冲突</strong><p>当前有 8 处高优先级冲突，主要集中在周三下午，涉及 5 位教师。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">查看并处理</button></div>
-              <div class="suggestion"><div class="s-head" style="color:var(--teal)">✦ 场地优化建议</div><strong>调整体育课场地分配</strong><p>操场周二上午利用率仅 42%，可迁移 3 节体育课，减少周四拥挤。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">查看方案</button></div>
+              <div class="suggestion"><div class="s-head" style="color:var(--teal)">✦ 教室/场地优化建议</div><strong>调整体育课教室/场地分配</strong><p>操场周二上午利用率仅 42%，可迁移 3 节体育课，减少周四拥挤。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">查看方案</button></div>
               <div class="suggestion"><div class="s-head" style="color:var(--purple)">✦ 课程均衡建议</div><strong>优化八年级主科分布</strong><p>部分班级数学课集中在周五，建议将 6 节课程调整至周二、周四。</p><button class="btn btn-secondary" onclick="gotoPage('schedule')">对比调整</button></div>
               <div class="suggestion"><div class="s-head" style="color:var(--orange)">✦ 办公任务建议</div><strong>从会议纪要生成待办</strong><p>昨日行政会议识别出 12 项任务，其中 3 项缺少截止日期。</p><button class="btn btn-secondary" onclick="gotoPage('office')">补充并生成</button></div>
             </div>
@@ -587,7 +587,7 @@
             <div class="card template-list">
               <div class="template-title">常用 AI 任务模板</div>
               <div class="template-item active" data-prompt="检查下周因教师请假受到影响的课程，并生成调课方案，但不要直接发布。"><strong>请假影响分析</strong><span>识别受影响课程并推荐调课 / 代课方案</span></div>
-              <div class="template-item" data-prompt="检查当前排课方案中的冲突，并按严重程度排序。"><strong>排课冲突检查</strong><span>检查教师、班级、场地及规则冲突</span></div>
+              <div class="template-item" data-prompt="检查当前排课方案中的冲突，并按严重程度排序。"><strong>排课冲突检查</strong><span>检查教师、班级、教室/场地及规则冲突</span></div>
               <div class="template-item" data-prompt="根据行政会议记录，提取任务、责任人和截止日期。"><strong>会议生成任务</strong><span>从纪要中提取结论与可执行事项</span></div>
               <div class="template-item" data-prompt="查询教师临时调课需要经过哪些审批，并引用学校制度。"><strong>制度流程查询</strong><span>基于学校知识库回答并显示原文</span></div>
               <div class="template-item" data-prompt="为八年级数学期中复习生成分层练习建议。"><strong>教学内容辅助</strong><span>结合学情生成教学设计与练习</span></div>
@@ -678,7 +678,7 @@
               <div class="tabs"><button class="tab active">硬约束</button><button class="tab">软约束</button></div>
               <div class="rule-row"><div><strong>教师不可冲突</strong><span>同一教师不可同时授课</span></div><div class="switch on"></div></div>
               <div class="rule-row"><div><strong>班级不可冲突</strong><span>行政班与教学班均校验</span></div><div class="switch on"></div></div>
-              <div class="rule-row"><div><strong>场地不可冲突</strong><span>含实验室与专用教室</span></div><div class="switch on"></div></div>
+              <div class="rule-row"><div><strong>教室/场地不可冲突</strong><span>含实验室与专用教室</span></div><div class="switch on"></div></div>
               <div class="rule-row"><div><strong>连堂完整性</strong><span>不得跨午休或被拆分</span></div><div class="switch on"></div></div>
               <div class="rule-row"><div><strong>单双周规则</strong><span>资源重叠时仍不可冲突</span></div><div class="switch on"></div></div>
               <div class="rule-row"><div><strong>每日课时上限</strong><span>教师不超过 6 节</span></div><div class="switch on"></div></div>
@@ -690,7 +690,7 @@
             <div class="card timetable-card">
               <div class="timetable-head"><div><strong style="font-size:12px">八年级 2 班课表</strong><div style="font-size:8px;color:var(--muted);margin-top:3px">可拖拽调整 · 已启用实时冲突校验</div></div>
                 <span class="tag blue">🔒 6 节已锁定</span><span class="tag red">! 1 条冲突</span>
-                <div class="view-pills"><button class="view-pill active">班级</button><button class="view-pill">教师</button><button class="view-pill">场地</button></div>
+                <div class="view-pills"><button class="view-pill active">班级</button><button class="view-pill">教师</button><button class="view-pill">教室/场地</button></div>
               </div>
               <div class="timetable-wrap">
                 <div class="timetable" id="timetable">
@@ -778,7 +778,7 @@
               <div class="card-header"><div><h3>AI 推荐调整</h3><p>基于冲突、教师偏好和课程均衡目标</p></div><span class="tag purple">3 条建议</span></div>
               <div class="card-body ai-reco-list">
                 <div class="reco"><strong>调整数学课时间</strong><p>建议将周三第 3 节移动至周四第 1 节，可消除教师冲突。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用数学课调整建议')">应用</button></div>
-                <div class="reco"><strong>优化体育课安排</strong><p>建议移至周二或周四下午，操场利用率更低。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用体育课场地优化')">应用</button></div>
+                <div class="reco"><strong>优化体育课安排</strong><p>建议移至周二或周四下午，操场利用率更低。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用体育课教室/场地优化')">应用</button></div>
                 <div class="reco"><strong>平衡主科分布</strong><p>建议将一节语文课移至周二，减少周五主科集中。</p><button class="btn btn-secondary" onclick="applyReco(this,'已应用主科分布优化')">应用</button></div>
               </div>
             </div>
@@ -805,7 +805,7 @@
               <div class="category"><span class="nav-icon">会</span><strong>会议纪要</strong><span>94</span></div>
               <div class="category"><span class="nav-icon">课</span><strong>课程与教学</strong><span>73</span></div>
               <div class="category"><span class="nav-icon">办</span><strong>行政办公</strong><span>65</span></div>
-              <div style="padding:14px 8px 4px;color:var(--muted);font-size:9px;line-height:1.6">当前账号可访问 723 份文档。权限范围：全校教务与行政公开资料。</div>
+              <div style="padding:14px 8px 4px;color:var(--muted);font-size:9px;line-height:1.6">当前账号可访问 723 份文档。权限范围：全校教务与行政公开文件。</div>
             </div>
 
             <div class="card answer-card">
@@ -815,13 +815,13 @@
                 根据学校现行制度，普通教学周内的临时调课应经过以下流程：
                 <br><br>
                 <strong>1. 任课教师发起申请</strong><br>
-                填写调课原因、原课程、拟调整时间及涉及班级；因请假产生的调课需关联有效请假申请。
+                填写调课原因、原课程、拟调整时间及涉及班级；因请假引发的调课需关联有效请假申请。
                 <br><br>
                 <strong>2. 年级主任确认</strong><br>
                 核对班级教学安排、任课教师时间和年级活动是否冲突。
                 <br><br>
                 <strong>3. 教务处审批</strong><br>
-                教务处完成教师、班级、场地和课时规则校验后，批准并更新临时课表。
+                教务处完成教师、班级、教室/场地和课时规则校验后，批准并更新临时课表。
                 <br><br>
                 <strong>4. 通知相关人员</strong><br>
                 审批通过后，由系统通知任课教师、班主任及相关班级。未经批准不得私自调课。
@@ -879,7 +879,7 @@
               <div style="display:flex;align-items:center;margin-bottom:12px"><div><strong style="font-size:12px">会议纪要 → 执行任务</strong><div style="font-size:9px;color:var(--muted);margin-top:4px">上传录音、文字记录或历史纪要，AI 自动提取可执行事项</div></div><span class="tag purple" style="margin-left:auto">AI 自动整理</span></div>
               <div class="upload-zone"><strong>行政会议记录 · 7 月 19 日</strong><span>已完成语音转写和关键事项识别</span><button class="btn btn-secondary" onclick="showToast('分析结果已刷新','共识别 5 项会议结论和 12 项执行任务。')">重新分析</button></div>
               <div class="extract-metrics"><div class="extract-metric"><strong>5</strong><span>会议结论</span></div><div class="extract-metric"><strong>12</strong><span>待办任务</span></div><div class="extract-metric"><strong>2</strong><span>责任人缺失</span></div><div class="extract-metric"><strong>3</strong><span>截止日期缺失</span></div></div>
-              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" onclick="showToast('已生成任务草稿','12 项任务已进入确认清单，尚未发送给责任人。')">生成任务草稿</button><button class="btn btn-plain">查看完整纪要</button></div>
+              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn btn-primary" onclick="showToast('已生成任务草稿','12 项任务已进入确认列表，尚未发送给责任人。')">生成任务草稿</button><button class="btn btn-plain">查看完整纪要</button></div>
             </div>
 
             <div class="card minutes-card">
@@ -893,7 +893,7 @@
           </div>
 
           <div class="card" style="margin-top:14px">
-            <div class="card-header"><div><h3>任务执行中心</h3><p>来自会议、通知、审批和 AI 建议的统一任务清单</p></div><span class="tag red">2 项即将逾期</span><button class="link-btn">查看全部</button></div>
+            <div class="card-header"><div><h3>任务执行中心</h3><p>来自会议、通知、审批和 AI 建议的统一任务列表</p></div><span class="tag red">2 项即将逾期</span><button class="link-btn">查看全部</button></div>
             <div class="card-body" style="padding-top:0">
               <table class="task-table">
                 <thead><tr><th>任务</th><th>来源</th><th>责任人</th><th>截止时间</th><th>进度</th><th>状态</th></tr></thead>
@@ -937,7 +937,7 @@
       home: ['首页总览','掌握学校运行状态，处理今日重点任务'],
       ai: ['AI 工作台','用自然语言发起跨模块任务，执行前始终由你确认'],
       schedule: ['智能排课','自动求解、半自动调整、冲突解释和方案发布'],
-      knowledge: ['学校知识助手','基于学校正式资料回答，并提供原文来源'],
+      knowledge: ['学校知识助手','基于学校正式文件回答，并提供原文来源'],
       office: ['校务办公','从文档生成到会议任务执行的完整闭环']
     };
 
@@ -1049,7 +1049,7 @@
           zone.appendChild(div);
           dragPayload.element.remove();
           div.addEventListener('dragstart', ev => { dragPayload = { type:'course', element:div }; ev.dataTransfer.effectAllowed='move'; });
-          showToast('课程已排入课表','系统已完成教师、班级和场地的即时冲突检查。');
+          showToast('课程已排入课表','系统已完成教师、班级和教室/场地的实时冲突检查。');
         }
         dragPayload = null;
       });
@@ -1060,7 +1060,7 @@
       const q = document.getElementById('knowledgeInput').value.trim();
       if (!q) return;
       document.getElementById('answerTitle').textContent = q;
-      document.getElementById('answerBox').innerHTML = `已在学校知识库中找到与“<strong>${q}</strong>”相关的制度和流程。<br><br>原型演示中，系统会综合当前账号权限内的正式文件，给出结构化回答，并在下方展示文件名、条款位置、发布时间和适用范围。<div class="citation">已检索 723 份可访问文档 · 命中 4 份高相关资料 · 回答内容等待人工核对</div>`;
+      document.getElementById('answerBox').innerHTML = `已在学校知识库中找到与“<strong>${q}</strong>”相关的制度和流程。<br><br>原型演示中，系统会综合当前账号权限内的正式文件，给出结构化回答，并在下方展示文件名、条款位置、发布时间和适用范围。<div class="citation">已检索 723 份可访问文档 · 命中 4 份高相关文件 · 回答内容等待人工核对</div>`;
       showToast('知识库检索完成','回答已附带来源，点击“查看原文”可定位到具体条款。');
     });
 

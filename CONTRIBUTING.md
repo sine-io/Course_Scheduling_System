@@ -68,12 +68,13 @@ sudo docker compose exec -T api python -m app.scripts.seed_e2e
 cd frontend
 npx playwright install chromium   # 首次
 npm run e2e            # 无头模式运行 E2E 回归测试（与 CI 一致）
+npm run e2e:acceptance # 上手引导与 RBAC 完整验收入口（CI 直接调用）
 npm run e2e:headed     # 显示浏览器并放慢执行，可在屏幕上观察
 npm run e2e:perf       # 60 班压测(执行久,非回归,CI 不跑)
 npm run e2e:manual     # 操作手册截图生成器(需另备示范数据测试站,CI 不跑)
 ```
 
-CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建测试账号并运行回归测试；E2E 未通过时不会发布镜像。
+CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建测试账号并运行 `npm run e2e:acceptance`；E2E 未通过时不会发布镜像。
 
 ## 提交与 PR
 

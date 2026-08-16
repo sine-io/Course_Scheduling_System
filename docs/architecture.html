@@ -191,7 +191,7 @@
       </blockquote>
       <hr />
       <h2 id="0-项目定位">0. 项目定位</h2>
-      <p>一套<strong>开源免费、单校自建、纯 Web</strong> 的学校排课、调课与代课管理系统,服务对象为全国小学、初中、普通高中、综合高中、中职的<strong>排课管理员</strong>(主要操作者)、教务主任(审核/查看)与一般教师(查课表、请假、接代课通知)。</p>
+      <p>一套<strong>开源免费、单校自建、纯 Web</strong> 的学校排课、调课与代课管理系统,服务对象为全国小学、初中、普通高中、综合高中、中职的<strong>排课管理员</strong>(核心排课)、教务主任(全校监督与有限日常运行)、系统管理员(系统安全)与教师(已发布课表和本人事务)。</p>
       <p>三大设计原则(所有后续决策的最高准则):</p>
       <ol>
       <li><strong>不写死学制</strong>：不同学校的差异统一表达为可配置数据（作息时间表、排课单位和约束），不在业务代码中增加地区或学制分支。公开模板仅保留“初中（空白模板）”，复杂示例由测试夹具构建。</li>
@@ -204,75 +204,119 @@
       <div class="tw"><table>
       <thead>
       <tr>
-      <th>功能</th>
-      <th>系统管理员</th>
-      <th>排课管理员</th>
-      <th>教务主任</th>
-      <th>教师</th>
+      <th>动作</th>
+      <th style="text-align: right;">系统管理员</th>
+      <th style="text-align: right;">排课管理员</th>
+      <th style="text-align: right;">教务主任</th>
+      <th style="text-align: right;">教师</th>
       </tr>
       </thead>
       <tbody>
       <tr>
-      <td>系统设置、账号管理、备份恢复</td>
-      <td>✅</td>
-      <td>—</td>
-      <td>—</td>
-      <td>—</td>
+      <td>查看已发布课表</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
       </tr>
       <tr>
-      <td>基础数据维护（作息时间表/教师/班级/科目/教室/场地）</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>查看</td>
-      <td>—</td>
+      <td>查看排课草稿</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
       </tr>
       <tr>
-      <td>教学任务与排课（手动+自动）</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>查看</td>
-      <td>—</td>
+      <td>编辑基础数据</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
       </tr>
       <tr>
-      <td>课表发布</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>查看</td>
-      <td>—</td>
+      <td>编辑教学任务/排课草稿</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
       </tr>
       <tr>
-      <td>调课与代课安排</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>查看</td>
-      <td>确认收到代课通知</td>
+      <td>运行自动排课</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
       </tr>
       <tr>
-      <td>请假登记</td>
-      <td>✅</td>
-      <td>✅(可代登)</td>
-      <td>查看</td>
-      <td>✅(登记本人)</td>
+      <td>发布课表</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
       </tr>
       <tr>
-      <td>查询课表(按班级、教师或教室/场地)</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>✅(全校可见或仅本人,可设置)</td>
+      <td>维护校历</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
       </tr>
       <tr>
-      <td>课时统计报表</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>✅</td>
-      <td>仅本人</td>
+      <td>登记或处理全校请假</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      </tr>
+      <tr>
+      <td>处理调课与代课</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">仅确认本人通知</td>
+      </tr>
+      <tr>
+      <td>修改本人请假/确认本人通知</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      </tr>
+      <tr>
+      <td>单张已发布课表导出</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      </tr>
+      <tr>
+      <td>批量或版本级导出</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
+      </tr>
+      <tr>
+      <td>备份与恢复</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
+      </tr>
+      <tr>
+      <td>账号和角色管理</td>
+      <td style="text-align: right;">是</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
+      <td style="text-align: right;">否</td>
       </tr>
       </tbody>
       </table></div>
       <ul>
-      <li>角色采 RBAC,一人可兼多角色(例:排课管理员同时是教师)。</li>
-      <li>本版本不增加调课、代课或课表发布审批流，由排课管理员完成业务操作，教务主任查看相关数据。</li>
+      <li>角色采用固定 RBAC，一人可兼多角色，权限取并集；只要拥有排课管理员角色，默认进入管理视角，同时保留本人事务入口。</li>
+      <li>前端入口只用于减少干扰，后端 HTTP 动作边界是最终授权来源。</li>
+      <li>本版本不增加调课、代课或课表发布审批流。排课管理员直接发布，教务主任查看草稿、监督版本并处理获准的日常运行事务。</li>
+      <li>只有系统管理员或排课管理员可以切换当前学期；历史或归档学期默认只读，可查询和复制，不能常规写入或发布。</li>
       </ul>
       <h3 id="12-user-story-列表">1.2 User Story 列表</h3>
       <p>优先级:<strong>MVP</strong>(M0–M5 必做)/ <strong>v2</strong> / <strong>v3</strong>。</p>
@@ -1146,23 +1190,24 @@
       <hr />
       <h2 id="5-uiux-规划">5. UI/UX 规划</h2>
       <h3 id="51-信息架构与关键页面">5.1 信息架构与关键页面</h3>
-      <pre><code>侧边栏(排课管理员/系统管理员视角；教师只显示与本人相关的页面):
-      ├── 仪表盘(今日调课与代课摘要、待办)
-      ├── 课表查询(按班级、教师或教室/场地，含导出)
-      ├── 基础数据
-      │   ├── 学期与作息时间表
-      │   └── 教师/班级/科目/教室/场地(含 Excel 导入)
-      ├── 排课作业
-      │   ├── 教学任务管理
-      │   ├── 排课工作台(拖拽界面)
-      │   ├── 自动排课
-      │   ├── 版本与发布
-      │   └── 课表组件示例
-      ├── 调课与代课(请假登记、处理工作台、今日看板、记录、课时统计、通知确认)
-      └── 系统管理(学校信息、账号与角色、备份恢复、操作审计、SMTP、排课参数、示例数据、重新启动向导；限系统管理员)
+      <pre><code>全局工具栏
+      ├── 学校与当前学期
+      ├── 通知
+      ├── 帮助
+      └── 账号
+
+      侧边栏
+      ├── 常用(最多五项；角色默认 + 首次成功阶段 + 用户固定/排序 + 最近访问补位)
+      └── 完整功能
+          ├── 学期准备(仪表盘、上手指南、学期与作息时间表、校历、基础数据)
+          ├── 排课主流程(教学任务、自动排课、排课工作台、版本与发布、课表查询)
+          ├── 日常运行(请假、调课与代课、今日看板、记录、通知)
+          ├── 报表(代课课时统计)
+          └── 系统管理(学校信息、账号与角色、备份恢复、操作审计、SMTP、排课参数；限系统管理员)
 
       独立页面:登录、首次登录强制修改密码、设置向导和 A4 公告打印。
       </code></pre>
+      <p>首次发布前，排课管理员的默认常用入口为当前待办、教学任务、自动排课、排课工作台、版本与发布；首次发布后切换为仪表盘、课表查询、今日看板、调课与代课、版本与发布。教务主任、教师和系统管理员使用各自稳定的角色默认入口，完整功能目录仍保留所有获准页面。</p>
       <p>首次设置向导中的“示例数据体验”是系统管理页之外的首次入口：排课管理员和系统管理
       员选择示例路线后可以创建隔离的示例学期；系统管理页中的再次使用入口仍仅限系统管理
       员，且任何正式学期存在时两处都拒绝写入。</p>
@@ -1185,7 +1230,12 @@
       <li>教师视角同一 grid 组件换数据源;冲突检测共用同一后端服务,避免双套逻辑。</li>
       </ul>
       <h3 id="52-设置向导30-分钟上手的关键">5.2 设置向导(30 分钟上手的关键)</h3>
-      <p>五个步骤均可返回修改：<strong>① 选择“初中（空白模板）”</strong>（带入科目参考项和空白作息时间表）→ <strong>② 设置学年学期</strong> → <strong>③ 填写作息时间表</strong> → <strong>④ 下载 Excel 模板并导入教师/班级</strong> → <strong>⑤ 完成并进入教学任务管理</strong>。</p>
+      <p>全新管理用户先选择一条持久化路线：</p>
+      <ul>
+      <li><strong>体验示例数据</strong>：创建隔离的示例学期，直接进入自动排课并查看示例发布结果；示例发布不改变正式首次成功状态。</li>
+      <li><strong>正式建校</strong>：进入五个可返回修改的步骤：<strong>① 选择“初中（空白模板）”</strong>（带入科目参考项和空白作息时间表）→ <strong>② 设置学年学期</strong> → <strong>③ 填写作息时间表</strong> → <strong>④ 下载 Excel 模板并导入教师/班级</strong> → <strong>⑤ 完成并进入基础数据</strong>。</li>
+      </ul>
+      <p>路线、当前步骤和正在设置的学期都持久化，刷新或重新登录后从中断处继续。设置向导完成只表示基础配置流程结束；正式首次成功仍须由完整性检查、必排教学任务无遗漏和已发布课表共同推导。</p>
       <h3 id="53-调课与代课状态机">5.3 调课与代课状态机</h3>
       <pre><code class="language-mermaid">stateDiagram-v2
           [*] --&gt; 已登记: 教师请假/排课管理员代登

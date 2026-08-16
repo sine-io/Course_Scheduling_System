@@ -261,32 +261,35 @@
       <!-- 00 -->
       <section class="ch" id="intro-body">
         <div class="ch-head"><span class="ch-num">00</span><h2>如何使用本手册</h2></div>
-        <p>这本手册照着「一个学期的实际流程」编排:先把学校的基础数据建好,再排课、发布,学期中再处理请假与调课与代课,最后导出与备份。<strong>第一次使用建议从第 3 章「设置向导」开始照做</strong>;之后遇到特定工作,再从左侧目录跳到对应章节。</p>
-        <p><strong>只想先体验系统时</strong>，可在设置向导第一步加载虚构的国内初中示例数据。系统会创建 18 个班、49 位教师、16 个科目和 252 条教学任务，加载后可直接运行自动排课并继续体验调课与代课、导出和备份。示例数据不代表任何学校或政策，正式使用前请改用本校真实数据。</p>
+        <p>这本手册照着「一个学期的实际流程」编排:先把学校的基础数据建好,再排课、发布,学期中再处理请假与调课与代课,最后导出与备份。<strong>第一次使用建议从第 3 章「设置向导」开始照做</strong>;达到首次成功前，也可以从“常用”里的“当前待办”继续唯一的下一步。</p>
+        <p><strong>只想先体验系统时</strong>，可在首次进入时选择“体验示例数据”。系统会创建 18 个班、49 位教师、16 个科目和 252 条教学任务，加载后可直接运行自动排课并查看示例发布结果。示例学期与正式学期彼此隔离，发布示例课表不会完成正式学期的首次成功；示例数据不代表任何学校或政策。</p>
 
         <h3>系统里的四种角色</h3>
         <p>登录后右上角会显示你的角色。不同角色看得到的功能不同——本手册主要写给<span class="rb sch">排课管理员</span>。</p>
         <div class="tw"><table>
           <thead><tr><th>角色</th><th>负责什么</th><th>看得到的页面</th></tr></thead>
           <tbody>
-            <tr><td><span class="rb admin">系统管理员</span></td><td>安装、账号、备份恢复、SMTP 等系统层设置</td><td>全部,含「系统管理」</td></tr>
-            <tr><td><span class="rb dir">教务主任</span></td><td>综览与审核,权限同排课管理员</td><td>几乎全部(除系统管理)</td></tr>
-            <tr><td><span class="rb sch">排课管理员</span></td><td>日常主力:基础数据、教学任务、排课、调课与代课</td><td>基础数据、排课作业、调课与代课</td></tr>
-            <tr><td><span class="rb tea">教师</span></td><td>查自己的课表、自己请假、确认代课通知</td><td>课表查询、请假登记、我的代课课时</td></tr>
+            <tr><td><span class="rb admin">系统管理员</span></td><td>系统安全、账号角色、备份恢复和故障处理</td><td>全部业务页面与系统管理</td></tr>
+            <tr><td><span class="rb dir">教务主任</span></td><td>全校监督、校历、全校请假和调课与代课</td><td>全校查询、草稿只读、日常运行和统计；不能编辑核心排课或发布</td></tr>
+            <tr><td><span class="rb sch">排课管理员</span></td><td>基础数据、教学任务、排课草稿、自动排课和发布</td><td>排课主流程与日常运行；不能管理账号或备份恢复</td></tr>
+            <tr><td><span class="rb tea">教师</span></td><td>查看已发布课表并处理本人事务</td><td>全校已发布课表、本人请假、通知和本人代课课时；看不到草稿</td></tr>
           </tbody>
         </table></div>
+        <p>同一账号可以兼任多个固定角色，权限取并集。只要兼任排课管理员，登录后默认进入管理视角，同时仍能登记本人请假、确认本人通知和查看本人统计；系统不会用“切换角色”临时改变授权。</p>
 
         <h3>菜单导航</h3>
-        <p>左侧菜单(排课管理员视角)分成四个区域。本手册每一步都会用面包屑标出位置,例如 <span class="path"><b>排课作业</b><i>›</i><b>教学任务管理</b></span>。</p>
+        <p>顶部只显示学校、当前学期、通知、帮助和账号。左侧先显示最多五项“常用”，下方保留按职责过滤的完整功能目录；本手册每一步都会用面包屑标出位置,例如 <span class="path"><b>排课主流程</b><i>›</i><b>教学任务</b></span>。</p>
         <div class="tw"><table>
-          <thead><tr><th>菜单区域</th><th>包含的页面</th></tr></thead>
+          <thead><tr><th>角色</th><th>首次发布前的常用入口</th><th>首次发布后</th></tr></thead>
           <tbody>
-            <tr><td><b>基础数据</b></td><td>学期与作息时间表 · 教师/班级/科目/教室/场地</td></tr>
-            <tr><td><b>排课作业</b></td><td>教学任务管理 · 排课工作台 · 自动排课 · 版本与发布 · 课表组件(示范)</td></tr>
-            <tr><td><b>调课与代课</b></td><td>请假登记 · 调课与代课处理 · 今日调课与代课 · 调课与代课记录 · 代课课时统计 · 通知确认看板</td></tr>
-            <tr><td><b>系统管理</b></td><td>学校信息 · 示例数据 · 排课设置 · 备份恢复 · SMTP · 重新启动向导(限系统管理员)</td></tr>
+            <tr><td><span class="rb admin">系统管理员</span></td><td>仪表盘 · 系统管理 · 备份恢复 · 账号权限 · 上手指南</td><td>以课表查询替换上手指南</td></tr>
+            <tr><td><span class="rb sch">排课管理员</span></td><td>当前待办 · 教学任务 · 自动排课 · 排课工作台 · 版本与发布</td><td>仪表盘 · 课表查询 · 今日看板 · 调课与代课 · 版本与发布</td></tr>
+            <tr><td><span class="rb dir">教务主任</span></td><td>仪表盘 · 课表查询 · 今日看板 · 版本与发布 · 代课课时统计</td><td>保持不变</td></tr>
+            <tr><td><span class="rb tea">教师</span></td><td>课表查询 · 请假登记 · 通知 · 我的代课课时</td><td>保持不变</td></tr>
           </tbody>
         </table></div>
+        <p>“常用”可以固定、排序或恢复默认，最近访问只补空位；它不会扩大权限，也不会绕过发布、删除、恢复或权限变更的检查。完整功能目录仍按“学期准备、排课主流程、日常运行、报表、系统管理”保留所有获准页面。</p>
+        <div class="cal warn"><div class="lab">⚠️ 当前学期边界</div><p>系统只有一个当前学期。只有系统管理员和排课管理员可以切换；教务主任和教师只能查看当前上下文。历史或归档学期可查询和复制，但默认只读，旧链接也不能绕过后端写入或发布保护。</p></div>
 
         <div class="cal note"><div class="lab">📖 图示说明</div>
           <p><strong>提示</strong>=让你更省力的小技巧;<strong>注意</strong>=容易忽略但重要;<strong>小心</strong>=做错会有后果的操作;<strong>场景</strong>=模拟一个真实情况带你操作。书中截图取自一个 3 班、8 位教师的小型测试学期；加载内置示例数据后内容会更多，但操作方式相同。</p>
@@ -348,7 +351,13 @@
       <!-- 03 -->
       <section class="ch" id="wizard">
         <div class="ch-head"><span class="ch-num">03</span><h2>第一次设置(设置向导)</h2></div>
-        <p>全新系统第一次登录时,会<strong>自动进入五步骤设置向导</strong>。每一步都可以「上一步」回去修改,也可以「跳过,稍后再设置」。</p>
+        <p>全新系统第一次登录时，会先选择“体验示例数据”或“正式建校”。选择会保存，中途退出后仍从原路线和上次步骤继续。</p>
+
+        <h4>选择首次路线</h4>
+        <ul>
+          <li><strong>体验示例数据</strong>——创建隔离的虚构学校数据，直接前往自动排课并查看示例发布结果，不改变正式首次成功状态。</li>
+          <li><strong>正式建校</strong>——进入五步骤设置向导，录入本校真实数据；P0 待办会一直保留到第一张可用的正式课表发布。</li>
+        </ul>
 
         <h4>登录与首次改密码</h4>
         <ol class="steps">
@@ -358,7 +367,7 @@
         </ol>
         <figure class="shot"><img src="manual-img/01-login.png" alt="登录页(输入账号/密码的页面)" loading="lazy"><figcaption><b>登录页</b>(输入账号/密码的页面)</figcaption></figure>
 
-        <h4>向导五步骤</h4>
+        <h4>正式路线五步骤</h4>
         <ol class="steps">
           <li><span class="st-t">学校模板</span>——选择“初中（空白模板）”，系统带入科目参考项和空白作息时间表。</li>
           <li><span class="st-t">学年学期</span>——设置学年起始年和学期，例如“2026-2027学年第一学期”。此步骤会创建学期。</li>
@@ -368,14 +377,14 @@
         </ol>
         <figure class="shot"><img src="manual-img/02-wizard.png" alt="设置向导(顶端五步骤进度条的页面)" loading="lazy"><figcaption><b>设置向导</b>(顶端五步骤进度条的页面)</figcaption></figure>
 
-        <div class="cal note"><div class="lab">📌 注意</div><p>中途关掉浏览器没关系——下次登录会从上次的步骤接续。日后想重跑向导,可到 <span class="path"><b>系统管理</b></span> 重新启动。</p></div>
-        <div class="cal tip"><div class="lab">💡 开始排课前</div><p>完成向导后，请进入 <span class="path"><b>系统设置</b><i>›</i><b>校历与排课准备</b></span>，设置学期起止日期和特殊日期，并在检查无误后确认排课准备完成。</p></div>
+        <div class="cal note"><div class="lab">📌 向导完成不等于首次成功</div><p>中途关掉浏览器没关系——下次登录会从上次的步骤接续。完成向导只表示基础配置告一段落；正式当前学期还必须通过完整性检查、没有必排教学任务遗漏并发布课表，仪表盘才会结束首次成功引导。</p></div>
+        <div class="cal tip"><div class="lab">💡 开始排课前</div><p>完成向导后，请进入 <span class="path"><b>学期准备</b><i>›</i><b>校历与排课准备</b></span>，设置学期起止日期和特殊日期，并在检查无误后确认排课准备完成。</p></div>
       </section>
 
       <!-- 04 -->
       <section class="ch" id="assign">
         <div class="ch-head"><span class="ch-num">04</span><h2>教学任务管理</h2></div>
-        <p><span class="path"><b>排课作业</b><i>›</i><b>教学任务管理</b></span></p>
+        <p><span class="path"><b>排课主流程</b><i>›</i><b>教学任务</b></span></p>
         <p>「教学任务」就是决定<strong>哪位老师、教哪个班、哪一科、每周几节</strong>。这是排课的核心输入——教学任务建好,才能开始排课。</p>
 
         <h3>创建一项基本教学任务</h3>
@@ -407,7 +416,7 @@
       <!-- 05 -->
       <section class="ch" id="manual">
         <div class="ch-head"><span class="ch-num">05</span><h2>手动排课工作台</h2></div>
-        <p><span class="path"><b>排课作业</b><i>›</i><b>排课工作台</b></span></p>
+        <p><span class="path"><b>排课主流程</b><i>›</i><b>排课工作台</b></span></p>
         <p>工作台是一张<strong>拖拽式周课表</strong>。左侧是还没排的教学任务列表(附剩余节数),你把课拖进格子里即可。适合微调,或想完全手动掌控时使用。</p>
 
         <h3>基本操作</h3>
@@ -431,7 +440,7 @@
       <!-- 06 -->
       <section class="ch" id="auto">
         <div class="ch-head"><span class="ch-num">06</span><h2>自动排课</h2></div>
-        <p><span class="path"><b>排课作业</b><i>›</i><b>自动排课</b></span></p>
+        <p><span class="path"><b>排课主流程</b><i>›</i><b>自动排课</b></span></p>
         <p>系统内置排课引擎,能在遵守各种硬性规则(教师和教室/场地均不冲突、连堂不跨午休、教师不可排时段…)下,自动排出一整周的课表。</p>
 
         <h3>操作流程</h3>
@@ -456,19 +465,20 @@
       <!-- 07 -->
       <section class="ch" id="publish">
         <div class="ch-head"><span class="ch-num">07</span><h2>发布课表与全校查询</h2></div>
-        <p><span class="path"><b>排课作业</b><i>›</i><b>版本与发布</b></span></p>
+        <p><span class="path"><b>排课主流程</b><i>›</i><b>版本与发布</b></span></p>
         <p>你可以同时保留<strong>多份草稿</strong>互相比较。满意哪一份,就把它「发布」——发布后全校师生就能查到这份课表。</p>
 
         <h3>发布流程</h3>
         <ol class="steps">
           <li><span class="st-t">在版本列表找到要发布的草稿</span>(可复制、改名、删除来管理多份)。</li>
-          <li><span class="st-t">(建议)先按完整性检查</span>——若还有课没排完,会列出警告列表。</li>
-          <li><span class="st-t">按「发布」</span>——若有未排完的课,会再问一次;确认后可强制发布。</li>
+          <li><span class="st-t">按「发布」并查看发布检查</span>——系统会显示学期、版本、完整性结果和未排教学任务；检查结果变化后，旧确认会失效。</li>
+          <li><span class="st-t">明确确认目标和影响</span>——取消不会发送发布请求；若有未排完的课，只有再次确认后才可强制发布。</li>
           <li><span class="st-t">旧版自动归档</span>——发布新版后,同学期原本已发布的那份会转为「已归档」。</li>
         </ol>
         <figure class="shot"><img src="manual-img/06-versions.png" alt="版本与发布页(草稿列表,状态显示草稿/已发布/已归档)" loading="lazy"><figcaption><b>版本与发布</b>页(草稿列表,状态显示草稿/已发布/已归档)</figcaption></figure>
 
         <div class="cal note"><div class="lab">📌 已发布课表是「定格快照」</div><p>发布后那份课表就固定下来,即使你之后改草稿也不影响它——这样调课与代课才有稳定的依据。要更新,就发布新的一份。</p></div>
+        <div class="cal warn"><div class="lab">⚠️ 发布保护</div><p>发布只允许当前且未归档的正式学期，由系统管理员或排课管理员执行；成功、取消后的零提交、权限拒绝和检查失效都会遵守确认与审计边界。教务主任可监督版本但不能发布。</p></div>
 
         <h3>全校查询</h3>
         <p><span class="path"><b>课表查询</b></span> 是<strong>只读</strong>的查询页,可用班级 / 教师 / 教室/场地三种角度查已发布课表,手机也能看。教师登录时,默认直接显示<strong>本人课表</strong>。</p>
@@ -572,6 +582,9 @@
         <div class="cal danger"><div class="lab">🛑 小心</div><p>恢复会<strong>覆盖目前所有数据</strong>。务必确认选对备份文件。所幸有「恢复前保护」这道自动备份垫底,误操作仍可救回。</p></div>
         <div class="cal warn"><div class="lab">⚠️ 异地备份</div><p>备份文件存在同一台主机。<strong>硬盘坏掉就一起没了</strong>。请定期把备份文件下载到另一台电脑或云端硬盘(详见部署文件的「备份与恢复」)。</p></div>
         <figure class="shot"><img src="manual-img/10-backup.png" alt="系统管理 → 数据备份与恢复卡片" loading="lazy"><figcaption><b>系统管理 → 数据备份与恢复</b>卡片</figcaption></figure>
+
+        <h3>高风险操作与审计</h3>
+        <p>备份恢复、核心数据永久或级联删除、账号和角色变更仅限系统管理员。界面会先列出具体目标和影响；取消确认不会提交命令，重复提交也会被拒绝。成功、拒绝和失败结果都会进入操作审计。课表发布同样需要检查、明确确认和审计，但由系统管理员或排课管理员执行。</p>
 
         <h3>Email 通知(SMTP,选填)</h3>
         <p>填写学校的 SMTP 服务器信息后，系统即可通过电子邮件发送调课与代课通知。<strong>未配置 SMTP 不影响其他功能</strong>，此时只发送站内通知。可以点击“发送测试邮件”验证配置。</p>

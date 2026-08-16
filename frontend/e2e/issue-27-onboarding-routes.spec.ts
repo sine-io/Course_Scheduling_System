@@ -308,6 +308,10 @@ test('示例路线可运行自动排课并在版本页发布结果', async ({ pa
   await page.getByTestId('v-publish').click()
   await page.getByTestId('v-confirm-publish').click()
   await expect(page.getByTestId('v-status-自动排课结果')).toHaveText('已发布')
+  const formalStatus = await page.evaluate(async () => (
+    await (await fetch('/api/onboarding/status')).json()
+  )) as { first_success: boolean }
+  expect(formalStatus.first_success).toBe(false)
   expect(state.routeWrites).toEqual(['demo'])
   expect(state.publishWrites).toBe(1)
 })
