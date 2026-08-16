@@ -67,7 +67,7 @@ sudo docker compose exec -T api python -m app.scripts.seed_e2e
 
 cd frontend
 npx playwright install chromium   # 首次
-npm run e2e            # 无头模式运行 E2E 回归测试（与 CI 一致）
+npm run e2e            # 无头模式运行 Chromium E2E 回归测试
 npm run e2e:acceptance # 上手引导与 RBAC 完整验收入口（CI 直接调用）
 npm run e2e:headed     # 显示浏览器并放慢执行，可在屏幕上观察
 npm run e2e:perf       # 60 班压测(执行久,非回归,CI 不跑)
