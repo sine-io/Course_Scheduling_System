@@ -127,20 +127,28 @@ def delete_subject(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    subject = db.get(Subject, subject_id)
-    if subject is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到科目")
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_subject",
         target_type="subject",
-        target_id=subject.id,
-        semester_id=subject.semester_id,
+        target_id=subject_id,
+        semester_id=None,
+        target_version=f"科目 #{subject_id}",
+        expected_target=f"subject:{subject_id}",
+        impact=f"永久删除科目 #{subject_id} 及其相关排课数据",
+    )
+    subject = db.get(Subject, subject_id)
+    if subject is None:
+        high_risk_http.reject(
+            db, attempt.id, HTTPException(status.HTTP_404_NOT_FOUND, "找不到科目")
+        )
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=subject.name,
-        expected_target=f"subject:{subject.id}",
-        impact=f"永久删除科目「{subject.name}」及其相关排课数据",
+        semester_id=subject.semester_id,
     )
     try:
         _require_writable(db, subject.semester_id)
@@ -430,20 +438,28 @@ def delete_teacher(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    teacher = db.get(Teacher, teacher_id)
-    if teacher is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_teacher",
         target_type="teacher",
-        target_id=teacher.id,
-        semester_id=teacher.semester_id,
+        target_id=teacher_id,
+        semester_id=None,
+        target_version=f"教师 #{teacher_id}",
+        expected_target=f"teacher:{teacher_id}",
+        impact=f"永久删除教师 #{teacher_id} 及其时段规则和排课关联",
+    )
+    teacher = db.get(Teacher, teacher_id)
+    if teacher is None:
+        high_risk_http.reject(
+            db, attempt.id, HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
+        )
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=teacher.name,
-        expected_target=f"teacher:{teacher.id}",
-        impact=f"永久删除教师「{teacher.name}」及其时段规则和排课关联",
+        semester_id=teacher.semester_id,
     )
     try:
         _require_writable(db, teacher.semester_id)
@@ -563,20 +579,28 @@ def delete_room(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    room = db.get(Room, room_id)
-    if room is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_room",
         target_type="room",
-        target_id=room.id,
-        semester_id=room.semester_id,
+        target_id=room_id,
+        semester_id=None,
+        target_version=f"教室/场地 #{room_id}",
+        expected_target=f"room:{room_id}",
+        impact=f"永久删除教室/场地 #{room_id} 并解除相关排课指定",
+    )
+    room = db.get(Room, room_id)
+    if room is None:
+        high_risk_http.reject(
+            db, attempt.id, HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
+        )
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=room.name,
-        expected_target=f"room:{room.id}",
-        impact=f"永久删除教室/场地「{room.name}」并解除相关排课指定",
+        semester_id=room.semester_id,
     )
     try:
         _require_writable(db, room.semester_id)
@@ -730,20 +754,28 @@ def delete_class_unit(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    cu = db.get(ClassUnit, class_id)
-    if cu is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_class_unit",
         target_type="class_unit",
-        target_id=cu.id,
-        semester_id=cu.semester_id,
+        target_id=class_id,
+        semester_id=None,
+        target_version=f"班级 #{class_id}",
+        expected_target=f"class-unit:{class_id}",
+        impact=f"永久删除班级 #{class_id} 及其排课单位关联",
+    )
+    cu = db.get(ClassUnit, class_id)
+    if cu is None:
+        high_risk_http.reject(
+            db, attempt.id, HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
+        )
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=cu.name,
-        expected_target=f"class-unit:{cu.id}",
-        impact=f"永久删除班级「{cu.name}」及其排课单位关联",
+        semester_id=cu.semester_id,
     )
     try:
         _require_writable(db, cu.semester_id)

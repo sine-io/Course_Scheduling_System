@@ -12,6 +12,7 @@ const YEAR = 2066
 
 test.describe('Issue #33 管理员高风险操作保护与审计', () => {
   test.afterEach(async ({ page }) => {
+    await deleteSemesterByYearTerm(page, YEAR + 1, 1)
     await deleteSemesterByYearTerm(page, YEAR, 1)
   })
 
@@ -125,5 +126,63 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     await expect(page.locator('.n-message--success').filter({ hasText: '恢复完成' })).toHaveCount(0)
     await expect(restore).toBeEnabled()
     expect(restoreCalls).toBe(1)
+  })
+
+  test('管理员确认后可删除，历史学期入口隐藏且接口拒绝', async ({ page }) => {
+    await login(page, E2E_ADMIN_USER, E2E_ADMIN_PASS)
+    await deleteSemesterByYearTerm(page, YEAR + 1, 1)
+    await deleteSemesterByYearTerm(page, YEAR, 1)
+    const semester = await createTestSemester(page, YEAR, { subjects: [] })
+    const firstResponse = await page.request.post(
+      `/api/subjects?semester_id=${semester.id}`,
+      { data: { name: '管理员确认删除科目' } },
+    )
+    expect(firstResponse.ok()).toBeTruthy()
+    const first = await firstResponse.json() as { id: number }
+
+    await page.goto('/basedata')
+    await page.locator('.n-tabs-tab', { hasText: '科目' }).click()
+    const deleteButton = page.getByTestId(`subject-delete-${first.id}`)
+    await deleteButton.click()
+    const deletePopover = page.locator('.n-popover')
+      .filter({ hasText: '管理员确认删除科目' }).last()
+    await expect(deletePopover).toContainText('永久删除')
+    await expect(deletePopover).toContainText('相关排课数据')
+    await deletePopover.getByRole('button', { name: '取消' }).click()
+    await expect(page.getByRole('cell', { name: '管理员确认删除科目' })).toBeVisible()
+
+    await deleteButton.click()
+    await deletePopover.getByRole('button', { name: '确认' }).click()
+    await expect(page.getByRole('cell', { name: '管理员确认删除科目' })).toHaveCount(0)
+    const successLogs = await (await page.request.get(
+      '/api/audit-logs?action=delete_subject',
+    )).json() as Array<{ target_id: number | null; result: string }>
+    expect(successLogs).toContainEqual(expect.objectContaining({
+      target_id: first.id,
+      result: 'success',
+    }))
+
+    const historicalResponse = await page.request.post(
+      `/api/subjects?semester_id=${semester.id}`,
+      { data: { name: '历史学期保留科目' } },
+    )
+    expect(historicalResponse.ok()).toBeTruthy()
+    const historicalSubject = await historicalResponse.json() as { id: number }
+    await createTestSemester(page, YEAR + 1, { subjects: [] })
+
+    await page.goto('/settings/semesters')
+    const historicalRow = page.getByTestId(`semester-${semester.id}`)
+    await expect(historicalRow).toBeVisible()
+    await expect(historicalRow.getByTestId(`semester-delete-${semester.id}`)).toHaveCount(0)
+
+    const rejected = await page.request.delete(`/api/subjects/${historicalSubject.id}`, {
+      data: highRiskData(`subject:${historicalSubject.id}`),
+    })
+    expect(rejected.status()).toBe(409)
+    expect((await rejected.json()).detail.code).toBe('semester_not_current')
+    const historicalSubjects = await (await page.request.get(
+      `/api/subjects?semester_id=${semester.id}`,
+    )).json() as Array<{ id: number }>
+    expect(historicalSubjects.some((item) => item.id === historicalSubject.id)).toBeTruthy()
   })
 })

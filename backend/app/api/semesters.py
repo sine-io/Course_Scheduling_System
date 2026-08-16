@@ -32,7 +32,7 @@ from app.schemas.semester import (
     TemplateOut,
 )
 from app.schemas.wizard import SemesterSummary
-from app.services import onboarding_route, semester_context
+from app.services import high_risk, onboarding_route, semester_context
 from app.services import period_tables as pt_service
 from app.services import templates as tpl
 from app.services.calendar import readiness_issues
@@ -324,18 +324,27 @@ def delete_semester(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    semester = _get_semester(db, semester_id)
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_semester",
         target_type="semester",
-        target_id=semester.id,
-        semester_id=semester.id,
+        target_id=semester_id,
+        semester_id=None,
+        target_version=f"学期 #{semester_id}",
+        expected_target=f"semester:{semester_id}",
+        impact=f"永久删除学期 #{semester_id} 及其全部排课、基础数据和运行记录",
+    )
+    try:
+        semester = _get_semester(db, semester_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=semester.label,
-        expected_target=f"semester:{semester.id}",
-        impact=f"永久删除学期「{semester.label}」及其全部排课、基础数据和运行记录",
+        semester_id=semester.id,
     )
     try:
         semester = _require_writable(db, semester_id, lock="update")
@@ -423,18 +432,27 @@ def delete_period_table(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    table = _get_period_table(db, table_id)
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_period_table",
         target_type="period_table",
-        target_id=table.id,
-        semester_id=table.semester_id,
+        target_id=table_id,
+        semester_id=None,
+        target_version=f"作息时间表 #{table_id}",
+        expected_target=f"period-table:{table_id}",
+        impact=f"永久删除作息时间表 #{table_id} 及其中全部节次",
+    )
+    try:
+        table = _get_period_table(db, table_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=table.name,
-        expected_target=f"period-table:{table.id}",
-        impact=f"永久删除作息时间表「{table.name}」及其中全部节次",
+        semester_id=table.semester_id,
     )
     try:
         semester = _require_writable(db, table.semester_id)

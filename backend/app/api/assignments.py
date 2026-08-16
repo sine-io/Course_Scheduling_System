@@ -31,7 +31,7 @@ from app.schemas.assignment import (
 )
 from app.schemas.high_risk import HighRiskConfirmation
 from app.services import assignments as svc
-from app.services import semester_context
+from app.services import high_risk, semester_context
 
 router = APIRouter(tags=["assignments"])
 
@@ -93,20 +93,28 @@ def delete_group(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    unit = db.get(SchedulingUnit, unit_id)
-    if unit is None or unit.unit_type != SchedulingUnitType.group.value:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到走班群组")
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_scheduling_unit",
         target_type="scheduling_unit",
-        target_id=unit.id,
-        semester_id=unit.semester_id,
+        target_id=unit_id,
+        semester_id=None,
+        target_version=f"走班群组 #{unit_id}",
+        expected_target=f"scheduling-unit:{unit_id}",
+        impact=f"永久删除走班群组 #{unit_id} 及其中全部教学任务",
+    )
+    unit = db.get(SchedulingUnit, unit_id)
+    if unit is None or unit.unit_type != SchedulingUnitType.group.value:
+        high_risk_http.reject(
+            db, attempt.id, HTTPException(status.HTTP_404_NOT_FOUND, "找不到走班群组")
+        )
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=unit.name,
-        expected_target=f"scheduling-unit:{unit.id}",
-        impact=f"永久删除走班群组「{unit.name}」及其中全部教学任务",
+        semester_id=unit.semester_id,
     )
     try:
         _require_semester(db, unit.semester_id)
@@ -278,21 +286,29 @@ def delete_assignment(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    a = db.get(CourseAssignment, assignment_id)
-    if a is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
-    target_version = f"{a.scheduling_unit.name} / {a.subject.name}"
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_assignment",
         target_type="assignment",
-        target_id=a.id,
-        semester_id=a.semester_id,
+        target_id=assignment_id,
+        semester_id=None,
+        target_version=f"教学任务 #{assignment_id}",
+        expected_target=f"assignment:{assignment_id}",
+        impact=f"永久删除教学任务 #{assignment_id} 及其排课条目",
+    )
+    a = db.get(CourseAssignment, assignment_id)
+    if a is None:
+        high_risk_http.reject(
+            db, attempt.id, HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
+        )
+    target_version = f"{a.scheduling_unit.name} / {a.subject.name}"
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=target_version,
-        expected_target=f"assignment:{a.id}",
-        impact=f"永久删除教学任务「{target_version}」及其排课条目",
+        semester_id=a.semester_id,
     )
     try:
         _require_semester(db, a.semester_id)

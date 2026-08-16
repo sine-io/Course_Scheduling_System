@@ -33,6 +33,16 @@ def begin(
         expected_target=expected_target,
         impact=impact,
     )
+    return begin_spec(db, user, confirmation, spec)
+
+
+def begin_spec(
+    db: Session,
+    user: User,
+    confirmation: HighRiskConfirmation | None,
+    spec: high_risk.AttemptSpec,
+) -> AuditLog:
+    """校验一个已经由调用方组装好的高风险命令规格。"""
     try:
         return high_risk.begin(db, user, spec, confirmation)
     except high_risk.HighRiskError as exc:
@@ -40,7 +50,16 @@ def begin(
 
 
 def reject(db: Session, attempt_id: int, exc: HTTPException) -> NoReturn:
+    # 业务校验可能发生在目标名称/学期补齐之后。回滚业务写入时保留这些审计快照，
+    # 否则只读或引用规则拒绝会退回成难以查询的纯 ID。
+    audit = db.get(AuditLog, attempt_id)
+    target_version = audit.target_version if audit is not None else ""
+    semester_id = audit.semester_id if audit is not None else None
     db.rollback()
+    audit = db.get(AuditLog, attempt_id)
+    if audit is not None:
+        audit.target_version = target_version
+        audit.semester_id = semester_id
     detail = exc.detail
     if isinstance(detail, dict):
         reason = str(detail.get("code", "business_rule_rejected"))

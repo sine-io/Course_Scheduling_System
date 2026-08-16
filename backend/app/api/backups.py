@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
 from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.models.audit import AuditLog
@@ -26,31 +27,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["backups"])
 
 admin_only = require_roles(Role.admin)
-
-
-def _begin_attempt(
-    db: Session,
-    user: User,
-    confirmation: HighRiskConfirmation | None,
-    *,
-    action: str,
-    target_version: str,
-    expected_target: str,
-    impact: str,
-) -> AuditLog:
-    spec = high_risk.AttemptSpec(
-        action=action,
-        target_type="backup",
-        target_id=None,
-        semester_id=None,
-        target_version=target_version,
-        expected_target=expected_target,
-        impact=impact,
-    )
-    try:
-        return high_risk.begin(db, user, spec, confirmation)
-    except high_risk.HighRiskError as exc:
-        raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
 
 
 def _finish_rejected(
@@ -82,11 +58,14 @@ def create_backup(
     user: User = Depends(get_active_user),
 ):
     """立即备份(pg_dump 于 worker)。"""
-    attempt = _begin_attempt(
+    attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="create_backup",
+        target_type="backup",
+        target_id=None,
+        semester_id=None,
         target_version="新建手动备份",
         expected_target="backup:create",
         impact="创建一份包含当前全部系统数据的手动备份",
@@ -137,11 +116,14 @@ def delete_backup(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ):
-    attempt = _begin_attempt(
+    attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_backup",
+        target_type="backup",
+        target_id=None,
+        semester_id=None,
         target_version=name,
         expected_target=f"backup:{name}",
         impact=f"永久删除备份 {name}，删除后无法用于恢复",
@@ -268,10 +250,7 @@ def restore_backup(
         expected_target=f"backup:{name}",
         impact=f"使用 {name} 覆盖当前全部数据，恢复后所有用户需要重新登录",
     )
-    try:
-        attempt = high_risk.begin(db, user, spec, confirmation)
-    except high_risk.HighRiskError as exc:
-        raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
+    attempt = high_risk_http.begin_spec(db, user, confirmation, spec)
     try:
         _get_backup(name)
     except HTTPException as exc:
@@ -315,10 +294,7 @@ async def restore_from_upload(
         expected_target=f"upload:{filename}",
         impact=f"上传 {filename} 并覆盖当前全部数据，恢复后所有用户需要重新登录",
     )
-    try:
-        attempt = high_risk.begin(db, user, spec, confirmation)
-    except high_risk.HighRiskError as exc:
-        raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
+    attempt = high_risk_http.begin_spec(db, user, confirmation, spec)
     content = await file.read()
     try:
         name = backup_service.save_uploaded(filename, content)

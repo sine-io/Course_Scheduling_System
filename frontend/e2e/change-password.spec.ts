@@ -72,7 +72,8 @@ test('首次登录:强制改密页阻止去路、验证输入,改完才能进入
   await newInput.fill(NEW_PW)
   await confirmInput.fill(NEW_PW)
   await page.getByTestId('cp-submit').click()
-  await expect(page.getByText('密码已更新')).toBeVisible()
+  await expect(page.locator('.n-message__content').filter({ hasText: '密码已更新' }))
+    .toBeVisible()
   await expect(page).not.toHaveURL(/change-password/)
 
   // ⑧ 改完之后 API 就通了(强制状态确实解除,不是只有画面跳走)

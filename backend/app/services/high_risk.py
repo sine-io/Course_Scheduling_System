@@ -99,16 +99,7 @@ def begin(
     confirmation: HighRiskConfirmation | None,
 ) -> AuditLog:
     """校验角色、确认目标与操作 ID，并持久化 pending 尝试。"""
-    if Role.admin.value not in user.role_names:
-        _reject(
-            db,
-            user,
-            spec,
-            confirmation,
-            status_code=403,
-            code="high_risk_permission_denied",
-            message="只有系统管理员可以执行此高风险操作",
-        )
+    require_admin(db, user, spec, confirmation)
     if confirmation is None or not confirmation.confirmed:
         _reject(
             db,
@@ -163,6 +154,25 @@ def begin(
             code="high_risk_duplicate_operation",
             message="此操作已经提交，请勿重复执行",
             keep_operation_id=False,
+        )
+
+
+def require_admin(
+    db: Session,
+    user: User,
+    spec: AttemptSpec,
+    confirmation: HighRiskConfirmation | None,
+) -> None:
+    """拒绝并审计非管理员；管理员继续完成其余命令校验。"""
+    if Role.admin.value not in user.role_names:
+        _reject(
+            db,
+            user,
+            spec,
+            confirmation,
+            status_code=403,
+            code="high_risk_permission_denied",
+            message="只有系统管理员可以执行此高风险操作",
         )
 
 

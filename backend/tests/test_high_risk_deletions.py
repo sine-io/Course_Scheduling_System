@@ -161,6 +161,66 @@ def test_all_destructive_deletes_are_admin_only_confirmed_and_audited(env):
     assert all(item.created_at is not None for item in succeeded)
 
 
+def test_non_admin_missing_delete_targets_are_denied_before_lookup_and_audited(env):
+    client, db = env
+    make_user(db, "scheduler", PW, roles=[Role.scheduler])
+    _login(client, "scheduler")
+    missing_id = 987654
+    targets = [
+        (
+            f"/api/timetables/{missing_id}",
+            f"timetable:{missing_id}",
+            "delete_timetable",
+        ),
+        (
+            f"/api/assignments/{missing_id}",
+            f"assignment:{missing_id}",
+            "delete_assignment",
+        ),
+        (
+            f"/api/scheduling-units/{missing_id}",
+            f"scheduling-unit:{missing_id}",
+            "delete_scheduling_unit",
+        ),
+        (
+            f"/api/class-units/{missing_id}",
+            f"class-unit:{missing_id}",
+            "delete_class_unit",
+        ),
+        (f"/api/rooms/{missing_id}", f"room:{missing_id}", "delete_room"),
+        (
+            f"/api/teachers/{missing_id}",
+            f"teacher:{missing_id}",
+            "delete_teacher",
+        ),
+        (
+            f"/api/subjects/{missing_id}",
+            f"subject:{missing_id}",
+            "delete_subject",
+        ),
+        (
+            f"/api/period-tables/{missing_id}",
+            f"period-table:{missing_id}",
+            "delete_period_table",
+        ),
+        (
+            f"/api/semesters/{missing_id}",
+            f"semester:{missing_id}",
+            "delete_semester",
+        ),
+    ]
+
+    for path, target, _action in targets:
+        denied = _delete(client, path, target)
+        assert denied.status_code == 403, (path, denied.text)
+        assert denied.json()["detail"]["code"] == "high_risk_permission_denied"
+
+    logs = db.query(AuditLog).order_by(AuditLog.id).all()
+    assert [log.action for log in logs] == [item[2] for item in targets]
+    assert all(log.result == "rejected" for log in logs)
+    assert all(log.reason == "high_risk_permission_denied" for log in logs)
+
+
 def test_delete_requires_exact_confirmation_and_reused_operation_is_zero_write(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])

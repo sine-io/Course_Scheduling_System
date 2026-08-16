@@ -43,7 +43,7 @@ from app.schemas.timetable import (
     TimetableRename,
 )
 from app.services import conflict_checker as cc
-from app.services import semester_context
+from app.services import high_risk, semester_context
 from app.services import timetable_publish as pub
 from app.services.school_rules import (
     SemesterNotReadyError,
@@ -446,18 +446,27 @@ def delete_timetable(
     db: Session = Depends(get_db),
     user: User = Depends(get_active_user),
 ) -> None:
-    tt = _get_timetable(db, timetable_id)
     attempt = high_risk_http.begin(
         db,
         user,
         confirmation,
         action="delete_timetable",
         target_type="timetable",
-        target_id=tt.id,
-        semester_id=tt.semester_id,
+        target_id=timetable_id,
+        semester_id=None,
+        target_version=f"课表 #{timetable_id}",
+        expected_target=f"timetable:{timetable_id}",
+        impact=f"永久删除课表 #{timetable_id} 及其中全部排课条目",
+    )
+    try:
+        tt = _get_timetable(db, timetable_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
+    high_risk.update_target(
+        db,
+        attempt.id,
         target_version=tt.name,
-        expected_target=f"timetable:{tt.id}",
-        impact=f"永久删除课表「{tt.name}」及其中全部排课条目",
+        semester_id=tt.semester_id,
     )
     try:
         _require_writable(db, tt.semester_id)

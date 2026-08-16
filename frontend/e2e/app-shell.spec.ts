@@ -82,6 +82,8 @@ test.describe('生产应用壳层', () => {
     await expect(menu).toBeFocused()
 
     await menu.click()
+    await expect(drawer).toBeVisible()
+    await expect(close).toBeFocused()
     const queryLink = drawer.locator('.app-nav-catalog [data-nav-key="timetable-query"]').first()
     await queryLink.focus()
     await page.keyboard.press('Enter')

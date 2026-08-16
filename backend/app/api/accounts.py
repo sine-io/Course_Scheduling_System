@@ -7,44 +7,18 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
 from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.core.security import hash_password
 from app.models.user import Role, User, UserRole
 from app.schemas.account import AccountCreateRequest, AccountOut, AccountUpdateRequest
-from app.schemas.high_risk import HighRiskConfirmation
 from app.services import high_risk
 from app.services.users import create_user
 
 router = APIRouter(tags=["accounts"])
 
 admin_only = require_roles(Role.admin)
-
-
-def _begin(
-    db: Session,
-    user: User,
-    confirmation: HighRiskConfirmation | None,
-    *,
-    action: str,
-    target_id: int | None,
-    target_version: str,
-    expected_target: str,
-    impact: str,
-):
-    spec = high_risk.AttemptSpec(
-        action=action,
-        target_type="account",
-        target_id=target_id,
-        semester_id=None,
-        target_version=target_version,
-        expected_target=expected_target,
-        impact=impact,
-    )
-    try:
-        return high_risk.begin(db, user, spec, confirmation)
-    except high_risk.HighRiskError as exc:
-        raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
 
 
 def _reject(
@@ -86,12 +60,14 @@ def create_account(
     actor: User = Depends(get_active_user),
 ) -> AccountOut:
     roles = _role_values(body.roles)
-    attempt = _begin(
+    attempt = high_risk_http.begin(
         db,
         actor,
         body.confirmation,
         action="create_account",
+        target_type="account",
         target_id=None,
+        semester_id=None,
         target_version=body.username,
         expected_target=f"account:{body.username}",
         impact=f"创建账号 {body.username} 并授予角色：{'、'.join(roles)}",
@@ -152,12 +128,14 @@ def update_account(
     db: Session = Depends(get_db),
     actor: User = Depends(get_active_user),
 ) -> AccountOut:
-    attempt = _begin(
+    attempt = high_risk_http.begin(
         db,
         actor,
         body.confirmation,
         action="update_account",
+        target_type="account",
         target_id=account_id,
+        semester_id=None,
         target_version=f"#{account_id}",
         expected_target=f"account:{account_id}",
         impact=f"修改账号 #{account_id} 的角色、状态或登录凭据",
