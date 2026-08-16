@@ -13,6 +13,14 @@ PW = "password123"
 PGDMP = b"PGDMP" + b"\x00" * 100  # 假的 custom 格式文件头
 
 
+def _confirmation(operation_id: str, target: str) -> dict[str, object]:
+    return {
+        "operation_id": operation_id,
+        "confirmed": True,
+        "target": target,
+    }
+
+
 @pytest.fixture
 def backup_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "backup_dir", str(tmp_path))
@@ -74,6 +82,34 @@ def test_path_traversal_rejected(backup_dir):
         bk.restore_backup("../../etc/passwd")
 
 
+def test_restore_nonzero_exit_is_reported_as_rolled_back_failure(
+    backup_dir, monkeypatch
+):
+    """单事务下连旧版可忽略的 SET 错误也会回滚，不能报告恢复成功。"""
+    import subprocess
+
+    name = "backup_20260101_010101_manual.dump"
+    _touch(backup_dir, name)
+    monkeypatch.setattr(bk, "_terminate_other_connections", lambda _params: None)
+    seen: dict[str, list[str]] = {}
+
+    def fake_run(command, **_kwargs):
+        seen["command"] = command
+        return subprocess.CompletedProcess(
+            command,
+            1,
+            "",
+            "pg_restore: error: unrecognized configuration parameter transaction_timeout",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(bk.BackupError, match="全部变更已回滚"):
+        bk.restore_backup(name)
+    assert "--single-transaction" in seen["command"]
+    assert "--exit-on-error" in seen["command"]
+
+
 # ── RBAC:仅管理员 ─────────────────────────────────────────
 def _login(client, db, username, roles):
     make_user(db, username, PW, roles=roles)
@@ -96,6 +132,11 @@ def test_restore_upload_rejects_garbage_before_touching_db(env, backup_dir):
     _login(client, db, "adm", [Role.admin])
     r = client.post(
         "/api/backups/restore-upload",
+        data={
+            "operation_id": "66666666-6666-4666-8666-666666666666",
+            "confirmed": "true",
+            "target": "upload:evil.dump",
+        },
         files={"file": ("evil.dump", b"rm -rf /", "application/octet-stream")},
     )
     assert r.status_code == 400
@@ -106,7 +147,206 @@ def test_restore_upload_rejects_garbage_before_touching_db(env, backup_dir):
 def test_scheduler_cannot_restore(env, backup_dir):
     client, db = env
     _login(client, db, "sch", [Role.scheduler])
-    assert client.post("/api/backups/some.dump/restore").status_code == 403
+    denied = client.post(
+        "/api/backups/some.dump/restore",
+        json=_confirmation("11111111-1111-4111-8111-111111111111", "backup:some.dump"),
+    )
+    assert denied.status_code == 403
+
+    client.post("/api/auth/logout")
+    _login(client, db, "adm-audit", [Role.admin])
+    attempts = client.get("/api/audit-logs?action=restore_backup").json()
+    assert len(attempts) == 1
+    assert attempts[0]["username"] == "sch"
+    assert attempts[0]["actor_roles"] == ["scheduler"]
+    assert attempts[0]["target_version"] == "some.dump"
+    assert attempts[0]["result"] == "rejected"
+    assert attempts[0]["reason"] == "high_risk_permission_denied"
+
+
+def test_scheduler_cannot_create_backup(env, backup_dir, monkeypatch):
+    from app.api import backups as backups_api
+
+    client, db = env
+    _login(client, db, "sch", [Role.scheduler])
+    called = False
+
+    def fake_backup(_reason: str):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(backups_api.job_queue, "run_backup", fake_backup)
+    denied = client.post(
+        "/api/backups",
+        json=_confirmation(
+            "12121212-1212-4212-8212-121212121212",
+            "backup:create",
+        ),
+    )
+
+    assert denied.status_code == 403
+    assert called is False
+    client.post("/api/auth/logout")
+    _login(client, db, "adm-audit", [Role.admin])
+    log = client.get("/api/audit-logs?action=create_backup").json()[0]
+    assert log["username"] == "sch"
+    assert log["result"] == "rejected"
+    assert log["reason"] == "high_risk_permission_denied"
+
+
+def test_create_backup_requires_confirmation_and_deduplicates_operation(
+    env, backup_dir, monkeypatch
+):
+    from app.api import backups as backups_api
+
+    client, db = env
+    _login(client, db, "adm", [Role.admin])
+    calls: list[str] = []
+
+    def fake_backup(reason: str):
+        calls.append(reason)
+        return {
+            "name": "backup_20260101_010101_manual.dump",
+            "size_bytes": len(PGDMP),
+            "created_at": "2026-01-01T01:01:01",
+            "reason": reason,
+        }
+
+    monkeypatch.setattr(backups_api.job_queue, "run_backup", fake_backup)
+
+    missing = client.post("/api/backups")
+    assert missing.status_code == 409
+    assert missing.json()["detail"]["code"] == "high_risk_confirmation_required"
+    assert calls == []
+
+    confirmation = _confirmation(
+        "22222222-2222-4222-8222-222222222222",
+        "backup:create",
+    )
+    created = client.post("/api/backups", json=confirmation)
+    assert created.status_code == 201, created.text
+    assert calls == ["manual"]
+
+    repeated = client.post("/api/backups", json=confirmation)
+    assert repeated.status_code == 409
+    assert repeated.json()["detail"]["code"] == "high_risk_duplicate_operation"
+    assert calls == ["manual"]
+
+    attempts = client.get("/api/audit-logs?action=create_backup").json()
+    assert [(item["result"], item["reason"]) for item in reversed(attempts)] == [
+        ("rejected", "high_risk_confirmation_required"),
+        ("success", ""),
+        ("rejected", "high_risk_duplicate_operation"),
+    ]
+    assert attempts[1]["operation_id"] == confirmation["operation_id"]
+
+
+def test_delete_backup_requires_confirmation_and_records_success(env, backup_dir):
+    client, db = env
+    name = "backup_20260101_010101_manual.dump"
+    _touch(backup_dir, name)
+    _login(client, db, "adm", [Role.admin])
+
+    missing = client.delete(f"/api/backups/{name}")
+    assert missing.status_code == 409
+    assert (backup_dir / name).exists()
+
+    deleted = client.request(
+        "DELETE",
+        f"/api/backups/{name}",
+        json=_confirmation(
+            "77777777-7777-4777-8777-777777777777",
+            f"backup:{name}",
+        ),
+    )
+    assert deleted.status_code == 200
+    assert not (backup_dir / name).exists()
+    log = client.get("/api/audit-logs?action=delete_backup").json()[0]
+    assert log["username"] == "adm"
+    assert log["target_version"] == name
+    assert log["result"] == "success"
+
+
+def test_delete_backup_file_failure_is_not_reported_as_success(
+    env, backup_dir, monkeypatch
+):
+    from app.api import backups as backups_api
+
+    client, db = env
+    name = "backup_20260101_010101_manual.dump"
+    _touch(backup_dir, name)
+    _login(client, db, "adm", [Role.admin])
+
+    def fail_remove(_path):
+        raise OSError("read only")
+
+    monkeypatch.setattr(backups_api.os, "remove", fail_remove)
+    failed = client.request(
+        "DELETE",
+        f"/api/backups/{name}",
+        json=_confirmation(
+            "88888888-8888-4888-8888-888888888888",
+            f"backup:{name}",
+        ),
+    )
+
+    assert failed.status_code == 500
+    assert (backup_dir / name).exists()
+    log = client.get("/api/audit-logs?action=delete_backup").json()[0]
+    assert log["result"] == "failed"
+    assert log["reason"] == "backup_delete_failed"
+
+
+def test_restore_requires_exact_target_and_records_worker_failure(
+    env, backup_dir, monkeypatch
+):
+    from app.api import backups as backups_api
+
+    client, db = env
+    name = "backup_20260101_010101_manual.dump"
+    _touch(backup_dir, name)
+    _login(client, db, "adm", [Role.admin])
+    restore_calls: list[str] = []
+
+    monkeypatch.setattr(backups_api.job_queue, "solver_busy", lambda: False)
+    monkeypatch.setattr(
+        backups_api.job_queue,
+        "run_backup",
+        lambda reason: {"name": f"backup_20260102_010101_{reason}.dump"},
+    )
+
+    def fail_restore(target: str):
+        restore_calls.append(target)
+        raise backups_api.job_queue.BackupJobError("校验失败")
+
+    monkeypatch.setattr(backups_api.job_queue, "run_restore", fail_restore)
+
+    wrong_target = client.post(
+        f"/api/backups/{name}/restore",
+        json=_confirmation(
+            "33333333-3333-4333-8333-333333333333",
+            "backup:another.dump",
+        ),
+    )
+    assert wrong_target.status_code == 409
+    assert wrong_target.json()["detail"]["code"] == "high_risk_target_mismatch"
+    assert restore_calls == []
+
+    failed = client.post(
+        f"/api/backups/{name}/restore",
+        json=_confirmation(
+            "44444444-4444-4444-8444-444444444444",
+            f"backup:{name}",
+        ),
+    )
+    assert failed.status_code == 502
+    assert restore_calls == [name]
+
+    attempts = client.get("/api/audit-logs?action=restore_backup").json()
+    assert [(item["result"], item["reason"]) for item in reversed(attempts)] == [
+        ("rejected", "high_risk_target_mismatch"),
+        ("failed", "backup_job_failed"),
+    ]
 
 
 # ── 恢复前不得保留会被 pg_restore 中止的数据库会话(M6-6 实测发现)────────
@@ -162,7 +402,13 @@ def test_restore_closes_the_request_session_before_touching_the_database(
     monkeypatch.setattr(backups_api.job_queue, "run_restore", fake_restore)
 
     try:
-        r = client.post("/api/backups/backup_20260101_010101_manual.dump/restore")
+        r = client.post(
+            "/api/backups/backup_20260101_010101_manual.dump/restore",
+            json=_confirmation(
+                "55555555-5555-4555-8555-555555555555",
+                "backup:backup_20260101_010101_manual.dump",
+            ),
+        )
     finally:
         client.app.dependency_overrides[get_db] = original
 

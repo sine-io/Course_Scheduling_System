@@ -2,6 +2,7 @@
 
 import { apiGet, apiPost, apiPut, request } from '@/api/client'
 import type { RoomType } from '@/api/basedata'
+import type { HighRiskConfirmation } from '@/api/highRisk'
 
 export interface ClassBrief {
   id: number
@@ -74,7 +75,8 @@ export const listGroups = (semesterId: number) =>
   apiGet<SchedulingUnit[]>(`/scheduling-units?semester_id=${semesterId}`)
 export const createGroup = (semesterId: number, body: { name: string; class_ids: number[] }) =>
   apiPost<SchedulingUnit>(`/scheduling-units?semester_id=${semesterId}`, body)
-export const deleteGroup = (id: number) => request<void>('DELETE', `/scheduling-units/${id}`)
+export const deleteGroup = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/scheduling-units/${id}`, confirmation)
 
 // ── 教学任务 ──
 export const listAssignments = (semesterId: number) =>
@@ -83,7 +85,8 @@ export const createAssignment = (semesterId: number, body: AssignmentPayload) =>
   apiPost<Assignment>(`/assignments?semester_id=${semesterId}`, body)
 export const updateAssignment = (id: number, body: AssignmentPayload) =>
   request<Assignment>('PATCH', `/assignments/${id}`, body)
-export const deleteAssignment = (id: number) => request<void>('DELETE', `/assignments/${id}`)
+export const deleteAssignment = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/assignments/${id}`, confirmation)
 
 // ── 统计 ──
 export const teacherLoad = (semesterId: number) =>

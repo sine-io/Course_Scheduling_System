@@ -9,12 +9,16 @@ import {
   TRACK_LABELS, createClassUnit, deleteClassUnit, listClassUnits, listTeachers, updateClassUnit,
 } from '@/api/basedata'
 import type { ClassTrack, ClassUnit, Teacher } from '@/api/basedata'
+import { highRiskConfirmation } from '@/api/highRisk'
 import { getSemester } from '@/api/semesters'
 import type { PeriodTable } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './basedata-workspace.css'
 
-const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
+const props = withDefaults(
+  defineProps<{ semesterId: number; canEdit?: boolean; canDelete?: boolean }>(),
+  { canEdit: true, canDelete: false },
+)
 const message = useMessage()
 
 const items = ref<ClassUnit[]>([])
@@ -169,10 +173,10 @@ async function save() {
 }
 
 async function remove(classUnit: ClassUnit) {
-  if (!props.canEdit || deletingId.value !== null) return
+  if (!props.canDelete || deletingId.value !== null) return
   deletingId.value = classUnit.id
   try {
-    await deleteClassUnit(classUnit.id)
+    await deleteClassUnit(classUnit.id, highRiskConfirmation(`class-unit:${classUnit.id}`))
     message.success('已删除')
     await reload()
   } catch (error) {
@@ -254,7 +258,7 @@ async function remove(classUnit: ClassUnit) {
                   <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                   {{ '编辑' }}
                 </n-button>
-                <n-popconfirm :disabled="deletingId !== null" @positive-click="remove(classUnit)">
+                <n-popconfirm v-if="canDelete" :disabled="deletingId !== null" @positive-click="remove(classUnit)">
                   <template #trigger>
                     <n-button
                       size="small"
@@ -268,7 +272,7 @@ async function remove(classUnit: ClassUnit) {
                       {{ '删除' }}
                     </n-button>
                   </template>
-                  {{ '确定删除此班级吗？' }}
+                  {{ `将永久删除班级“${classUnit.name}”及其排课单位关联。确定继续吗？` }}
                 </n-popconfirm>
               </div>
             </td>

@@ -1,17 +1,27 @@
 <script setup lang="ts">
 import { Download, FileSpreadsheet, RotateCcw, Upload } from '@lucide/vue'
 import {
-  NAlert, NButton, NCheckbox, NList, NListItem, NRadioButton, NRadioGroup, NUpload, useMessage,
+  NAlert, NButton, NCheckbox, NList, NListItem, NRadioButton, NRadioGroup, NUpload,
+  useDialog, useMessage,
 } from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { downloadTemplate, ENTITY_LABELS, uploadImport } from '@/api/imports'
 import type { ImportEntity, ImportResult } from '@/api/imports'
+import { highRiskConfirmation } from '@/api/highRisk'
 import './basedata-workspace.css'
 
-const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
+const props = withDefaults(
+  defineProps<{
+    semesterId: number
+    canEdit?: boolean
+    canManageAccounts?: boolean
+  }>(),
+  { canEdit: true, canManageAccounts: false },
+)
 const emit = defineEmits<{ imported: [] }>()
 const message = useMessage()
+const dialog = useDialog()
 const labels = ENTITY_LABELS
 
 const entity = ref<ImportEntity>('subjects')
@@ -45,7 +55,7 @@ function onFileChange(data: { fileList: UploadFileInfo[] }) {
   errorMessage.value = null
 }
 
-async function onUpload() {
+async function performUpload() {
   if (!props.canEdit || uploading.value) return
   if (!selectedFile.value) {
     errorMessage.value = '请先选择文件'
@@ -55,11 +65,15 @@ async function onUpload() {
   uploading.value = true
   result.value = null
   try {
+    const confirmation = isTeacher.value && createAccounts.value
+      ? highRiskConfirmation(`semester:${props.semesterId}:teacher-accounts`)
+      : undefined
     const importResult = await uploadImport(
       entity.value,
       props.semesterId,
       selectedFile.value,
       isTeacher.value && createAccounts.value,
+      confirmation,
     )
     result.value = importResult
     if (importResult.errors.length === 0) {
@@ -73,6 +87,21 @@ async function onUpload() {
   } finally {
     uploading.value = false
   }
+}
+
+function onUpload() {
+  if (!isTeacher.value || !createAccounts.value) {
+    void performUpload()
+    return
+  }
+  dialog.warning({
+    title: '确认批量创建教师账号',
+    content: `目标：学期 #${props.semesterId} 的教师导入。影响：导入成功的每位教师都会新增登录账号，默认密码须由本人首次登录修改。`,
+    positiveText: '确认导入并建号',
+    negativeText: '取消',
+    maskClosable: false,
+    onPositiveClick: () => performUpload(),
+  })
 }
 </script>
 
@@ -122,7 +151,7 @@ async function onUpload() {
         <Upload :size="18" aria-hidden="true" />
         <strong>{{ '③ 上传填写完成的文件' }}</strong>
       </div>
-      <n-checkbox v-if="isTeacher" v-model:checked="createAccounts">
+      <n-checkbox v-if="isTeacher && canManageAccounts" v-model:checked="createAccounts">
         {{ '同时创建教师登录账号（默认密码，首次登录需修改）' }}
       </n-checkbox>
       <n-upload

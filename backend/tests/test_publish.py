@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.models.basedata import Teacher
 from app.models.user import Role
 from tests.api_helpers import publish_checked_timetable
 from tests.conftest import make_user
@@ -409,7 +410,10 @@ def test_published_endpoints_readable_by_teacher(env3):
     # 绑定教师账号:王师 ↔ e2e teacher user
     teacher = client.get(f"/api/teachers?semester_id={sid}").json()[0]
     tuser = make_user(db, "t", PW, roles=[Role.teacher])
-    client.patch(f"/api/teachers/{teacher['id']}", json={"name": "王师", "user_id": tuser.id})
+    teacher_model = db.get(Teacher, teacher["id"])
+    assert teacher_model is not None
+    teacher_model.user_id = tuser.id
+    db.commit()
 
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "t", "password": PW})

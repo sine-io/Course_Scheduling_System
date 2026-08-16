@@ -20,6 +20,7 @@ admin_only = require_roles(Role.admin)
 class AuditLogOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    operation_id: str | None
     username: str
     actor_roles: list[str]
     action: str

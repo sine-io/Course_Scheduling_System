@@ -1,9 +1,12 @@
 // Excel 导入 API:模板下载、上传导入。
 
+import type { HighRiskConfirmation } from '@/api/highRisk'
+
 export type ImportEntity = 'subjects' | 'teachers' | 'classes' | 'assignments'
 
 export interface ImportResult {
   imported: number
+  accounts_created?: number
   errors: string[]
 }
 
@@ -33,9 +36,15 @@ export async function uploadImport(
   semesterId: number,
   file: File,
   createAccounts = false,
+  confirmation?: HighRiskConfirmation,
 ): Promise<ImportResult> {
   const form = new FormData()
   form.append('file', file)
+  if (createAccounts && confirmation) {
+    form.append('operation_id', confirmation.operation_id)
+    form.append('confirmed', String(confirmation.confirmed))
+    form.append('target', confirmation.target)
+  }
   let url = `/api/import/${entity}?semester_id=${semesterId}`
   if (createAccounts) url += '&create_accounts=true'
   const resp = await fetch(url, { method: 'POST', credentials: 'include', body: form })

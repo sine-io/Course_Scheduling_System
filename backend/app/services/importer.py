@@ -107,6 +107,7 @@ TEMPLATE_DEFS: dict[str, dict] = {
 @dataclass
 class ImportResult:
     imported: int = 0
+    accounts_created: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -263,7 +264,12 @@ def _import_classes(db: Session, semester_id: int, file_bytes: bytes) -> ImportR
 
 
 def _import_teachers(
-    db: Session, semester_id: int, file_bytes: bytes, create_accounts: bool
+    db: Session,
+    semester_id: int,
+    file_bytes: bytes,
+    create_accounts: bool,
+    *,
+    commit: bool = True,
 ) -> ImportResult:
     result = ImportResult()
     subjects = {
@@ -348,8 +354,12 @@ def _import_teachers(
                 must_change_password=True,
                 roles=[UserRole(role=Role.teacher.value)],
             )
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     result.imported = len(pending)
+    result.accounts_created = sum(1 for _, username in pending if username)
     return result
 
 
@@ -476,7 +486,13 @@ def run_import(
     if entity == "classes":
         return _import_classes(db, semester_id, file_bytes)
     if entity == "teachers":
-        return _import_teachers(db, semester_id, file_bytes, create_accounts)
+        return _import_teachers(
+            db,
+            semester_id,
+            file_bytes,
+            create_accounts,
+            commit=not create_accounts,
+        )
     if entity == "assignments":
         return _import_assignments(db, semester_id, file_bytes)
     raise ValueError(f"未知的导入类型:{entity}")

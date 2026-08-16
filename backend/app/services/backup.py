@@ -192,16 +192,17 @@ def restore_backup(name: str) -> list[str]:
     _terminate_other_connections(p)
     try:
         proc = subprocess.run(
-            ["pg_restore", "--clean", "--if-exists", "--no-owner", "--no-privileges",
+            ["pg_restore", "--single-transaction", "--exit-on-error", "--clean", "--if-exists",
+             "--no-owner", "--no-privileges",
              "-h", p["host"], "-p", p["port"], "-U", p["user"], "-d", p["dbname"], path],
             check=False, env=_env(p), capture_output=True, text=True,
         )
     except FileNotFoundError as e:
         raise BackupError("找不到 pg_restore(需在 worker 镜像执行)") from e
-    # returncode>1 直接失败;==1 需逐行判别是「可忽略的跨版本噪音」还是真正的数据错误。
-    if proc.returncode > 1:
-        raise BackupError(f"恢复失败:{proc.stderr or proc.returncode}")
-    warnings = _classify_restore_stderr(proc.stderr) if proc.returncode == 1 else []
+    # 单事务恢复下任何 SQL 错误都会回滚整次恢复；不能再把跨版本 SET 错误当作已完成。
+    if proc.returncode != 0:
+        raise BackupError(f"恢复失败，全部变更已回滚:{proc.stderr or proc.returncode}")
+    warnings = _classify_restore_stderr(proc.stderr)
     if warnings:
         logger.warning("pg_restore 完成但有可忽略的警告:%s", " | ".join(warnings))
     return warnings
@@ -216,3 +217,11 @@ def save_uploaded(name_hint: str, data: bytes) -> str:
     with open(os.path.join(_dir(), name), "wb") as f:
         f.write(data)
     return name
+
+
+def discard(name: str) -> None:
+    """删除未能完成恢复的上传文件；只接受备份目录中的合法文件名。"""
+    try:
+        os.remove(_path(name))
+    except OSError:
+        pass

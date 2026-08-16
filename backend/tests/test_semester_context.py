@@ -1,5 +1,7 @@
 """当前学期上下文的 HTTP 行为测试。"""
 
+from uuid import uuid4
+
 from app.api import solver as solver_api
 from app.models.semester import SemesterStatus
 from app.models.user import Role
@@ -178,7 +180,7 @@ def test_non_current_semester_writes_are_rejected_but_current_writes_work(env):
 
 def test_historical_calendar_import_solver_and_timetable_delete_are_read_only(env):
     client, db = env
-    login(client, db)
+    login(client, db, roles=(Role.admin,))
     first = create_api_semester(client, academic_year=2026)
     first_timetable = client.post(
         f"/api/timetables?semester_id={first['id']}", json={"name": "历史草稿"}
@@ -209,7 +211,15 @@ def test_historical_calendar_import_solver_and_timetable_delete_are_read_only(en
     assert solver.status_code == 409
     assert solver.json()["detail"]["code"] == "semester_not_current"
 
-    deleted = client.delete(f"/api/timetables/{first_timetable['id']}")
+    deleted = client.request(
+        "DELETE",
+        f"/api/timetables/{first_timetable['id']}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"timetable:{first_timetable['id']}",
+        },
+    )
     assert deleted.status_code == 409
     assert deleted.json()["detail"]["code"] == "semester_not_current"
 
@@ -250,7 +260,7 @@ def test_historical_solver_stop_is_read_only_but_cancel_remains_available(env):
 
 def test_historical_assignment_and_publish_mutations_are_read_only(env):
     client, db = env
-    login(client, db)
+    login(client, db, roles=(Role.admin,))
     first = create_api_semester(client, academic_year=2026)
     subject = client.post(
         f"/api/subjects?semester_id={first['id']}", json={"name": "语文"}
@@ -285,7 +295,15 @@ def test_historical_assignment_and_publish_mutations_are_read_only(env):
 
     responses = [
         client.patch(f"/api/assignments/{assignment['id']}", json=assignment_body),
-        client.delete(f"/api/assignments/{assignment['id']}"),
+        client.request(
+            "DELETE",
+            f"/api/assignments/{assignment['id']}",
+            json={
+                "operation_id": str(uuid4()),
+                "confirmed": True,
+                "target": f"assignment:{assignment['id']}",
+            },
+        ),
         client.post(f"/api/timetables/{timetable['id']}/publish"),
     ]
     assert {response.status_code for response in responses} == {409}

@@ -15,6 +15,7 @@ import {
   updateAssignment, teacherLoad, classLoad,
 } from '@/api/assignments'
 import type { Assignment, AssignmentPayload, ClassLoad, SchedulingUnit, TeacherLoad } from '@/api/assignments'
+import { highRiskConfirmation } from '@/api/highRisk'
 import { listClassUnits, listRooms, listSubjects, listTeachers, ROOM_TYPE_LABELS } from '@/api/basedata'
 import type { ClassUnit, Room, Subject, Teacher } from '@/api/basedata'
 import { listSemesters } from '@/api/semesters'
@@ -33,6 +34,10 @@ const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
 const canEdit = computed(() => (
   (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
+))
+const canDelete = computed(() => (
+  auth.hasRole('admin')
   && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 const loading = ref(true)
@@ -230,10 +235,10 @@ async function save() {
 }
 const deletingAssignmentId = ref<number | null>(null)
 async function removeAssignment(a: Assignment) {
-  if (!canEdit.value || deletingAssignmentId.value !== null) return
+  if (!canDelete.value || deletingAssignmentId.value !== null) return
   deletingAssignmentId.value = a.id
   try {
-    await deleteAssignment(a.id)
+    await deleteAssignment(a.id, highRiskConfirmation(`assignment:${a.id}`))
     message.success('已删除')
     await reloadAll(sid.value!)
   } catch (error) {
@@ -270,10 +275,10 @@ async function saveGroup() {
   }
 }
 async function removeGroup(g: SchedulingUnit) {
-  if (!canEdit.value || deletingGroupId.value !== null) return
+  if (!canDelete.value || deletingGroupId.value !== null) return
   deletingGroupId.value = g.id
   try {
-    await deleteGroup(g.id)
+    await deleteGroup(g.id, highRiskConfirmation(`scheduling-unit:${g.id}`))
     message.success('分组已删除')
     await reloadAll(sid.value!)
   } catch (e) {
@@ -413,7 +418,7 @@ function blockLabel(a: Assignment): string {
                           <template #icon><Pencil :size="13" aria-hidden="true" /></template>
                           {{ '编辑' }}
                         </n-button>
-                        <n-popconfirm @positive-click="removeAssignment(a)">
+                        <n-popconfirm v-if="canDelete" @positive-click="removeAssignment(a)">
                           <template #trigger>
                             <n-button
                               size="tiny"
@@ -426,7 +431,7 @@ function blockLabel(a: Assignment): string {
                               {{ '删除' }}
                             </n-button>
                           </template>
-                          {{ '确定删除此教学任务吗？' }}
+                          {{ `将永久删除“${unitLabel(a)} / ${a.subject.name}”及其排课条目。确定继续吗？` }}
                         </n-popconfirm>
                       </div>
                     </td>
@@ -452,7 +457,7 @@ function blockLabel(a: Assignment): string {
                   <strong>{{ group.name }}</strong>
                   <span>{{ group.classes.map((c) => `${c.grade}年${c.name}`).join('、') }}</span>
                 </div>
-                <n-popconfirm v-if="canEdit" @positive-click="removeGroup(group)">
+                <n-popconfirm v-if="canDelete" @positive-click="removeGroup(group)">
                   <template #trigger>
                     <n-button
                       size="tiny"
@@ -464,7 +469,7 @@ function blockLabel(a: Assignment): string {
                       {{ '删除分组' }}
                     </n-button>
                   </template>
-                  {{ '删除分组将同时移除其教学任务，确定吗？' }}
+                  {{ `将永久删除走班群组“${group.name}”及其中全部教学任务。确定继续吗？` }}
                 </n-popconfirm>
               </div>
             </div>

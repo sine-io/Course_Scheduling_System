@@ -9,6 +9,7 @@ import {
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { apiErrorMessage } from '@/api/client'
+import { highRiskConfirmation } from '@/api/highRisk'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
@@ -31,6 +32,10 @@ const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
 const canEdit = computed(() => (
   (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
+))
+const canDelete = computed(() => (
+  auth.hasRole('admin')
   && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 const items = ref<TimetableBrief[]>([])
@@ -137,9 +142,9 @@ async function onDuplicate(timetable: TimetableBrief) {
 }
 
 async function onDelete(timetable: TimetableBrief) {
-  if (!canEdit.value) return
+  if (!canDelete.value) return
   await runAction('delete', timetable.id, async () => {
-    await deleteTimetable(timetable.id)
+    await deleteTimetable(timetable.id, highRiskConfirmation(`timetable:${timetable.id}`))
     message.success(`已删除“${timetable.name}”`)
     await reload()
   }, '删除课表版本失败，请稍后重试。')
@@ -382,7 +387,7 @@ async function onCheck(timetable: TimetableBrief) {
                       <template #icon><Pencil :size="13" aria-hidden="true" /></template>
                       {{ '改名' }}
                     </n-button>
-                    <n-popconfirm v-if="canEdit" @positive-click="onDelete(timetable)">
+                    <n-popconfirm v-if="canDelete" @positive-click="onDelete(timetable)">
                       <template #trigger>
                         <n-button
                           size="tiny"
@@ -395,7 +400,7 @@ async function onCheck(timetable: TimetableBrief) {
                           {{ '删除' }}
                         </n-button>
                       </template>
-                      {{ `确定删除“${timetable.name}”吗？其单元格将一并移除。` }}
+                      {{ `将永久删除课表“${timetable.name}”及其中全部排课条目。确定继续吗？` }}
                     </n-popconfirm>
                   </div>
                 </td>

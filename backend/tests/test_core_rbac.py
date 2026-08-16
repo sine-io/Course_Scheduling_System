@@ -3,6 +3,7 @@
 这些测试只通过 HTTP seam 验证角色可见范围和动作权限，避免把前端隐藏入口当成安全边界。
 """
 
+from app.models.basedata import Teacher
 from app.models.user import Role
 from tests.conftest import make_user
 
@@ -105,9 +106,13 @@ def test_scheduler_teacher_union_keeps_core_and_personal_roles(env):
     ).status_code == 201
     teacher = client.post(
         f"/api/teachers?semester_id={semester_id}",
-        json={"name": "兼任教师", "base_periods": 20, "user_id": user.id},
+        json={"name": "兼任教师", "base_periods": 20},
     )
     assert teacher.status_code == 201, teacher.text
+    teacher_model = db.get(Teacher, teacher.json()["id"])
+    assert teacher_model is not None
+    teacher_model.user_id = user.id
+    db.commit()
     leave = client.post(
         f"/api/leaves?semester_id={semester_id}",
         json={

@@ -7,6 +7,8 @@
 日期边界是重点:周末、学期起止外、跨周、半天、连堂。
 """
 
+from uuid import uuid4
+
 import pytest
 
 from app.models.leave import AffectedStatus, LeaveRequest, LeaveStatus
@@ -40,7 +42,7 @@ def school(env):
     返回 (client, db, semester_id, teacher_id)。
     """
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.scheduler, Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
 
     sid = create_api_semester(
@@ -89,7 +91,15 @@ def _bind_account(client, db, teacher_id: int, username: str):
     """把登录账号绑到教师基础信息。PATCH /teachers 会整体替换,得带齐必填字段。"""
     user = make_user(db, username, PW, roles=[Role.teacher])
     r = client.patch(f"/api/teachers/{teacher_id}", json={
-        "name": "王师", "base_periods": 20, "user_id": user.id})
+        "name": "王师",
+        "base_periods": 20,
+        "user_id": user.id,
+        "account_confirmation": {
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"teacher:{teacher_id}:account:{user.id}",
+        },
+    })
     assert r.status_code == 200, r.json()
     return user
 
@@ -269,7 +279,15 @@ def test_affected_periods_are_a_snapshot_not_a_join(school):
     assert db.get(LeaveRequest, leave_id).affected_periods[0].schedule_entry_id is not None
     published = client.get(f"/api/published/timetable?semester_id={sid}").json()
     client.patch(f"/api/timetables/{published['id']}", json={"status": "archived"})
-    client.delete(f"/api/timetables/{published['id']}")
+    client.request(
+        "DELETE",
+        f"/api/timetables/{published['id']}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"timetable:{published['id']}",
+        },
+    )
 
     after = client.get(f"/api/leaves/{leave_id}/affected").json()
     assert len(after) == 5

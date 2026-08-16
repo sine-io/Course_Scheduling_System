@@ -29,7 +29,6 @@ const SCHEDULER_ROUTES = [
   ['/substitution-stats', '代课课时统计'],
   ['/scheduling/versions', '版本与发布'],
   ['/scheduling/timetable-demo', '课表组件演示（TimetableGrid）'],
-  ['/settings/system', '系统管理'],
 ] as const
 
 const TEACHER_ROUTES = [

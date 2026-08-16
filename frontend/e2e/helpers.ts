@@ -1,4 +1,6 @@
-import type { APIResponse, Page } from '@playwright/test'
+import { randomUUID } from 'node:crypto'
+import { request } from '@playwright/test'
+import type { APIRequestContext, APIResponse, Page } from '@playwright/test'
 import { SEM_END, SEM_START } from './dates'
 
 // 专用于 E2E 的排课管理员账号（由验收前置步骤通过 sudo docker exec 创建，不删除）。
@@ -8,6 +10,28 @@ export const E2E_DIRECTOR_USER = 'e2e_director'
 export const E2E_DIRECTOR_PASS = 'e2edirector1234'
 export const E2E_TEACHER_USER = 'e2e_teacher'
 export const E2E_TEACHER_PASS = 'e2eteacher1234'
+export const E2E_ADMIN_USER = 'e2e_admin'
+export const E2E_ADMIN_PASS = 'e2eadmin1234'
+
+export function highRiskData(target: string) {
+  return { operation_id: randomUUID(), confirmed: true, target }
+}
+
+export async function createAdminApiContext(page: Page): Promise<APIRequestContext> {
+  const currentUrl = page.url()
+  const baseURL = currentUrl.startsWith('http')
+    ? new URL(currentUrl).origin
+    : (process.env.E2E_BASE_URL || 'http://localhost')
+  const context = await request.newContext({ baseURL })
+  const loginResponse = await context.post('/api/auth/login', {
+    data: { username: E2E_ADMIN_USER, password: E2E_ADMIN_PASS },
+  })
+  if (!loginResponse.ok()) {
+    await context.dispose()
+    throw new Error(`管理员 E2E 账号登录失败：${await loginResponse.text()}`)
+  }
+  return context
+}
 
 export const JUNIOR_HIGH_SLOTS = [
   [1, '早自习', '07:50', '08:20', 'morning'],
@@ -186,19 +210,36 @@ export async function browserApiRequest(
 
 /** 删除指定学年学期(idempotent),避免测试数据残留或冲突。 */
 export async function deleteSemesterByYearTerm(page: Page, year: number, term: number): Promise<void> {
-  const resp = await page.request.get('/api/semesters')
-  const list = (await resp.json()) as Array<{
-    id: number
-    academic_year: number
-    term: number
-    status?: string
-    is_current?: boolean
-  }>
-  for (const s of list) {
-    if (s.academic_year === year && s.term === term) {
-      if (s.status === 'archived') continue
-      if (!s.is_current) await switchCurrentSemester(page, s.id)
-      await page.request.delete(`/api/semesters/${s.id}`)
+  const admin = await createAdminApiContext(page)
+  try {
+    const resp = await admin.get('/api/semesters')
+    const list = await responseJson<Array<{
+      id: number
+      academic_year: number
+      term: number
+      status?: string
+      is_current?: boolean
+    }>>(resp)
+    for (const semester of list) {
+      if (semester.academic_year === year && semester.term === term) {
+        if (semester.status === 'archived') continue
+        if (!semester.is_current) {
+          const context = await responseJson<{ revision: number }>(
+            await admin.get('/api/semester-context'),
+          )
+          await responseJson(await admin.put('/api/semester-context', {
+            data: { semester_id: semester.id, expected_revision: context.revision },
+          }))
+        }
+        const deletion = await admin.delete(`/api/semesters/${semester.id}`, {
+          data: highRiskData(`semester:${semester.id}`),
+        })
+        if (!deletion.ok()) {
+          throw new Error(`${deletion.url()}：${await deletion.text()}`)
+        }
+      }
     }
+  } finally {
+    await admin.dispose()
   }
 }

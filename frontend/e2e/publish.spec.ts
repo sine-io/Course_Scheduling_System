@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import {
+  createAdminApiContext,
   createTestSemester,
   deleteSemesterByYearTerm,
+  highRiskData,
   login,
   publishCheckedTimetable,
   semesterLabel,
@@ -116,24 +118,40 @@ test.describe('教师端(手机)', () => {
     // 创建教师账号:导入含「登录账号」的教师模板(唯一能创建 teacher 账号的途径)。
     // 账号不随学期删除,故第二次执行改为创建教师并绑定现有账号(保持幂等)。
     const file = fileURLToPath(new URL('./fixtures/teachers_with_account.xlsx', import.meta.url))
-    const imp = await (await page.request.post(
-      `/api/import/teachers?semester_id=${sid}&create_accounts=true`,
-      { multipart: { file: { name: 't.xlsx', mimeType: XLSX, buffer: readFileSync(file) } } },
-    )).json()
-
+    const admin = await createAdminApiContext(page)
     let teacherId: number
-    if (imp.imported === 1) {
-      const list = await get(page, `/api/teachers?semester_id=${sid}`)
-      teacherId = list.find((x: { name: string }) => x.name === '陈老师').id
-    } else {
-      const created = await post(page, `/api/teachers?semester_id=${sid}`, { name: '陈老师' })
-      const accounts = await get(page, `/api/teachers/bindable-accounts?semester_id=${sid}`)
-      const acc = accounts.find((x: { username: string }) => x.username === TEACHER_USER)
-      expect(acc, '应可绑定现有的 e2e_teacher 账号').toBeTruthy()
-      await page.request.patch(`/api/teachers/${created.id}`, {
-        data: { name: '陈老师', user_id: acc.id },
-      })
-      teacherId = created.id
+    try {
+      const confirmation = highRiskData(`semester:${sid}:teacher-accounts`)
+      const imp = await (await admin.post(
+        `/api/import/teachers?semester_id=${sid}&create_accounts=true`,
+        {
+          multipart: {
+            ...confirmation,
+            confirmed: String(confirmation.confirmed),
+            file: { name: 't.xlsx', mimeType: XLSX, buffer: readFileSync(file) },
+          },
+        },
+      )).json()
+
+      if (imp.imported === 1) {
+        const list = await (await admin.get(`/api/teachers?semester_id=${sid}`)).json()
+        teacherId = list.find((x: { name: string }) => x.name === '陈老师').id
+      } else {
+        const created = await post(page, `/api/teachers?semester_id=${sid}`, { name: '陈老师' })
+        const accounts = await (await admin.get(`/api/teachers/bindable-accounts?semester_id=${sid}`)).json()
+        const acc = accounts.find((x: { username: string }) => x.username === TEACHER_USER)
+        expect(acc, '应可绑定现有的 e2e_teacher 账号').toBeTruthy()
+        await admin.patch(`/api/teachers/${created.id}`, {
+          data: {
+            name: '陈老师',
+            user_id: acc.id,
+            account_confirmation: highRiskData(`teacher:${created.id}:account:${acc.id}`),
+          },
+        })
+        teacherId = created.id
+      }
+    } finally {
+      await admin.dispose()
     }
 
     // 陈老师的课,排入并发布(每周 1 节 → 排 1 节即完整,无需强制发布)

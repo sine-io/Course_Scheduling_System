@@ -30,6 +30,7 @@ test('系统管理:三张卡片渲染、可立即备份并删除备份', async (
   const rows = page.getByTestId('backup-row')
   const before = await rows.count()
   await page.getByTestId('backup-now').click()
+  await page.getByRole('button', { name: '确认' }).click()
   await expect(page.getByText('备份已创建')).toBeVisible({ timeout: 60_000 })
   await expect(rows).toHaveCount(before + 1)
   await page.screenshot({ path: `${SHOTS}/system-2-backup.png` })

@@ -1,6 +1,7 @@
 // 基础数据(教师/科目/教室/场地/班级)API 类型与调用封装。
 
 import { apiGet, apiPost, request } from '@/api/client'
+import type { HighRiskConfirmation } from '@/api/highRisk'
 
 export type RoomType = 'normal' | 'special' | 'workshop' | 'outdoor'
 export type ClassTrack = 'elementary' | 'junior_high' | 'senior_high' | 'comprehensive' | 'vocational'
@@ -93,7 +94,8 @@ export const createSubject = (semesterId: number, body: Partial<Subject>) =>
   apiPost<Subject>(`/subjects?semester_id=${semesterId}`, body)
 export const updateSubject = (id: number, body: Partial<Subject>) =>
   request<Subject>('PATCH', `/subjects/${id}`, body)
-export const deleteSubject = (id: number) => request<void>('DELETE', `/subjects/${id}`)
+export const deleteSubject = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/subjects/${id}`, confirmation)
 
 // ── 教师 ──
 export const listTeachers = (semesterId: number, q?: string) =>
@@ -102,7 +104,8 @@ export const createTeacher = (semesterId: number, body: Record<string, unknown>)
   apiPost<Teacher>(`/teachers?semester_id=${semesterId}`, body)
 export const updateTeacher = (id: number, body: Record<string, unknown>) =>
   request<Teacher>('PATCH', `/teachers/${id}`, body)
-export const deleteTeacher = (id: number) => request<void>('DELETE', `/teachers/${id}`)
+export const deleteTeacher = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/teachers/${id}`, confirmation)
 export const listBindableAccounts = (semesterId: number, currentTeacherId?: number) =>
   apiGet<BindableAccount[]>(
     `/teachers/bindable-accounts?semester_id=${semesterId}` +
@@ -119,7 +122,8 @@ export const createRoom = (semesterId: number, body: Record<string, unknown>) =>
   apiPost<Room>(`/rooms?semester_id=${semesterId}`, body)
 export const updateRoom = (id: number, body: Record<string, unknown>) =>
   request<Room>('PATCH', `/rooms/${id}`, body)
-export const deleteRoom = (id: number) => request<void>('DELETE', `/rooms/${id}`)
+export const deleteRoom = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/rooms/${id}`, confirmation)
 
 // ── 班级 ──
 export const listClassUnits = (semesterId: number, q?: string) =>
@@ -130,4 +134,5 @@ export const createClassUnit = (semesterId: number, body: Record<string, unknown
   apiPost<ClassUnit>(`/class-units?semester_id=${semesterId}`, body)
 export const updateClassUnit = (id: number, body: Record<string, unknown>) =>
   request<ClassUnit>('PATCH', `/class-units/${id}`, body)
-export const deleteClassUnit = (id: number) => request<void>('DELETE', `/class-units/${id}`)
+export const deleteClassUnit = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/class-units/${id}`, confirmation)

@@ -10,10 +10,14 @@ import {
   ROOM_TYPE_LABELS, createRoom, deleteRoom, listRooms, listSubjects, updateRoom,
 } from '@/api/basedata'
 import type { Room, RoomType, Subject } from '@/api/basedata'
+import { highRiskConfirmation } from '@/api/highRisk'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './basedata-workspace.css'
 
-const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
+const props = withDefaults(
+  defineProps<{ semesterId: number; canEdit?: boolean; canDelete?: boolean }>(),
+  { canEdit: true, canDelete: false },
+)
 const message = useMessage()
 
 const items = ref<Room[]>([])
@@ -121,10 +125,10 @@ async function save() {
 }
 
 async function remove(room: Room) {
-  if (!props.canEdit || deletingId.value !== null) return
+  if (!props.canDelete || deletingId.value !== null) return
   deletingId.value = room.id
   try {
-    await deleteRoom(room.id)
+    await deleteRoom(room.id, highRiskConfirmation(`room:${room.id}`))
     message.success('已删除')
     await reload()
   } catch (error) {
@@ -205,7 +209,7 @@ async function remove(room: Room) {
                   <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                   {{ '编辑' }}
                 </n-button>
-                <n-popconfirm :disabled="deletingId !== null" @positive-click="remove(room)">
+                <n-popconfirm v-if="canDelete" :disabled="deletingId !== null" @positive-click="remove(room)">
                   <template #trigger>
                     <n-button
                       size="small"
@@ -219,7 +223,7 @@ async function remove(room: Room) {
                       {{ '删除' }}
                     </n-button>
                   </template>
-                  {{ '确定删除此教室/场地吗？' }}
+                  {{ `将永久删除教室/场地“${room.name}”并解除相关排课指定。确定继续吗？` }}
                 </n-popconfirm>
               </div>
             </td>

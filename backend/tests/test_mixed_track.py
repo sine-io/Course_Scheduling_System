@@ -1,5 +1,7 @@
 """混合学制(班级 ↔ 作息时间表指派)测试。对应 M1-6 验收标准。"""
 
+from uuid import uuid4
+
 import pytest
 
 from app.models.user import Role
@@ -14,7 +16,7 @@ PW = "password123"
 def env2(env):
     """已登录排课管理员和一份默认使用初中测试作息时间表的学期。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sem = create_api_semester(client)
     return client, sem
@@ -68,7 +70,15 @@ def test_delete_period_table_referenced_by_class_blocked(env2):
     sid = sem["id"]
     senior_table = _add_table(client, sid, "高中部作息时间表")["id"]
     _make_class(client, sid, "高中501", senior_table)
-    r = client.delete(f"/api/period-tables/{senior_table}")
+    r = client.request(
+        "DELETE",
+        f"/api/period-tables/{senior_table}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"period-table:{senior_table}",
+        },
+    )
     assert r.status_code == 409
     assert "班级" in r.json()["detail"]
 

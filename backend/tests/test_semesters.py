@@ -1,5 +1,7 @@
 """学期与作息时间表测试。"""
 
+from uuid import uuid4
+
 from app.models.user import Role
 from tests.api_helpers import create_api_semester
 from tests.conftest import make_user
@@ -143,9 +145,17 @@ def test_update_semester_status(env):
 
 def test_delete_semester_cascades(env):
     client, db = env
-    login(client, db)
+    login(client, db, roles=(Role.admin,))
     semester = create_api_semester(client)
-    assert client.delete(f"/api/semesters/{semester['id']}").status_code == 204
+    assert client.request(
+        "DELETE",
+        f"/api/semesters/{semester['id']}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"semester:{semester['id']}",
+        },
+    ).status_code == 204
     assert client.get(f"/api/semesters/{semester['id']}").status_code == 404
 
 

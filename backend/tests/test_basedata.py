@@ -1,5 +1,7 @@
 """基础数据(教师/科目/教室/场地/班级)测试。对应 M1-2 验收标准。"""
 
+from uuid import uuid4
+
 import pytest
 
 from app.models.user import Role
@@ -12,7 +14,7 @@ PW = "password123"
 def scheduler_env(env):
     """已登录排课管理员 + 一个学期,返回 (client, semester_id)。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
     return client, sem["id"]
@@ -34,7 +36,15 @@ def test_subject_crud(scheduler_env):
     # 列表
     assert len(client.get(f"/api/subjects?semester_id={sid}").json()) == 1
     # 删除
-    assert client.delete(f"/api/subjects/{subj['id']}").status_code == 204
+    assert client.request(
+        "DELETE",
+        f"/api/subjects/{subj['id']}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"subject:{subj['id']}",
+        },
+    ).status_code == 204
 
 
 def test_teacher_with_subjects(scheduler_env):
@@ -84,7 +94,15 @@ def test_delete_teacher_referenced_as_homeroom_blocked(scheduler_env):
             "grade": 3, "name": "忠", "track": "elementary", "homeroom_teacher_id": tid,
         },
     )
-    r = client.delete(f"/api/teachers/{tid}")
+    r = client.request(
+        "DELETE",
+        f"/api/teachers/{tid}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"teacher:{tid}",
+        },
+    )
     assert r.status_code == 409
     assert "班主任" in r.json()["detail"]
     # 改为离职(is_active=false)则允许
@@ -99,7 +117,15 @@ def test_delete_subject_referenced_blocked(scheduler_env):
         f"/api/teachers?semester_id={sid}",
         json={"name": "吴老师", "subject_ids": [subj["id"]]},
     )
-    assert client.delete(f"/api/subjects/{subj['id']}").status_code == 409
+    assert client.request(
+        "DELETE",
+        f"/api/subjects/{subj['id']}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"subject:{subj['id']}",
+        },
+    ).status_code == 409
 
 
 def test_teacher_time_rules(scheduler_env):

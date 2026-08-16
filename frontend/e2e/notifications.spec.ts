@@ -4,8 +4,10 @@ import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { WED } from './dates'
 import {
+  createAdminApiContext,
   createTestSemester,
   deleteSemesterByYearTerm,
+  highRiskData,
   login,
   publishCheckedTimetable,
   semesterLabel,
@@ -28,20 +30,37 @@ async function selectSemester(page: Page, year: number) {
 /** 创建/获取绑定 e2e_teacher 账号的教师「陈老师」。返回 teacherId。 */
 async function bindTeacher(page: Page, sid: number): Promise<number> {
   const file = fileURLToPath(new URL('./fixtures/teachers_with_account.xlsx', import.meta.url))
-  const imp = await (await page.request.post(
-    `/api/import/teachers?semester_id=${sid}&create_accounts=true`,
-    { multipart: { file: { name: 't.xlsx', mimeType: XLSX, buffer: readFileSync(file) } } },
-  )).json()
-  if (imp.imported === 1) {
-    const list = await get(page, `/api/teachers?semester_id=${sid}`)
-    return list.find((x: { name: string }) => x.name === '陈老师').id
+  const admin = await createAdminApiContext(page)
+  try {
+    const confirmation = highRiskData(`semester:${sid}:teacher-accounts`)
+    const imp = await (await admin.post(
+      `/api/import/teachers?semester_id=${sid}&create_accounts=true`,
+      {
+        multipart: {
+          ...confirmation,
+          confirmed: String(confirmation.confirmed),
+          file: { name: 't.xlsx', mimeType: XLSX, buffer: readFileSync(file) },
+        },
+      },
+    )).json()
+    if (imp.imported === 1) {
+      const list = await (await admin.get(`/api/teachers?semester_id=${sid}`)).json()
+      return list.find((x: { name: string }) => x.name === '陈老师').id
+    }
+    const created = await post(page, `/api/teachers?semester_id=${sid}`, { name: '陈老师' })
+    const accounts = await (await admin.get(`/api/teachers/bindable-accounts?semester_id=${sid}`)).json()
+    const acc = accounts.find((x: { username: string }) => x.username === TEACHER_USER)
+    await admin.patch(`/api/teachers/${created.id}`, {
+      data: {
+        name: '陈老师',
+        user_id: acc.id,
+        account_confirmation: highRiskData(`teacher:${created.id}:account:${acc.id}`),
+      },
+    })
+    return created.id
+  } finally {
+    await admin.dispose()
   }
-  const created = await post(page, `/api/teachers?semester_id=${sid}`, { name: '陈老师' })
-  const accounts = await get(page, `/api/teachers/bindable-accounts?semester_id=${sid}`)
-  const acc = accounts.find((x: { username: string }) => x.username === TEACHER_USER)
-  await page.request.patch(`/api/teachers/${created.id}`,
-    { data: { name: '陈老师', user_id: acc.id } })
-  return created.id
 }
 
 async function ensureTeacherPassword(page: Page) {

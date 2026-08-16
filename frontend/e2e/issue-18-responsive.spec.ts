@@ -287,7 +287,7 @@ test('教室/场地保留原有校验、失败重试和完整 CRUD 语义', asyn
     roomRequests: [],
     failNextRoomSave: true,
   }
-  await mockSession(page, ['scheduler'], state)
+  await mockSession(page, ['admin'], state)
 
   await page.goto('/basedata')
   await tab(page, '教室/场地').click()
@@ -324,10 +324,13 @@ test('教室/场地保留原有校验、失败重试和完整 CRUD 语义', asyn
   })
 
   await page.getByTestId('room-delete-10').click()
-  const confirmation = page.locator('.n-popover').filter({ hasText: '确定删除此教室/场地吗？' })
+  const confirmation = page.locator('.n-popover').filter({ hasText: '将永久删除教室/场地' })
   await confirmation.getByRole('button', { name: '确认' }).click()
   await expect(page.getByTestId('rooms-table')).not.toContainText('更新后的教室')
-  expect(state.roomRequests?.at(-1)).toEqual({ method: 'DELETE', body: null })
+  expect(state.roomRequests?.at(-1)).toMatchObject({
+    method: 'DELETE',
+    body: { confirmed: true, target: 'room:10' },
+  })
 })
 
 test('基础数据在学期请求期间显示加载状态', async ({ page }) => {
@@ -408,7 +411,7 @@ for (const viewport of VIEWPORTS) {
     await expect(teacherModal.getByLabel('电子邮箱')).toBeVisible()
     await expect(teacherModal.getByLabel('手机')).toBeVisible()
     await expect(teacherModal.getByLabel('即时通讯账号')).toBeVisible()
-    await expect(teacherModal.getByLabel('绑定登录账号')).toBeVisible()
+    await expect(teacherModal.getByLabel('绑定登录账号')).toHaveCount(0)
     if (viewport.width === 375) {
       await expectModalWithinViewport(teacherModal, viewport)
     }
@@ -497,12 +500,11 @@ for (const viewport of VIEWPORTS) {
       const importEntity = (label: string) => importWorkspace.locator('.n-radio-button', { hasText: label })
       await importEntity('教师').click()
       const createAccounts = page.getByRole('checkbox', { name: /同时创建教师登录账号/ })
-      await importWorkspace.locator('.n-checkbox', { hasText: '同时创建教师登录账号' }).click()
-      await expect(createAccounts).toBeChecked()
+      await expect(createAccounts).toHaveCount(0)
       await importEntity('科目').click()
       await expect(page.getByTestId('import-result-errors')).toBeVisible()
       await importEntity('教师').click()
-      await expect(createAccounts).toBeChecked()
+      await expect(createAccounts).toHaveCount(0)
       await expect(page.getByText('subjects.xlsx')).toBeVisible()
       await importEntity('科目').click()
 

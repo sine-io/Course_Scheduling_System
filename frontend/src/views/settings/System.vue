@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import {
-  AlertTriangle, DatabaseBackup, Download, RefreshCw, RotateCcw, Save, Trash2, Upload,
+  AlertTriangle, ClipboardList, DatabaseBackup, Download, Pencil, Plus, RefreshCw,
+  RotateCcw, Save, Trash2, Upload, UserCog,
 } from '@lucide/vue'
 import {
-  NAlert, NButton, NCheckbox, NInput, NInputNumber, NPopconfirm, NTag, NUpload,
+  NAlert, NButton, NCheckbox, NInput, NInputNumber, NModal, NPopconfirm, NSwitch, NTag,
+  NUpload,
   useDialog, useMessage,
 } from 'naive-ui'
 import type { UploadCustomRequestOptions, UploadSettledFileInfo } from 'naive-ui'
 import { computed, h, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { apiErrorMessage } from '@/api/client'
+import { ACCOUNT_ROLES, createAccount, listAccounts, updateAccount } from '@/api/accounts'
+import type { Account, AccountRole } from '@/api/accounts'
+import { listAuditLogs } from '@/api/audit'
+import type { AuditLog } from '@/api/audit'
 import {
   createBackup, deleteBackup, downloadBackup, listBackups, restoreBackup, restoreUpload,
 } from '@/api/backups'
@@ -18,6 +23,9 @@ import {
   demoDataStatus, getSchedulingSettings, getSchoolSettings, loadDemoData,
   saveSchedulingSettings, saveSchoolSettings,
 } from '@/api/assignments'
+import { apiErrorMessage } from '@/api/client'
+import { highRiskConfirmation } from '@/api/highRisk'
+import type { HighRiskConfirmation } from '@/api/highRisk'
 import { chooseOnboardingRoute } from '@/api/onboarding'
 import { getSmtp, saveSmtp } from '@/api/notifications'
 import { resetWizard } from '@/api/wizard'
@@ -36,10 +44,27 @@ const adminLoading = ref(isAdmin.value)
 const adminError = ref<string | null>(null)
 
 const backups = ref<Backup[]>([])
+const accounts = ref<Account[]>([])
+const auditLogs = ref<AuditLog[]>([])
+const auditQuery = ref('')
+const filteredAuditLogs = computed(() => {
+  const query = auditQuery.value.trim().toLowerCase()
+  if (!query) return auditLogs.value
+  return auditLogs.value.filter((log) => [
+    log.username,
+    ...log.actor_roles,
+    log.action,
+    log.target_version,
+    log.result,
+    log.reason,
+    log.detail,
+  ].some((value) => value.toLowerCase().includes(query)))
+})
 const creatingBackup = ref(false)
 const restoringBackup = ref<string | null>(null)
 const confirmingUploadRestore = ref(false)
 const confirmedUploadRestoreId = ref<string | null>(null)
+const uploadRestoreConfirmation = ref<HighRiskConfirmation | null>(null)
 const uploadingRestore = ref(false)
 const deletingBackup = ref<string | null>(null)
 const downloadingBackup = ref<string | null>(null)
@@ -66,10 +91,51 @@ const loadingDemo = ref(false)
 const resettingWizard = ref(false)
 let redirectingAfterRestore = false
 
+interface AccountForm {
+  username: string
+  display_name: string
+  temporary_password: string
+  roles: AccountRole[]
+  is_active: boolean
+}
+
+const accountShow = ref(false)
+const accountSaving = ref(false)
+const accountTarget = ref<Account | null>(null)
+const accountForm = ref<AccountForm>({
+  username: '',
+  display_name: '',
+  temporary_password: '',
+  roles: ['teacher'],
+  is_active: true,
+})
+const roleOptions = ACCOUNT_ROLES.map((role) => ({
+  value: role,
+  label: {
+    admin: '系统管理员',
+    director: '教务主任',
+    scheduler: '排课管理员',
+    teacher: '教师',
+  }[role],
+}))
+
 function humanSize(size: number): string {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`
   return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
+function auditResultLabel(result: string): string {
+  return { success: '成功', rejected: '已拒绝', failed: '失败', pending: '处理中' }[result] ?? result
+}
+
+function auditResultType(result: string): 'success' | 'warning' | 'error' | 'info' | 'default' {
+  return {
+    success: 'success',
+    rejected: 'warning',
+    failed: 'error',
+    pending: 'info',
+  }[result] as 'success' | 'warning' | 'error' | 'info' | undefined ?? 'default'
 }
 
 async function loadAdminSettings() {
@@ -80,12 +146,14 @@ async function loadAdminSettings() {
   adminLoading.value = true
   adminError.value = null
   try {
-    const [smtpSettings, scheduling, school, demo, backupRows] = await Promise.all([
+    const [smtpSettings, scheduling, school, demo, backupRows, accountRows, auditRows] = await Promise.all([
       getSmtp(),
       getSchedulingSettings(),
       getSchoolSettings(),
       demoDataStatus(),
       listBackups(),
+      listAccounts(),
+      listAuditLogs(),
     ])
     smtp.value = {
       host: smtpSettings.host,
@@ -102,6 +170,8 @@ async function loadAdminSettings() {
     demoAvailable.value = demo.available
     demoSchool.value = demo.school_name
     backups.value = backupRows
+    accounts.value = accountRows
+    auditLogs.value = auditRows
   } catch (error) {
     adminError.value = apiErrorMessage(error, '暂时无法读取系统设置，请重试。')
   } finally {
@@ -120,17 +190,36 @@ async function reloadBackups() {
   }
 }
 
+async function reloadAccounts() {
+  if (!isAdmin.value) return
+  try {
+    accounts.value = await listAccounts()
+  } catch (error) {
+    message.error(apiErrorMessage(error, '账号列表读取失败，请重试。'))
+  }
+}
+
+async function reloadAudit() {
+  if (!isAdmin.value) return
+  try {
+    auditLogs.value = await listAuditLogs()
+  } catch (error) {
+    message.error(apiErrorMessage(error, '审计记录读取失败，请重试。'))
+  }
+}
+
 async function onCreateBackup() {
   if (backupBusy.value) return
   creatingBackup.value = true
   try {
-    await createBackup()
+    await createBackup(highRiskConfirmation('backup:create'))
     message.success('备份已创建')
     await reloadBackups()
   } catch (error) {
     message.error(apiErrorMessage(error, '备份失败，请重试。'))
   } finally {
     creatingBackup.value = false
+    void reloadAudit()
   }
 }
 
@@ -138,13 +227,14 @@ async function onDeleteBackup(name: string) {
   if (backupBusy.value) return
   deletingBackup.value = name
   try {
-    await deleteBackup(name)
+    await deleteBackup(name, highRiskConfirmation(`backup:${name}`))
     message.success('备份已删除')
     await reloadBackups()
   } catch (error) {
     message.error(apiErrorMessage(error, '备份删除失败，请重试。'))
   } finally {
     deletingBackup.value = null
+    void reloadAudit()
   }
 }
 
@@ -190,12 +280,13 @@ async function onRestore(name: string) {
   if (backupBusy.value) return
   restoringBackup.value = name
   try {
-    const result = await restoreBackup(name)
+    const result = await restoreBackup(name, highRiskConfirmation(`backup:${name}`))
     await afterRestore(result)
   } catch (error) {
     message.error(apiErrorMessage(error, '恢复失败，请重试。'))
   } finally {
     restoringBackup.value = null
+    if (!redirectingAfterRestore) void reloadAudit()
   }
 }
 
@@ -214,6 +305,9 @@ function onBeforeUploadRestore({ file }: { file: UploadSettledFileInfo }): Promi
       settled = true
       confirmingUploadRestore.value = false
       confirmedUploadRestoreId.value = confirmed ? file.id : null
+      uploadRestoreConfirmation.value = confirmed
+        ? highRiskConfirmation(`upload:${file.name}`)
+        : null
       resolve(confirmed)
     }
 
@@ -231,12 +325,14 @@ function onBeforeUploadRestore({ file }: { file: UploadSettledFileInfo }): Promi
 }
 
 async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestOptions) {
-  if (confirmedUploadRestoreId.value !== file.id || uploadingRestore.value) {
+  const confirmation = uploadRestoreConfirmation.value
+  if (confirmedUploadRestoreId.value !== file.id || !confirmation || uploadingRestore.value) {
     onError()
     return
   }
   const uploadFile = file.file
   confirmedUploadRestoreId.value = null
+  uploadRestoreConfirmation.value = null
   if (!uploadFile) {
     onError()
     message.error('无法读取所选备份文件，请重新选择。')
@@ -244,7 +340,7 @@ async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestO
   }
   uploadingRestore.value = true
   try {
-    const result = await restoreUpload(uploadFile)
+    const result = await restoreUpload(uploadFile, confirmation)
     onFinish()
     await afterRestore(result)
   } catch (error) {
@@ -252,7 +348,102 @@ async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestO
     message.error(apiErrorMessage(error, '上传恢复失败，请重试。'))
   } finally {
     uploadingRestore.value = false
+    if (!redirectingAfterRestore) void reloadAudit()
   }
+}
+
+function openCreateAccount() {
+  accountTarget.value = null
+  accountForm.value = {
+    username: '',
+    display_name: '',
+    temporary_password: '',
+    roles: ['teacher'],
+    is_active: true,
+  }
+  accountShow.value = true
+}
+
+function openEditAccount(account: Account) {
+  accountTarget.value = account
+  accountForm.value = {
+    username: account.username,
+    display_name: account.display_name,
+    temporary_password: '',
+    roles: [...account.roles],
+    is_active: account.is_active,
+  }
+  accountShow.value = true
+}
+
+function toggleAccountRole(role: AccountRole, checked: boolean) {
+  const roles = new Set(accountForm.value.roles)
+  if (checked) roles.add(role)
+  else roles.delete(role)
+  accountForm.value.roles = [...roles] as AccountRole[]
+}
+
+async function persistAccount() {
+  if (accountSaving.value) return
+  accountSaving.value = true
+  const target = accountTarget.value
+    ? `account:${accountTarget.value.id}`
+    : `account:${accountForm.value.username.trim()}`
+  try {
+    if (accountTarget.value) {
+      const body: Parameters<typeof updateAccount>[1] = {
+        display_name: accountForm.value.display_name.trim(),
+        roles: accountForm.value.roles,
+        is_active: accountForm.value.is_active,
+        confirmation: highRiskConfirmation(target),
+      }
+      if (accountForm.value.temporary_password) {
+        body.temporary_password = accountForm.value.temporary_password
+      }
+      await updateAccount(accountTarget.value.id, body)
+    } else {
+      await createAccount({
+        username: accountForm.value.username.trim(),
+        display_name: accountForm.value.display_name.trim(),
+        temporary_password: accountForm.value.temporary_password,
+        roles: accountForm.value.roles,
+        confirmation: highRiskConfirmation(target),
+      })
+    }
+    accountShow.value = false
+    message.success(accountTarget.value ? '账号设置已更新' : '账号已创建')
+    await Promise.all([reloadAccounts(), reloadAudit()])
+  } catch (error) {
+    message.error(apiErrorMessage(error, '账号操作失败，请重试。'))
+  } finally {
+    accountSaving.value = false
+  }
+}
+
+function saveAccount() {
+  if (accountSaving.value) return
+  if (!accountForm.value.display_name.trim() || !accountForm.value.roles.length) {
+    message.warning('请填写显示名称并至少选择一个角色')
+    return
+  }
+  if (!accountTarget.value && (!accountForm.value.username.trim() || accountForm.value.temporary_password.length < 8)) {
+    message.warning('新账号需要用户名和至少 8 位临时密码')
+    return
+  }
+  const target = accountTarget.value
+    ? `账号 #${accountTarget.value.id}（${accountTarget.value.username}）`
+    : `新账号 ${accountForm.value.username.trim()}`
+  const impact = accountTarget.value
+    ? '将立即改变该账号的角色、启用状态或登录凭据。'
+    : `将创建账号并授予：${accountForm.value.roles.map((role) => roleOptions.find((item) => item.value === role)?.label).join('、')}。`
+  dialog.warning({
+    title: '确认账号与角色变更',
+    content: `目标：${target}。影响：${impact}`,
+    positiveText: '确认提交',
+    negativeText: '取消',
+    maskClosable: false,
+    onPositiveClick: () => persistAccount(),
+  })
 }
 
 async function onSaveSchool() {
@@ -446,6 +637,67 @@ async function onResetWizard() {
         </div>
       </section>
 
+      <section class="settings-panel" data-testid="accounts-card">
+        <div class="settings-panel-heading">
+          <div>
+            <p class="settings-eyebrow">{{ '访问控制' }}</p>
+            <h2>{{ '账号与角色' }}</h2>
+            <p>{{ '维护固定系统角色、账号状态与临时密码。所有变更均需再次确认并写入审计。' }}</p>
+          </div>
+          <UserCog :size="20" class="settings-heading-icon" aria-hidden="true" />
+        </div>
+        <div class="settings-actions">
+          <n-button type="primary" data-testid="account-add" @click="openCreateAccount">
+            <template #icon><Plus :size="15" aria-hidden="true" /></template>
+            {{ '新增账号' }}
+          </n-button>
+          <n-button quaternary @click="reloadAccounts">
+            <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+            {{ '刷新' }}
+          </n-button>
+        </div>
+        <div v-if="!accounts.length" class="settings-empty" data-testid="accounts-empty">
+          <span class="settings-field-hint">{{ '暂无账号。' }}</span>
+        </div>
+        <div v-else class="settings-table-scroll">
+          <table class="settings-data-table" data-testid="accounts-table">
+            <thead>
+              <tr>
+                <th>{{ '账号' }}</th>
+                <th>{{ '显示名称' }}</th>
+                <th>{{ '角色' }}</th>
+                <th>{{ '状态' }}</th>
+                <th>{{ '操作' }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="account in accounts" :key="account.id" data-testid="account-row">
+                <td><strong>{{ account.username }}</strong></td>
+                <td>{{ account.display_name }}</td>
+                <td>
+                  <div class="settings-command-group">
+                    <n-tag v-for="role in account.roles" :key="role" size="small">
+                      {{ auth.roleLabel(role) }}
+                    </n-tag>
+                  </div>
+                </td>
+                <td>
+                  <n-tag :type="account.is_active ? 'success' : 'default'" size="small">
+                    {{ account.is_active ? '启用' : '停用' }}
+                  </n-tag>
+                </td>
+                <td>
+                  <n-button size="small" :data-testid="`account-edit-${account.id}`" @click="openEditAccount(account)">
+                    <template #icon><Pencil :size="14" aria-hidden="true" /></template>
+                    {{ '编辑' }}
+                  </n-button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="settings-panel" data-testid="backup-card">
         <div class="settings-panel-heading">
           <div>
@@ -456,10 +708,15 @@ async function onResetWizard() {
           <DatabaseBackup :size="20" class="settings-heading-icon" aria-hidden="true" />
         </div>
         <div class="settings-actions">
-          <n-button type="primary" :loading="creatingBackup" :disabled="backupBusy" data-testid="backup-now" @click="onCreateBackup">
-            <template #icon><DatabaseBackup :size="15" aria-hidden="true" /></template>
-            {{ '立即备份' }}
-          </n-button>
+          <n-popconfirm :disabled="backupBusy" @positive-click="onCreateBackup">
+            <template #trigger>
+              <n-button type="primary" :loading="creatingBackup" :disabled="backupBusy" data-testid="backup-now">
+                <template #icon><DatabaseBackup :size="15" aria-hidden="true" /></template>
+                {{ '立即备份' }}
+              </n-button>
+            </template>
+            {{ '将创建一份包含当前全部系统数据的手动备份。确定继续吗？' }}
+          </n-popconfirm>
           <n-upload
             :custom-request="onUploadRestore"
             :on-before-upload="onBeforeUploadRestore"
@@ -497,7 +754,7 @@ async function onResetWizard() {
                           {{ '恢复' }}
                         </n-button>
                       </template>
-                      {{ '恢复将覆盖当前所有数据，系统会先自动备份当前状态。确定继续吗？' }}
+                      {{ `将使用备份“${backup.name}”覆盖当前所有数据，系统会先自动备份当前状态，恢复后所有用户需要重新登录。确定继续吗？` }}
                     </n-popconfirm>
                     <n-popconfirm :disabled="backupBusy" @positive-click="onDeleteBackup(backup.name)">
                       <template #trigger>
@@ -537,7 +794,118 @@ async function onResetWizard() {
           </n-button>
         </div>
       </section>
+
+      <section class="settings-panel" data-testid="audit-card">
+        <div class="settings-panel-heading">
+          <div>
+            <p class="settings-eyebrow">{{ '安全追溯' }}</p>
+            <h2>{{ '操作审计' }}</h2>
+            <p>{{ '查询危险操作的操作者、角色、目标、结果与发生时间。' }}</p>
+          </div>
+          <ClipboardList :size="20" class="settings-heading-icon" aria-hidden="true" />
+        </div>
+        <div class="settings-actions">
+          <n-input
+            v-model:value="auditQuery"
+            clearable
+            placeholder="搜索操作者、动作、目标或结果"
+            aria-label="搜索审计记录"
+            data-testid="audit-search"
+          />
+          <n-button quaternary data-testid="audit-refresh" @click="reloadAudit">
+            <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+            {{ '刷新' }}
+          </n-button>
+        </div>
+        <div v-if="!filteredAuditLogs.length" class="settings-empty" data-testid="audit-empty">
+          <span class="settings-field-hint">{{ auditQuery ? '没有符合条件的记录。' : '暂无审计记录。' }}</span>
+        </div>
+        <div v-else class="settings-table-scroll">
+          <table class="settings-data-table" data-testid="audit-table">
+            <thead>
+              <tr>
+                <th>{{ '时间' }}</th>
+                <th>{{ '操作者 / 角色' }}</th>
+                <th>{{ '动作 / 目标' }}</th>
+                <th>{{ '结果' }}</th>
+                <th>{{ '说明' }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="log in filteredAuditLogs" :key="log.id" data-testid="audit-row">
+                <td>{{ new Date(log.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
+                <td>
+                  <strong>{{ log.username }}</strong>
+                  <div class="settings-field-hint">{{ log.actor_roles.map((role) => auth.roleLabel(role)).join('、') }}</div>
+                </td>
+                <td>
+                  <strong>{{ log.action }}</strong>
+                  <div class="settings-field-hint">{{ log.target_version || `${log.target_type} #${log.target_id ?? '—'}` }}</div>
+                </td>
+                <td><n-tag :type="auditResultType(log.result)" size="small">{{ auditResultLabel(log.result) }}</n-tag></td>
+                <td>{{ log.detail || log.reason || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </template>
+
+    <n-modal v-if="isAdmin" v-model:show="accountShow" preset="card" :title="accountTarget ? '编辑账号' : '新增账号'" style="max-width: 520px">
+      <div class="settings-modal-form">
+        <div class="settings-form-grid settings-form-grid-two">
+          <div class="settings-field">
+            <label for="account-username">{{ '登录账号' }}</label>
+            <n-input
+              id="account-username"
+              v-model:value="accountForm.username"
+              :disabled="accountTarget !== null"
+              placeholder="英文字母、数字、点、横线或下划线"
+              data-testid="account-username"
+            />
+          </div>
+          <div class="settings-field">
+            <label for="account-display-name">{{ '显示名称' }}</label>
+            <n-input id="account-display-name" v-model:value="accountForm.display_name" data-testid="account-display-name" />
+          </div>
+        </div>
+        <div class="settings-field">
+          <span class="settings-field-label">{{ '角色' }}</span>
+          <div class="settings-command-group">
+            <n-checkbox
+              v-for="option in roleOptions"
+              :key="option.value"
+              :checked="accountForm.roles.includes(option.value)"
+              :data-testid="`account-role-${option.value}`"
+              @update:checked="toggleAccountRole(option.value, $event)"
+            >
+              {{ option.label }}
+            </n-checkbox>
+          </div>
+        </div>
+        <div class="settings-field">
+          <label for="account-temporary-password">{{ accountTarget ? '重设临时密码（留空不变）' : '临时密码' }}</label>
+          <n-input
+            id="account-temporary-password"
+            v-model:value="accountForm.temporary_password"
+            type="password"
+            show-password-on="click"
+            placeholder="至少 8 位，用户首次登录必须修改"
+            data-testid="account-password"
+          />
+        </div>
+        <div v-if="accountTarget" class="settings-field settings-field-checkbox">
+          <label><span>{{ '启用账号' }}</span><n-switch v-model:value="accountForm.is_active" data-testid="account-active" /></label>
+        </div>
+        <div class="settings-modal-actions">
+          <n-button :disabled="accountSaving" @click="accountShow = false">{{ '取消' }}</n-button>
+          <n-button type="primary" :loading="accountSaving" :disabled="accountSaving" data-testid="account-save" @click="saveAccount">
+            <template #icon><Save :size="15" aria-hidden="true" /></template>
+            {{ '提交变更' }}
+          </n-button>
+        </div>
+      </div>
+    </n-modal>
 
     <section class="settings-panel settings-danger-panel" data-testid="wizard-reset-card">
       <div class="settings-panel-heading">

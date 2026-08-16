@@ -1,6 +1,7 @@
 // 数据库备份与恢复(M5-2,管理员专用)。
 
 import { apiDelete, apiGet, apiPost } from '@/api/client'
+import type { HighRiskConfirmation } from '@/api/highRisk'
 
 export interface Backup {
   name: string
@@ -17,15 +18,26 @@ export interface RestoreResult {
 }
 
 export const listBackups = (): Promise<Backup[]> => apiGet('/backups')
-export const createBackup = (): Promise<Backup> => apiPost('/backups')
-export const deleteBackup = (name: string): Promise<{ deleted: string }> =>
-  apiDelete(`/backups/${encodeURIComponent(name)}`)
-export const restoreBackup = (name: string): Promise<RestoreResult> =>
-  apiPost(`/backups/${encodeURIComponent(name)}/restore`)
+export const createBackup = (confirmation: HighRiskConfirmation): Promise<Backup> =>
+  apiPost('/backups', confirmation)
+export const deleteBackup = (
+  name: string,
+  confirmation: HighRiskConfirmation,
+): Promise<{ deleted: string }> => apiDelete(`/backups/${encodeURIComponent(name)}`, confirmation)
+export const restoreBackup = (
+  name: string,
+  confirmation: HighRiskConfirmation,
+): Promise<RestoreResult> => apiPost(`/backups/${encodeURIComponent(name)}/restore`, confirmation)
 
-export async function restoreUpload(file: File): Promise<RestoreResult> {
+export async function restoreUpload(
+  file: File,
+  confirmation: HighRiskConfirmation,
+): Promise<RestoreResult> {
   const fd = new FormData()
   fd.append('file', file)
+  fd.append('operation_id', confirmation.operation_id)
+  fd.append('confirmed', String(confirmation.confirmed))
+  fd.append('target', confirmation.target)
   const resp = await fetch('/api/backups/restore-upload',
     { method: 'POST', credentials: 'include', body: fd })
   if (!resp.ok) {

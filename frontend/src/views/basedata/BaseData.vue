@@ -29,6 +29,10 @@ const canEdit = computed(() => (
   (auth.hasRole('admin') || auth.hasRole('scheduler'))
   && (!semesterContext.authoritative || semesterContext.isCurrent(currentId.value))
 ))
+const canAdminHighRisk = computed(() => (
+  auth.hasRole('admin')
+  && (!semesterContext.authoritative || semesterContext.isCurrent(currentId.value))
+))
 
 const semesterOptions = computed(() =>
   semesters.value.map((s) => ({ label: s.label, value: s.id })),
@@ -104,19 +108,45 @@ onMounted(loadSemesters)
       </n-alert>
       <n-tabs v-model:value="activeTab" type="line" :animated="false">
         <n-tab-pane name="teachers" :tab="'教师'">
-          <TeachersTab :key="`t-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
+          <TeachersTab
+            :key="`t-${currentId}`"
+            :semester-id="currentId"
+            :can-edit="canEdit"
+            :can-delete="canAdminHighRisk"
+            :can-manage-accounts="canAdminHighRisk"
+          />
         </n-tab-pane>
         <n-tab-pane name="classes" :tab="'班级'">
-          <ClassesTab :key="`c-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
+          <ClassesTab
+            :key="`c-${currentId}`"
+            :semester-id="currentId"
+            :can-edit="canEdit"
+            :can-delete="canAdminHighRisk"
+          />
         </n-tab-pane>
         <n-tab-pane name="subjects" :tab="'科目'">
-          <SubjectsTab :key="`s-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
+          <SubjectsTab
+            :key="`s-${currentId}`"
+            :semester-id="currentId"
+            :can-edit="canEdit"
+            :can-delete="canAdminHighRisk"
+          />
         </n-tab-pane>
         <n-tab-pane name="rooms" :tab="'教室/场地'">
-          <RoomsTab :key="`r-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
+          <RoomsTab
+            :key="`r-${currentId}`"
+            :semester-id="currentId"
+            :can-edit="canEdit"
+            :can-delete="canAdminHighRisk"
+          />
         </n-tab-pane>
         <n-tab-pane name="import" :tab="'批量导入'">
-          <ImportTab :key="`i-${currentId}`" :semester-id="currentId" :can-edit="canEdit" />
+          <ImportTab
+            :key="`i-${currentId}`"
+            :semester-id="currentId"
+            :can-edit="canEdit"
+            :can-manage-accounts="canAdminHighRisk"
+          />
         </n-tab-pane>
       </n-tabs>
     </section>

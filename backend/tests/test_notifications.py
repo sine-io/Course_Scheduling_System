@@ -256,12 +256,11 @@ def _login(client, username):
 
 
 def _bind_login(client, db, teacher_id, username):
-    """把登录账号绑到教师基础信息。PATCH 会整体替换,得带回原名以免把老师改名。"""
+    """直接建立测试所需的教师账号关联，再切换为该教师登录。"""
     from app.models.basedata import Teacher
     teacher = db.get(Teacher, teacher_id)
+    assert teacher is not None
     user = make_user(db, username, PW, roles=[Role.teacher])
-    r = client.patch(f"/api/teachers/{teacher_id}", json={
-        "name": teacher.name, "base_periods": teacher.base_periods,
-        "subject_ids": [s.id for s in teacher.subjects], "user_id": user.id})
-    assert r.status_code == 200, r.json()
+    teacher.user_id = user.id
+    db.commit()
     _login(client, username)

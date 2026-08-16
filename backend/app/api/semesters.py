@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
 from app.core.auth import get_active_user
 from app.core.db import get_db
 from app.core.permissions import core_editor, core_viewer
@@ -14,6 +15,7 @@ from app.models.basedata import ClassUnit, Room, Subject, Teacher
 from app.models.period import Period, PeriodTable
 from app.models.semester import Semester
 from app.models.user import Role, User
+from app.schemas.high_risk import HighRiskConfirmation
 from app.schemas.semester import (
     AvailableSlot,
     PeriodIn,
@@ -317,12 +319,33 @@ def update_semester(
 
 @router.delete("/semesters/{semester_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_semester(
-    semester_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    semester_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
-    semester = _require_writable(db, semester_id, lock="update")
-    semester_context.clear_current_if_matches(db, semester.id)
+    semester = _get_semester(db, semester_id)
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_semester",
+        target_type="semester",
+        target_id=semester.id,
+        semester_id=semester.id,
+        target_version=semester.label,
+        expected_target=f"semester:{semester.id}",
+        impact=f"永久删除学期「{semester.label}」及其全部排课、基础数据和运行记录",
+    )
+    try:
+        semester = _require_writable(db, semester_id, lock="update")
+        semester_context.clear_current_if_matches(db, semester.id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(semester)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除学期「{semester.label}」"
+    )
 
 
 # ── 作息时间表 ────────────────────────────
@@ -395,22 +418,44 @@ def update_period_table(
 
 @router.delete("/period-tables/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_period_table(
-    table_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    table_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     table = _get_period_table(db, table_id)
-    semester = _require_writable(db, table.semester_id)
-    ref_count = db.scalar(
-        select(func.count()).select_from(ClassUnit).where(ClassUnit.period_table_id == table_id)
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_period_table",
+        target_type="period_table",
+        target_id=table.id,
+        semester_id=table.semester_id,
+        target_version=table.name,
+        expected_target=f"period-table:{table.id}",
+        impact=f"永久删除作息时间表「{table.name}」及其中全部节次",
     )
-    if ref_count:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"此作息时间表已被 {ref_count} 个班级指定使用,请先改用其他作息时间表再删除",
+    try:
+        semester = _require_writable(db, table.semester_id)
+        ref_count = db.scalar(
+            select(func.count())
+            .select_from(ClassUnit)
+            .where(ClassUnit.period_table_id == table_id)
         )
+        if ref_count:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"此作息时间表已被 {ref_count} 个班级指定使用,请先改用其他作息时间表再删除",
+            )
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(table)
     if semester is not None:
         semester.readiness = "draft"
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除作息时间表「{table.name}」"
+    )
 
 
 @router.put("/period-tables/{table_id}/periods", response_model=PeriodTableOut)

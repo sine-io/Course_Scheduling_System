@@ -6,6 +6,7 @@
 
 import pytest
 
+from app.models.basedata import Teacher
 from app.models.semester import Semester, SemesterStatus
 from app.models.user import Role
 from tests.api_helpers import create_api_semester
@@ -28,13 +29,12 @@ def _switch(client, db, username: str, roles: list[Role] | None = None) -> None:
     _login(client, username)
 
 
-def _bind_teacher(client, db, teacher_id: int, name: str, username: str) -> None:
+def _bind_teacher(_client, db, teacher_id: int, name: str, username: str) -> None:
     user = make_user(db, username, PW, roles=[Role.teacher])
-    response = client.patch(
-        f"/api/teachers/{teacher_id}",
-        json={"name": name, "base_periods": 20, "user_id": user.id},
-    )
-    assert response.status_code == 200, response.text
+    teacher = db.get(Teacher, teacher_id)
+    assert teacher is not None and teacher.name == name
+    teacher.user_id = user.id
+    db.commit()
 
 
 @pytest.fixture
@@ -213,11 +213,10 @@ def test_scheduler_teacher_union_keeps_daily_personal_and_operator_actions(daily
         f"/api/teachers?semester_id={sid}", json={"name": "兼任教师", "base_periods": 20}
     )
     assert third.status_code == 201, third.text
-    bound = client.patch(
-        f"/api/teachers/{third.json()['id']}",
-        json={"name": "兼任教师", "base_periods": 20, "user_id": user.id},
-    )
-    assert bound.status_code == 200, bound.text
+    teacher = db.get(Teacher, third.json()["id"])
+    assert teacher is not None
+    teacher.user_id = user.id
+    db.commit()
     client.post("/api/auth/logout")
     _login(client, "scheduler-teacher")
 

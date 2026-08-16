@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    accounts,
     app_config,
     assignments,
     audit,
@@ -97,6 +98,7 @@ app.add_middleware(
 # 所有 API 挂在 /api 前缀之下(Caddy 依此前缀分流)
 app.include_router(health.router, prefix="/api")
 app.include_router(app_config.router, prefix="/api")
+app.include_router(accounts.router, prefix="/api")
 app.include_router(calendar.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(semesters.router, prefix="/api")

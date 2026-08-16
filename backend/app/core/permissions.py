@@ -12,6 +12,7 @@ from app.models.user import Role, User
 
 CORE_VIEW_ROLES: tuple[Role, ...] = (Role.scheduler, Role.director)
 CORE_EDIT_ROLES: tuple[Role, ...] = (Role.scheduler,)
+CORE_EDIT_ROLE_NAMES = frozenset({Role.admin.value, Role.scheduler.value})
 BATCH_EXPORT_ROLES: tuple[Role, ...] = (Role.scheduler,)
 TIMETABLE_PUBLISH_ROLE_NAMES = frozenset({Role.admin.value, Role.scheduler.value})
 
@@ -50,3 +51,8 @@ def is_daily_operator(user: User) -> bool:
 def can_publish_timetable(user: User) -> bool:
     """Return whether the user's fixed-role union includes direct publication."""
     return bool(user.role_names & TIMETABLE_PUBLISH_ROLE_NAMES)
+
+
+def can_edit_core(user: User) -> bool:
+    """Return whether the fixed-role union may edit ordinary core data."""
+    return bool(user.role_names & CORE_EDIT_ROLE_NAMES)

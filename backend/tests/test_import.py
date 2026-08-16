@@ -1,6 +1,7 @@
 """Excel 导入测试。对应 M1-3 验收标准。"""
 
 import io
+from uuid import uuid4
 
 import pytest
 from openpyxl import Workbook
@@ -17,6 +18,15 @@ def scheduler_env(env):
     client, db = env
     make_user(db, "s", PW, roles=[Role.scheduler])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
+    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
+    return client, sem["id"]
+
+
+@pytest.fixture
+def admin_env(env):
+    client, db = env
+    make_user(db, "admin", PW, roles=[Role.admin])
+    client.post("/api/auth/login", json={"username": "admin", "password": PW})
     sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
     return client, sem["id"]
 
@@ -40,7 +50,18 @@ def upload(client, entity, sid, data_rows, ncols=8, create_accounts=False):
     url = f"/api/import/{entity}?semester_id={sid}"
     if create_accounts:
         url += "&create_accounts=true"
-    return client.post(url, files={"file": ("t.xlsx", content, XLSX_MIME)})
+    data = None
+    if create_accounts:
+        data = {
+            "operation_id": str(uuid4()),
+            "confirmed": "true",
+            "target": f"semester:{sid}:teacher-accounts",
+        }
+    return client.post(
+        url,
+        data=data,
+        files={"file": ("t.xlsx", content, XLSX_MIME)},
+    )
 
 
 def test_download_template(scheduler_env):
@@ -73,9 +94,9 @@ def test_import_subjects_invalid_room_type_zero_write(scheduler_env):
     assert client.get(f"/api/subjects?semester_id={sid}").json() == []
 
 
-def test_import_teachers_with_accounts(scheduler_env):
+def test_import_teachers_with_accounts(admin_env):
     """验收①:导入教师、创建账号、任教科目关联。"""
-    client, sid = scheduler_env
+    client, sid = admin_env
     client.post(f"/api/subjects?semester_id={sid}", json={"name": "数学"})
     client.post(f"/api/subjects?semester_id={sid}", json={"name": "物理"})
     rows = [

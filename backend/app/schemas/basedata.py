@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.validators import is_valid_email
 from app.models.basedata import ClassTrack, RoomType, TeacherRuleType
+from app.schemas.high_risk import HighRiskConfirmation
 
 
 def _normalize_optional_email(value: str | None) -> str | None:
@@ -53,6 +54,7 @@ class TeacherIn(BaseModel):
     phone: str | None = Field(default=None, max_length=32)
     line_id: str | None = Field(default=None, max_length=64)
     user_id: int | None = None  # 绑定的登录账号(空=不绑定)
+    account_confirmation: HighRiskConfirmation | None = None
 
     @field_validator("email")
     @classmethod

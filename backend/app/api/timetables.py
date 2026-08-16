@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
 from app.core.auth import get_active_user
 from app.core.db import get_db
 from app.core.permissions import can_publish_timetable, core_editor, core_viewer
@@ -19,6 +20,7 @@ from app.models.period import PeriodTable
 from app.models.semester import Semester
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
 from app.models.user import User
+from app.schemas.high_risk import HighRiskConfirmation
 from app.schemas.timetable import (
     CheckRequest,
     CheckResponse,
@@ -439,12 +441,32 @@ def publish_timetable(
 
 @router.delete("/timetables/{timetable_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_timetable(
-    timetable_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    timetable_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     tt = _get_timetable(db, timetable_id)
-    _require_writable(db, tt.semester_id)
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_timetable",
+        target_type="timetable",
+        target_id=tt.id,
+        semester_id=tt.semester_id,
+        target_version=tt.name,
+        expected_target=f"timetable:{tt.id}",
+        impact=f"永久删除课表「{tt.name}」及其中全部排课条目",
+    )
+    try:
+        _require_writable(db, tt.semester_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(tt)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除课表「{tt.name}」"
+    )
 
 
 # ── 全员只读课表查询(含 teacher 角色)────

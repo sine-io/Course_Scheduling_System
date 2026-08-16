@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api import (
+    accounts,
     app_config,
     assignments,
     audit,
@@ -83,6 +84,7 @@ def env():
 
     application = FastAPI()
     application.include_router(app_config.router, prefix="/api")
+    application.include_router(accounts.router, prefix="/api")
     application.include_router(calendar.router, prefix="/api")
     application.include_router(auth.router, prefix="/api/auth")
     application.include_router(semesters.router, prefix="/api")

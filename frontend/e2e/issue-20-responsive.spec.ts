@@ -167,10 +167,8 @@ for (const viewport of VIEWPORTS) {
     }
 
     await page.goto('/settings/system')
-    await expect(page.getByTestId('wizard-reset-card')).toBeVisible()
-    await expect(page.getByTestId('school-card')).toHaveCount(0)
-    await expect(page.getByTestId('backup-card')).toHaveCount(0)
-    await expect(page.getByTestId('scheduling-card')).toHaveCount(0)
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByTestId('app-shell')).toBeVisible()
     await expectNoRootOverflow(page)
     expect(requestedAdminPaths).toEqual([])
   })

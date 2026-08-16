@@ -5,6 +5,7 @@ D7 跨作息时间表墙钟时间重叠、走班群组同进同出,以及 check-
 """
 
 import time as _time
+from uuid import uuid4
 
 import pytest
 
@@ -40,7 +41,7 @@ def _periods(slots, weekdays=5):
 def env2(env):
     """已登录排课管理员 + 空白学期 + 主作息时间表(默认)+ 一份课表草稿。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
     sid = sem["id"]
@@ -133,7 +134,15 @@ def test_create_and_list_timetable(env2):
     client, sid, tid, _ = env2
     lst = client.get(f"/api/timetables?semester_id={sid}").json()
     assert len(lst) == 1 and lst[0]["name"] == "草稿A" and lst[0]["entry_count"] == 0
-    assert client.delete(f"/api/timetables/{tid}").status_code == 204
+    assert client.request(
+        "DELETE",
+        f"/api/timetables/{tid}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"timetable:{tid}",
+        },
+    ).status_code == 204
     assert client.get(f"/api/timetables?semester_id={sid}").json() == []
 
 

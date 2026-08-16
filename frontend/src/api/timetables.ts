@@ -1,6 +1,7 @@
 // 课表(草稿、单元格、冲突检查)API 类型与调用封装。
 
 import { apiGet, apiPost, request } from '@/api/client'
+import type { HighRiskConfirmation } from '@/api/highRisk'
 import type { PeriodTable } from '@/api/semesters'
 
 export interface ScheduleEntry {
@@ -107,7 +108,8 @@ export const listTimetables = (semesterId: number) =>
 export const createTimetable = (semesterId: number, name: string) =>
   apiPost<Timetable>(`/timetables?semester_id=${semesterId}`, { name })
 export const getTimetable = (id: number) => apiGet<Timetable>(`/timetables/${id}`)
-export const deleteTimetable = (id: number) => request<void>('DELETE', `/timetables/${id}`)
+export const deleteTimetable = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/timetables/${id}`, confirmation)
 
 export const checkConflict = (
   timetableId: number,

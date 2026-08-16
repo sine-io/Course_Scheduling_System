@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
+from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
-from app.core.permissions import core_editor, core_viewer
+from app.core.permissions import can_edit_core, core_editor, core_viewer
 from app.models.basedata import (
     ClassUnit,
     Room,
@@ -34,14 +36,16 @@ from app.schemas.basedata import (
     TeacherTimeRuleIn,
     TeacherTimeRuleOut,
 )
+from app.schemas.high_risk import HighRiskConfirmation
 from app.schemas.semester import AvailableSlot, PeriodTableOut
+from app.services import high_risk, semester_context
 from app.services import period_tables as pt_service
-from app.services import semester_context
 
 router = APIRouter(tags=["basedata"])
 
 viewer = core_viewer
 editor = core_editor
+admin_only = require_roles(Role.admin)
 
 
 def _require_writable(db: Session, semester_id: int) -> None:
@@ -118,29 +122,49 @@ def update_subject(
 
 @router.delete("/subjects/{subject_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_subject(
-    subject_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    subject_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     subject = db.get(Subject, subject_id)
     if subject is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到科目")
-    _require_writable(db, subject.semester_id)
-    t_count = db.scalar(
-        select(func.count()).select_from(teacher_subjects).where(
-            teacher_subjects.c.subject_id == subject_id
-        )
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_subject",
+        target_type="subject",
+        target_id=subject.id,
+        semester_id=subject.semester_id,
+        target_version=subject.name,
+        expected_target=f"subject:{subject.id}",
+        impact=f"永久删除科目「{subject.name}」及其相关排课数据",
     )
-    r_count = db.scalar(
-        select(func.count()).select_from(room_subjects).where(
-            room_subjects.c.subject_id == subject_id
+    try:
+        _require_writable(db, subject.semester_id)
+        t_count = db.scalar(
+            select(func.count()).select_from(teacher_subjects).where(
+                teacher_subjects.c.subject_id == subject_id
+            )
         )
-    )
-    if t_count or r_count:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"此科目已被 {t_count} 位教师、{r_count} 个教室/场地引用,请先解除关联再删除",
+        r_count = db.scalar(
+            select(func.count()).select_from(room_subjects).where(
+                room_subjects.c.subject_id == subject_id
+            )
         )
+        if t_count or r_count:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"此科目已被 {t_count} 位教师、{r_count} 个教室/场地引用,请先解除关联再删除",
+            )
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(subject)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除科目「{subject.name}」"
+    )
 
 
 def _validate_teacher_user(
@@ -160,13 +184,61 @@ def _validate_teacher_user(
         raise HTTPException(status.HTTP_409_CONFLICT, "此账号在本学期已绑定其他教师")
 
 
+def _begin_account_binding(
+    db: Session,
+    user: User,
+    *,
+    confirmation,
+    target_id: int | None,
+    semester_id: int,
+    target_version: str,
+    expected_target: str,
+    impact: str,
+):
+    spec = high_risk.AttemptSpec(
+        action="bind_teacher_account",
+        target_type="teacher",
+        target_id=target_id,
+        semester_id=semester_id,
+        target_version=target_version,
+        expected_target=expected_target,
+        impact=impact,
+    )
+    try:
+        return high_risk.begin(db, user, spec, confirmation)
+    except high_risk.HighRiskError as exc:
+        raise HTTPException(exc.status_code, high_risk.error_detail(exc)) from exc
+
+
+def _reject_account_binding(db: Session, attempt_id: int, exc: HTTPException) -> None:
+    db.rollback()
+    detail = (
+        str(exc.detail.get("message", exc.detail))
+        if isinstance(exc.detail, dict)
+        else str(exc.detail)
+    )
+    reason = (
+        str(exc.detail.get("code", "teacher_account_binding_rejected"))
+        if isinstance(exc.detail, dict)
+        else "teacher_account_binding_rejected"
+    )
+    high_risk.finish(
+        db,
+        attempt_id,
+        result="rejected",
+        reason=reason,
+        detail=detail,
+    )
+    raise exc
+
+
 # ── 教师 ──────────────────────────────
 @router.get("/teachers/bindable-accounts", response_model=list[BindableAccount])
 def list_bindable_accounts(
     semester_id: int = Query(...),
     current_teacher_id: int | None = None,
     db: Session = Depends(get_db),
-    _: object = Depends(viewer),
+    _: object = Depends(admin_only),
 ):
     """teacher 角色且在本学期尚未绑定的账号;编辑时另纳入该教师目前绑定的账号。"""
     bound = set(
@@ -212,10 +284,31 @@ def create_teacher(
     body: TeacherIn,
     semester_id: int = Query(...),
     db: Session = Depends(get_db),
-    _: object = Depends(editor),
+    user: User = Depends(get_active_user),
 ) -> Teacher:
-    _require_writable(db, semester_id)
-    _validate_teacher_user(db, semester_id, body.user_id)
+    attempt = None
+    if body.user_id is not None:
+        attempt = _begin_account_binding(
+            db,
+            user,
+            confirmation=body.account_confirmation,
+            target_id=None,
+            semester_id=semester_id,
+            target_version=f"{body.name} -> 账号 #{body.user_id}",
+            expected_target=(
+                f"teacher:{semester_id}:{body.name}:account:{body.user_id}"
+            ),
+            impact=f"创建教师 {body.name} 并绑定登录账号 #{body.user_id}",
+        )
+    if not can_edit_core(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "权限不足")
+    try:
+        _require_writable(db, semester_id)
+        _validate_teacher_user(db, semester_id, body.user_id)
+    except HTTPException as exc:
+        if attempt is not None:
+            _reject_account_binding(db, attempt.id, exc)
+        raise
     teacher = Teacher(
         semester_id=semester_id,
         name=body.name,
@@ -232,7 +325,22 @@ def create_teacher(
         subjects=_resolve_subjects(db, semester_id, body.subject_ids),
     )
     db.add(teacher)
-    db.commit()
+    if attempt is None:
+        db.commit()
+    else:
+        db.flush()
+        high_risk.update_target(
+            db,
+            attempt.id,
+            target_version=f"{teacher.name} (#{teacher.id}) -> 账号 #{body.user_id}",
+            semester_id=semester_id,
+        )
+        high_risk.finish(
+            db,
+            attempt.id,
+            result="success",
+            detail=f"已将教师 {teacher.name} 绑定到登录账号 #{body.user_id}",
+        )
     db.refresh(teacher)
     return teacher
 
@@ -249,13 +357,44 @@ def get_teacher(
 
 @router.patch("/teachers/{teacher_id}", response_model=TeacherOut)
 def update_teacher(
-    teacher_id: int, body: TeacherIn, db: Session = Depends(get_db), _: object = Depends(editor)
+    teacher_id: int,
+    body: TeacherIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> Teacher:
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
-    _require_writable(db, teacher.semester_id)
-    _validate_teacher_user(db, teacher.semester_id, body.user_id, exclude_teacher_id=teacher.id)
+    attempt = None
+    if body.user_id != teacher.user_id:
+        account_target = str(body.user_id) if body.user_id is not None else "none"
+        attempt = _begin_account_binding(
+            db,
+            user,
+            confirmation=body.account_confirmation,
+            target_id=teacher.id,
+            semester_id=teacher.semester_id,
+            target_version=teacher.name,
+            expected_target=f"teacher:{teacher.id}:account:{account_target}",
+            impact=(
+                f"将教师 {teacher.name} 的登录账号绑定改为 "
+                f"{body.user_id if body.user_id is not None else '未绑定'}"
+            ),
+        )
+    if not can_edit_core(user):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "权限不足")
+    try:
+        _require_writable(db, teacher.semester_id)
+        _validate_teacher_user(
+            db,
+            teacher.semester_id,
+            body.user_id,
+            exclude_teacher_id=teacher.id,
+        )
+    except HTTPException as exc:
+        if attempt is not None:
+            _reject_account_binding(db, attempt.id, exc)
+        raise
     teacher.name = body.name
     teacher.id_last4 = body.id_last4
     teacher.base_periods = body.base_periods
@@ -268,31 +407,63 @@ def update_teacher(
     teacher.line_id = body.line_id
     teacher.user_id = body.user_id
     teacher.subjects = _resolve_subjects(db, teacher.semester_id, body.subject_ids)
-    db.commit()
+    if attempt is None:
+        db.commit()
+    else:
+        high_risk.finish(
+            db,
+            attempt.id,
+            result="success",
+            detail=(
+                f"已更新教师 {teacher.name} 的登录账号绑定为 "
+                f"{body.user_id if body.user_id is not None else '未绑定'}"
+            ),
+        )
     db.refresh(teacher)
     return teacher
 
 
 @router.delete("/teachers/{teacher_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_teacher(
-    teacher_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    teacher_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     teacher = db.get(Teacher, teacher_id)
     if teacher is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
-    _require_writable(db, teacher.semester_id)
-    homeroom_count = db.scalar(
-        select(func.count()).select_from(ClassUnit).where(
-            ClassUnit.homeroom_teacher_id == teacher_id
-        )
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_teacher",
+        target_type="teacher",
+        target_id=teacher.id,
+        semester_id=teacher.semester_id,
+        target_version=teacher.name,
+        expected_target=f"teacher:{teacher.id}",
+        impact=f"永久删除教师「{teacher.name}」及其时段规则和排课关联",
     )
-    if homeroom_count:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"此教师为 {homeroom_count} 个班级的班主任,无法删除;请先更换班主任,或将教师设为离职",
+    try:
+        _require_writable(db, teacher.semester_id)
+        homeroom_count = db.scalar(
+            select(func.count()).select_from(ClassUnit).where(
+                ClassUnit.homeroom_teacher_id == teacher_id
+            )
         )
+        if homeroom_count:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"此教师为 {homeroom_count} 个班级的班主任,无法删除;"
+                "请先更换班主任,或将教师设为离职",
+            )
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(teacher)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除教师「{teacher.name}」"
+    )
 
 
 @router.get("/teachers/{teacher_id}/time-rules", response_model=list[TeacherTimeRuleOut])
@@ -386,13 +557,35 @@ def update_room(
 
 
 @router.delete("/rooms/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_room(room_id: int, db: Session = Depends(get_db), _: object = Depends(editor)) -> None:
+def delete_room(
+    room_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
+) -> None:
     room = db.get(Room, room_id)
     if room is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教室/场地")
-    _require_writable(db, room.semester_id)
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_room",
+        target_type="room",
+        target_id=room.id,
+        semester_id=room.semester_id,
+        target_version=room.name,
+        expected_target=f"room:{room.id}",
+        impact=f"永久删除教室/场地「{room.name}」并解除相关排课指定",
+    )
+    try:
+        _require_writable(db, room.semester_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(room)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除教室/场地「{room.name}」"
+    )
 
 
 # ── 班级 ──────────────────────────────
@@ -532,11 +725,31 @@ def class_available_slots(
 
 @router.delete("/class-units/{class_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_class_unit(
-    class_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    class_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     cu = db.get(ClassUnit, class_id)
     if cu is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到班级")
-    _require_writable(db, cu.semester_id)
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_class_unit",
+        target_type="class_unit",
+        target_id=cu.id,
+        semester_id=cu.semester_id,
+        target_version=cu.name,
+        expected_target=f"class-unit:{cu.id}",
+        impact=f"永久删除班级「{cu.name}」及其排课单位关联",
+    )
+    try:
+        _require_writable(db, cu.semester_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(cu)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除班级「{cu.name}」"
+    )

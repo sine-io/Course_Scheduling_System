@@ -4,7 +4,7 @@ import {
 } from '@lucide/vue'
 import {
   NAlert, NButton, NDivider, NEmpty, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpin,
-  NSwitch, NTag, useMessage,
+  NSwitch, NTag, useDialog, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { apiErrorMessage } from '@/api/client'
@@ -12,12 +12,22 @@ import {
   createTeacher, deleteTeacher, listBindableAccounts, listSubjects, listTeachers, updateTeacher,
 } from '@/api/basedata'
 import type { BindableAccount, Subject, Teacher } from '@/api/basedata'
+import { highRiskConfirmation } from '@/api/highRisk'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import TeacherTimeRules from './TeacherTimeRules.vue'
 import './basedata-workspace.css'
 
-const props = withDefaults(defineProps<{ semesterId: number; canEdit?: boolean }>(), { canEdit: true })
+const props = withDefaults(
+  defineProps<{
+    semesterId: number
+    canEdit?: boolean
+    canDelete?: boolean
+    canManageAccounts?: boolean
+  }>(),
+  { canEdit: true, canDelete: false, canManageAccounts: false },
+)
 const message = useMessage()
+const dialog = useDialog()
 
 const items = ref<Teacher[]>([])
 const subjects = ref<Subject[]>([])
@@ -98,6 +108,7 @@ function emptyForm(): TeacherForm {
   }
 }
 const form = ref<TeacherForm>(emptyForm())
+const originalUserId = ref<number | null>(null)
 
 async function loadAccounts(currentTeacherId?: number) {
   loadingAccounts.value = true
@@ -115,7 +126,9 @@ async function openCreate() {
   if (!props.canEdit) return
   editingId.value = null
   form.value = emptyForm()
+  originalUserId.value = null
   show.value = true
+  if (!props.canManageAccounts) return
   try {
     await loadAccounts()
   } catch {
@@ -138,7 +151,9 @@ async function openEdit(teacher: Teacher) {
     line_id: teacher.line_id ?? '',
     user_id: teacher.user_id,
   }
+  originalUserId.value = teacher.user_id
   show.value = true
+  if (!props.canManageAccounts) return
   try {
     await loadAccounts(teacher.id)
   } catch {
@@ -149,20 +164,16 @@ function closeModal() {
   if (!saving.value) show.value = false
 }
 
-async function save() {
-  if (!props.canEdit || saving.value) return
-  if (!form.value.name) {
-    message.warning('请输入教师姓名')
-    return
+async function persistSave(body: Record<string, unknown>, bindingChanged: boolean) {
+  if (saving.value) return
+  if (bindingChanged) {
+    const accountTarget = form.value.user_id === null ? 'none' : String(form.value.user_id)
+    const target = editingId.value
+      ? `teacher:${editingId.value}:account:${accountTarget}`
+      : `teacher:${props.semesterId}:${form.value.name}:account:${accountTarget}`
+    body.account_confirmation = highRiskConfirmation(target)
   }
   saving.value = true
-  const body = {
-    ...form.value,
-    admin_title: form.value.admin_title || null,
-    email: form.value.email || null,
-    phone: form.value.phone || null,
-    line_id: form.value.line_id || null,
-  }
   try {
     if (editingId.value) await updateTeacher(editingId.value, body)
     else await createTeacher(props.semesterId, body)
@@ -176,11 +187,46 @@ async function save() {
   }
 }
 
+async function save() {
+  if (!props.canEdit || saving.value) return
+  if (!form.value.name) {
+    message.warning('请输入教师姓名')
+    return
+  }
+  const body: Record<string, unknown> = {
+    ...form.value,
+    admin_title: form.value.admin_title || null,
+    email: form.value.email || null,
+    phone: form.value.phone || null,
+    line_id: form.value.line_id || null,
+  }
+  const bindingChanged = form.value.user_id !== originalUserId.value
+  if (!bindingChanged) {
+    await persistSave(body, false)
+    return
+  }
+  if (!props.canManageAccounts) {
+    message.error('只有系统管理员可以变更教师的登录账号绑定')
+    return
+  }
+  const accountLabel = form.value.user_id === null
+    ? '解除现有账号绑定'
+    : `绑定账号 #${form.value.user_id}`
+  dialog.warning({
+    title: '确认变更教师账号绑定',
+    content: `目标：教师“${form.value.name}”。影响：${accountLabel}，将改变该账号可访问的教师本人数据。`,
+    positiveText: '确认变更',
+    negativeText: '取消',
+    maskClosable: false,
+    onPositiveClick: () => persistSave(body, true),
+  })
+}
+
 async function remove(teacher: Teacher) {
-  if (!props.canEdit || deletingId.value !== null) return
+  if (!props.canDelete || deletingId.value !== null) return
   deletingId.value = teacher.id
   try {
-    await deleteTeacher(teacher.id)
+    await deleteTeacher(teacher.id, highRiskConfirmation(`teacher:${teacher.id}`))
     message.success('已删除')
     await reload()
   } catch (error) {
@@ -286,7 +332,7 @@ function openRules(teacher: Teacher) {
                   <template #icon><CalendarClock :size="14" aria-hidden="true" /></template>
                   {{ '时段规则' }}
                 </n-button>
-                <n-popconfirm v-if="canEdit" :disabled="deletingId !== null" @positive-click="remove(teacher)">
+                <n-popconfirm v-if="canDelete" :disabled="deletingId !== null" @positive-click="remove(teacher)">
                   <template #trigger>
                     <n-button
                       size="small"
@@ -300,7 +346,7 @@ function openRules(teacher: Teacher) {
                       {{ '删除' }}
                     </n-button>
                   </template>
-                  {{ '确定删除此教师吗？' }}
+                  {{ `将永久删除教师“${teacher.name}”及其时段规则和排课关联。确定继续吗？` }}
                 </n-popconfirm>
               </div>
             </td>
@@ -396,7 +442,7 @@ function openRules(teacher: Teacher) {
             :input-props="{ 'aria-label': '即时通讯账号' }"
           />
         </div>
-        <div class="basedata-field">
+        <div v-if="canManageAccounts" class="basedata-field">
           <span class="basedata-field-label">{{ '绑定登录账号（可选）' }}</span>
           <n-select
             v-model:value="form.user_id"

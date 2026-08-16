@@ -1,6 +1,7 @@
 """教学任务(M2-1)测试:单班/走班/协同/连堂三种结构 + 五项验收标准。"""
 
 import io
+from uuid import uuid4
 
 import pytest
 from openpyxl import Workbook
@@ -17,7 +18,7 @@ PW = "password123"
 def env2(env):
     """已登录排课管理员和一份含测试作息时间表的学期。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sem = create_api_semester(client)
     return client, sem["id"]
@@ -267,7 +268,15 @@ def test_delete_group_cascades_assignments(env2):
         client, sid, scheduling_unit_id=g["id"], subject_id=s["id"], periods_per_week=2,
         teachers=[{"teacher_id": t["id"]}],
     )
-    assert client.delete(f"/api/scheduling-units/{g['id']}").status_code == 204
+    assert client.request(
+        "DELETE",
+        f"/api/scheduling-units/{g['id']}",
+        json={
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"scheduling-unit:{g['id']}",
+        },
+    ).status_code == 204
     assert client.get(f"/api/assignments?semester_id={sid}").json() == []
 
 

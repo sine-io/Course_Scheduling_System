@@ -9,6 +9,7 @@ import {
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
+import { highRiskConfirmation } from '@/api/highRisk'
 import {
   copySemester, createPeriodTable, createSemester, deletePeriodTable,
   deleteSemester, getSemester, listSemesters, listTemplates,
@@ -74,6 +75,10 @@ function canWriteSemester(semesterId: number): boolean {
     && (!semesterContext.authoritative || semesterContext.isCurrent(semesterId))
 }
 
+function canDeleteFromSemester(semesterId: number): boolean {
+  return auth.hasRole('admin') && canWriteSemester(semesterId)
+}
+
 async function fetchSemesters() {
   await semesterContext.load()
   const items = await listSemesters()
@@ -135,10 +140,10 @@ async function onCreateSemester() {
 }
 
 async function onDeleteSemester(id: number) {
-  if (!canWriteSemester(id) || deletingSemesterId.value !== null) return
+  if (!canDeleteFromSemester(id) || deletingSemesterId.value !== null) return
   deletingSemesterId.value = id
   try {
-    await deleteSemester(id)
+    await deleteSemester(id, highRiskConfirmation(`semester:${id}`))
     message.success('学期已删除')
     await refreshData()
   } catch (error) {
@@ -186,10 +191,10 @@ async function onAddTable() {
 
 async function onDeleteTable(id: number) {
   const owner = semesters.value.find((semester) => semester.period_tables.some((table) => table.id === id))
-  if (!owner || !canWriteSemester(owner.id) || deletingTableId.value !== null) return
+  if (!owner || !canDeleteFromSemester(owner.id) || deletingTableId.value !== null) return
   deletingTableId.value = id
   try {
-    await deletePeriodTable(id)
+    await deletePeriodTable(id, highRiskConfirmation(`period-table:${id}`))
     message.success('作息时间表已删除')
     await refreshData()
   } catch (error) {
@@ -394,19 +399,19 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                 <template #icon><Copy :size="14" aria-hidden="true" /></template>
                 {{ '复制到新学期' }}
               </n-button>
-              <n-popconfirm v-if="canManageSemesters" :disabled="deletingSemesterId !== null || !canWriteSemester(semester.id) || semester.status === 'archived'" @positive-click="onDeleteSemester(semester.id)">
+              <n-popconfirm v-if="canDeleteFromSemester(semester.id)" :disabled="deletingSemesterId !== null || semester.status === 'archived'" @positive-click="onDeleteSemester(semester.id)">
                 <template #trigger>
                   <n-button
                     :data-testid="`semester-delete-${semester.id}`"
                     size="small" type="error" ghost
                     :loading="deletingSemesterId === semester.id"
-                    :disabled="deletingSemesterId !== null || !canWriteSemester(semester.id) || semester.status === 'archived'"
+                    :disabled="deletingSemesterId !== null || semester.status === 'archived'"
                   >
                     <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
                     {{ '删除学期' }}
                   </n-button>
                 </template>
-                {{ `确定删除“${semester.label}”吗？其中的作息时间表也会一并删除。` }}
+                {{ `将永久删除学期“${semester.label}”及其全部排课、基础数据和运行记录。确定继续吗？` }}
               </n-popconfirm>
             </div>
           </header>
@@ -436,19 +441,19 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                     <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                     {{ '编辑' }}
                   </n-button>
-                  <n-popconfirm v-if="canManageSemesters" :disabled="deletingTableId !== null || !canWriteSemester(semester.id)" @positive-click="onDeleteTable(table.id)">
+                  <n-popconfirm v-if="canDeleteFromSemester(semester.id)" :disabled="deletingTableId !== null" @positive-click="onDeleteTable(table.id)">
                     <template #trigger>
                       <n-button
                         :data-testid="`period-table-delete-${table.id}`"
                         size="small" type="error" ghost
                         :loading="deletingTableId === table.id"
-                        :disabled="deletingTableId !== null || !canWriteSemester(semester.id)"
+                        :disabled="deletingTableId !== null"
                       >
                         <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
                         {{ '删除' }}
                       </n-button>
                     </template>
-                    {{ `确定删除“${table.name}”吗？` }}
+                    {{ `将永久删除作息时间表“${table.name}”及其中全部节次。确定继续吗？` }}
                   </n-popconfirm>
                 </div>
               </div>

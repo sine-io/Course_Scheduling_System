@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api import high_risk_http
+from app.core.auth import get_active_user
 from app.core.db import get_db
 from app.core.permissions import core_editor, core_viewer
 from app.models.assignment import (
@@ -18,6 +20,7 @@ from app.models.assignment import (
     SchedulingUnitType,
 )
 from app.models.basedata import ClassUnit, Room, Subject, Teacher
+from app.models.user import User
 from app.schemas.assignment import (
     AssignmentIn,
     AssignmentOut,
@@ -26,6 +29,7 @@ from app.schemas.assignment import (
     SchedulingUnitOut,
     TeacherLoad,
 )
+from app.schemas.high_risk import HighRiskConfirmation
 from app.services import assignments as svc
 from app.services import semester_context
 
@@ -84,14 +88,34 @@ def create_group(
 
 @router.delete("/scheduling-units/{unit_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_group(
-    unit_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    unit_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     unit = db.get(SchedulingUnit, unit_id)
     if unit is None or unit.unit_type != SchedulingUnitType.group.value:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到走班群组")
-    _require_semester(db, unit.semester_id)
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_scheduling_unit",
+        target_type="scheduling_unit",
+        target_id=unit.id,
+        semester_id=unit.semester_id,
+        target_version=unit.name,
+        expected_target=f"scheduling-unit:{unit.id}",
+        impact=f"永久删除走班群组「{unit.name}」及其中全部教学任务",
+    )
+    try:
+        _require_semester(db, unit.semester_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(unit)  # 级联删除其教学任务
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除走班群组「{unit.name}」"
+    )
 
 
 # ── 统计(需在 /assignments/{id} 之前注册)────
@@ -249,11 +273,32 @@ def update_assignment(
 
 @router.delete("/assignments/{assignment_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_assignment(
-    assignment_id: int, db: Session = Depends(get_db), _: object = Depends(editor)
+    assignment_id: int,
+    confirmation: HighRiskConfirmation | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_active_user),
 ) -> None:
     a = db.get(CourseAssignment, assignment_id)
     if a is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教学任务")
-    _require_semester(db, a.semester_id)
+    target_version = f"{a.scheduling_unit.name} / {a.subject.name}"
+    attempt = high_risk_http.begin(
+        db,
+        user,
+        confirmation,
+        action="delete_assignment",
+        target_type="assignment",
+        target_id=a.id,
+        semester_id=a.semester_id,
+        target_version=target_version,
+        expected_target=f"assignment:{a.id}",
+        impact=f"永久删除教学任务「{target_version}」及其排课条目",
+    )
+    try:
+        _require_semester(db, a.semester_id)
+    except HTTPException as exc:
+        high_risk_http.reject(db, attempt.id, exc)
     db.delete(a)
-    db.commit()
+    high_risk_http.complete_delete(
+        db, attempt.id, detail=f"已永久删除教学任务「{target_version}」"
+    )

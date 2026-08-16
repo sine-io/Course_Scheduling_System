@@ -34,12 +34,25 @@ const wizardMocks = vi.hoisted(() => ({
   resetWizard: vi.fn(),
   getWizardState: vi.fn(),
 }))
+const accountMocks = vi.hoisted(() => ({
+  createAccount: vi.fn(),
+  listAccounts: vi.fn(),
+  updateAccount: vi.fn(),
+}))
+const auditMocks = vi.hoisted(() => ({
+  listAuditLogs: vi.fn(),
+}))
 
 vi.mock('@/api/backups', () => ({ ...backupMocks }))
 vi.mock('@/api/assignments', () => ({ ...assignmentMocks }))
 vi.mock('@/api/onboarding', () => ({ ...onboardingMocks }))
 vi.mock('@/api/notifications', () => ({ ...notificationMocks }))
 vi.mock('@/api/wizard', () => ({ ...wizardMocks }))
+vi.mock('@/api/accounts', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/api/accounts')>(),
+  ...accountMocks,
+}))
+vi.mock('@/api/audit', () => ({ ...auditMocks }))
 
 const backup = {
   name: 'backup-1.dump',
@@ -104,6 +117,8 @@ describe('System', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     backupMocks.listBackups.mockResolvedValue([])
+    accountMocks.listAccounts.mockResolvedValue([])
+    auditMocks.listAuditLogs.mockResolvedValue([])
     assignmentMocks.demoDataStatus.mockResolvedValue(adminSettings.demo)
     assignmentMocks.getSchedulingSettings.mockResolvedValue(adminSettings.scheduling)
     assignmentMocks.getSchoolSettings.mockResolvedValue(adminSettings.school)
@@ -203,8 +218,8 @@ describe('System', () => {
     await flushPromises()
 
     const confirmations = wrapper.findAll('[data-testid="confirm-backup-action"]')
-    await confirmations[0].trigger('click')
-    await confirmations[0].trigger('click')
+    await confirmations[1].trigger('click')
+    await confirmations[1].trigger('click')
 
     expect(backupMocks.restoreBackup).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="backup-restore"]').attributes('disabled')).toBeDefined()
@@ -226,9 +241,9 @@ describe('System', () => {
     await flushPromises()
 
     const confirmations = wrapper.findAll('[data-testid="confirm-backup-action"]')
-    await confirmations[1].trigger('click')
+    await confirmations[2].trigger('click')
     await flushPromises()
-    await confirmations[1].trigger('click')
+    await confirmations[2].trigger('click')
     await flushPromises()
 
     expect(backupMocks.deleteBackup).toHaveBeenCalledTimes(2)

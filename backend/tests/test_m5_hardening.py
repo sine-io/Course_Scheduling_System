@@ -213,6 +213,13 @@ def test_restore_rejected_while_solver_busy(env, backup_dir, monkeypatch):  # no
     (backup_dir / "backup_20260101_010101_manual.dump").write_bytes(PGDMP)
 
     monkeypatch.setattr(job_queue, "solver_busy", lambda: True)
-    r = client.post("/api/backups/backup_20260101_010101_manual.dump/restore")
+    r = client.post(
+        "/api/backups/backup_20260101_010101_manual.dump/restore",
+        json={
+            "operation_id": "1de9fc8a-40ae-407a-9a5d-8a3e0b0a3745",
+            "confirmed": True,
+            "target": "backup:backup_20260101_010101_manual.dump",
+        },
+    )
     assert r.status_code == 409
     assert "排课进行中" in r.json()["detail"]

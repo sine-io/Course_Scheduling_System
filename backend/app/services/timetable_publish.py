@@ -322,6 +322,11 @@ def publish(db: Session, timetable: Timetable, user: User, forced: bool) -> Time
     ).all()
     for p in previous:
         p.status = TimetableStatus.archived.value
+    # The partial unique index permits only one published row per semester.
+    # Flush the outgoing snapshot before promoting the new one so SQLAlchemy's
+    # batched UPDATE order cannot briefly violate that invariant.
+    if previous:
+        db.flush()
     timetable.status = TimetableStatus.published.value
 
     record_publication_attempt(

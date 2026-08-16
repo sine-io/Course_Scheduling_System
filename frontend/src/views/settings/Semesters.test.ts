@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Semesters from './Semesters.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const mocks = vi.hoisted(() => ({
   listTemplates: vi.fn(),
@@ -50,14 +51,23 @@ function makeRouter() {
   })
 }
 
-async function mountSemesters(options: Record<string, unknown> = {}) {
+async function mountSemesters(options: Record<string, unknown> = {}, role = 'scheduler') {
+  const pinia = createPinia()
+  const auth = useAuthStore(pinia)
+  auth.user = {
+    id: 1,
+    username: 'test-user',
+    display_name: '测试用户',
+    roles: [role],
+    must_change_password: false,
+  }
   const router = makeRouter()
   await router.push('/settings/semesters')
   await router.isReady()
   const Host = { render: () => h(NMessageProvider, null, { default: () => h(Semesters) }) }
   return mount(Host, {
     global: {
-      plugins: [createPinia(), router],
+      plugins: [pinia, router],
       ...options,
     },
   })
@@ -115,7 +125,7 @@ describe('Semesters', () => {
           template: '<span><slot name="trigger" /><button data-testid="confirm-semester-delete-1" @click="$emit(\'positive-click\')">确认</button></span>',
         },
       },
-    })
+    }, 'admin')
     await flushPromises()
 
     const confirm = wrapper.get('[data-testid="confirm-semester-delete-1"]')

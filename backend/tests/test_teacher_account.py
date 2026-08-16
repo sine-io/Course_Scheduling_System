@@ -1,6 +1,7 @@
 """教师账号绑定与联系信息测试。对应 M2-0 验收标准。"""
 
 import io
+from uuid import uuid4
 
 import pytest
 from openpyxl import Workbook
@@ -15,9 +16,9 @@ PW = "password123"
 
 @pytest.fixture
 def sched(env):
-    """已登录排课管理员 + 一个学期。返回 (client, semester_id, db)。"""
+    """已登录系统管理员 + 一个学期。返回 (client, semester_id, db)。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
     return client, sem["id"], db
@@ -25,6 +26,19 @@ def sched(env):
 
 def _make_teacher_account(db, username: str) -> int:
     return make_user(db, username, PW, roles=[Role.teacher]).id
+
+
+def _binding_body(sid: int, name: str, user_id: int, **fields) -> dict:
+    return {
+        "name": name,
+        "user_id": user_id,
+        "account_confirmation": {
+            "operation_id": str(uuid4()),
+            "confirmed": True,
+            "target": f"teacher:{sid}:{name}:account:{user_id}",
+        },
+        **fields,
+    }
 
 
 # ── 联系信息 ──────────────────────────
@@ -66,14 +80,20 @@ def test_empty_email_becomes_null(sched):
 def test_bind_account_success(sched):
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid})
+    r = client.post(
+        f"/api/teachers?semester_id={sid}",
+        json=_binding_body(sid, "王老师", uid),
+    )
     assert r.status_code == 201
     assert r.json()["user_id"] == uid
 
 
 def test_bind_nonexistent_account_400(sched):
     client, sid, _ = sched
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": 99999})
+    r = client.post(
+        f"/api/teachers?semester_id={sid}",
+        json=_binding_body(sid, "王老师", 99999),
+    )
     assert r.status_code == 400
 
 
@@ -82,9 +102,12 @@ def test_bind_same_account_twice_409(sched):
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
     assert client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid}
+        f"/api/teachers?semester_id={sid}", json=_binding_body(sid, "王老师", uid)
     ).status_code == 201
-    r = client.post(f"/api/teachers?semester_id={sid}", json={"name": "李老师", "user_id": uid})
+    r = client.post(
+        f"/api/teachers?semester_id={sid}",
+        json=_binding_body(sid, "李老师", uid),
+    )
     assert r.status_code == 409
 
 
@@ -93,7 +116,7 @@ def test_rebind_same_teacher_ok(sched):
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
     t = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid}
+        f"/api/teachers?semester_id={sid}", json=_binding_body(sid, "王老师", uid)
     ).json()
     r = client.patch(f"/api/teachers/{t['id']}", json={"name": "王老师", "user_id": uid})
     assert r.status_code == 200
@@ -105,7 +128,10 @@ def test_bindable_accounts_excludes_bound(sched):
     u1 = _make_teacher_account(db, "wang001")
     u2 = _make_teacher_account(db, "lee001")
     # 绑定 u1 给某教师
-    client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": u1})
+    client.post(
+        f"/api/teachers?semester_id={sid}",
+        json=_binding_body(sid, "王老师", u1),
+    )
     avail = client.get(f"/api/teachers/bindable-accounts?semester_id={sid}").json()
     ids = {a["id"] for a in avail}
     assert u2 in ids and u1 not in ids
@@ -115,7 +141,7 @@ def test_bindable_accounts_includes_current_in_edit(sched):
     client, sid, db = sched
     u1 = _make_teacher_account(db, "wang001")
     t = client.post(
-        f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": u1}
+        f"/api/teachers?semester_id={sid}", json=_binding_body(sid, "王老师", u1)
     ).json()
     # 编辑场景:带 current_teacher_id → 应含目前绑定的 u1
     avail = client.get(
@@ -128,7 +154,10 @@ def test_bindable_accounts_includes_current_in_edit(sched):
 def test_current_teacher_helper(sched):
     client, sid, db = sched
     uid = _make_teacher_account(db, "wang001")
-    client.post(f"/api/teachers?semester_id={sid}", json={"name": "王老师", "user_id": uid})
+    client.post(
+        f"/api/teachers?semester_id={sid}",
+        json=_binding_body(sid, "王老师", uid),
+    )
     user = db.get(User, uid)
     t = current_teacher(db, user, sid)
     assert t is not None and t.name == "王老师"
@@ -154,7 +183,14 @@ def _upload_teachers(client, sid, rows, ncols=11, create_accounts=True):
     url = f"/api/import/teachers?semester_id={sid}"
     if create_accounts:
         url += "&create_accounts=true"
-    return client.post(url, files={"file": ("t.xlsx", content, XLSX_MIME)})
+    data = None
+    if create_accounts:
+        data = {
+            "operation_id": str(uuid4()),
+            "confirmed": "true",
+            "target": f"semester:{sid}:teacher-accounts",
+        }
+    return client.post(url, data=data, files={"file": ("t.xlsx", content, XLSX_MIME)})
 
 
 def test_import_binds_account(sched):
@@ -193,7 +229,13 @@ def test_copy_preserves_binding_and_contact(sched):
     uid = _make_teacher_account(db, "wang001")
     client.post(
         f"/api/teachers?semester_id={sid}",
-        json={"name": "王老师", "user_id": uid, "email": "wang@a.bc", "phone": "0911"},
+        json=_binding_body(
+            sid,
+            "王老师",
+            uid,
+            email="wang@a.bc",
+            phone="0911",
+        ),
     )
     r = client.post(
         f"/api/semesters/{sid}/copy",

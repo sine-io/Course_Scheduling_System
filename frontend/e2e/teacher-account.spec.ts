@@ -28,8 +28,8 @@ test('教师联系信息：新增教师并保存电子邮箱', async ({ page }) 
   await page.getByTestId('teacher-add').click()
   await page.getByTestId('teacher-name').locator('input').fill('陈老师')
   await page.getByTestId('teacher-email').locator('input').fill('chen@example.edu.cn')
-  // 账号绑定下拉存在(本学期尚无教师账号时为空列表,字段仍应可见)
-  await expect(page.getByTestId('teacher-account')).toBeVisible()
+  // 账号绑定属于管理员高风险操作，排课管理员编辑教师时不显示入口。
+  await expect(page.getByTestId('teacher-account')).toHaveCount(0)
   await page.screenshot({ path: `${SHOTS}/teacher-1-form.png` })
   await page.getByTestId('teacher-save').click()
 

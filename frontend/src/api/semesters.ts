@@ -1,6 +1,7 @@
 // 学期与作息时间表 API 类型与调用封装。
 
 import { apiGet, apiPost, apiPut, request } from '@/api/client'
+import type { HighRiskConfirmation } from '@/api/highRisk'
 
 export type PeriodType = 'regular' | 'morning' | 'lunch' | 'homeroom' | 'reserved'
 
@@ -89,7 +90,8 @@ export const updateSemester = (
   id: number,
   body: { status?: string; readiness?: string; start_date?: string | null; end_date?: string | null },
 ) => request<Semester>('PATCH', `/semesters/${id}`, body)
-export const deleteSemester = (id: number) => request<void>('DELETE', `/semesters/${id}`)
+export const deleteSemester = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/semesters/${id}`, confirmation)
 
 export interface CopyOptions {
   academic_year: number
@@ -125,6 +127,7 @@ export const getAvailableSlots = (tableId: number) =>
   apiGet<AvailableSlot[]>(`/period-tables/${tableId}/available-slots`)
 export const updatePeriodTable = (id: number, body: { name?: string; is_default?: boolean }) =>
   request<PeriodTable>('PATCH', `/period-tables/${id}`, body)
-export const deletePeriodTable = (id: number) => request<void>('DELETE', `/period-tables/${id}`)
+export const deletePeriodTable = (id: number, confirmation: HighRiskConfirmation) =>
+  request<void>('DELETE', `/period-tables/${id}`, confirmation)
 export const replacePeriods = (id: number, periods: Period[]) =>
   request<PeriodTable>('PUT', `/period-tables/${id}/periods`, periods)
