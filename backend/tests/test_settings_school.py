@@ -33,6 +33,7 @@ def test_can_be_changed_without_restart(env):
     assert r.status_code == 200
     assert r.json()["school_name"] == "海州市启明实验初级中学"
     assert app_settings.school_name(db) == "海州市启明实验初级中学"
+    assert client.get("/api/app-config").json()["school_name"] == "海州市启明实验初级中学"
 
 
 def test_blank_name_is_rejected(env):

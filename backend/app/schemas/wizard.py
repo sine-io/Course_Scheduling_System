@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class WizardStateOut(BaseModel):
     current_step: int
     completed: bool
+    paused: bool
     semester_id: int | None
     total_steps: int
     has_semesters: bool  # 系统是否已有任何学期(辅助前端判断是否需引导)
@@ -14,6 +15,7 @@ class WizardStateOut(BaseModel):
 class WizardStateUpdate(BaseModel):
     current_step: int | None = None
     completed: bool | None = None
+    paused: bool | None = None
     semester_id: int | None = None
 
 

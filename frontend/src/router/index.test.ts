@@ -77,6 +77,33 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('leaves')
   })
 
+  it('respects an explicit save-and-exit pause without marking setup complete', async () => {
+    setActivePinia(createPinia())
+    const auth = useAuthStore()
+    auth.user = {
+      id: 5,
+      username: 'scheduler',
+      display_name: '排课管理员',
+      roles: ['scheduler'],
+      must_change_password: false,
+    }
+    auth.loaded = true
+    const wizard = useWizardStore()
+    wizard.loaded = true
+    wizard.state = {
+      current_step: 1,
+      completed: false,
+      paused: true,
+      semester_id: 8,
+      total_steps: 4,
+      has_semesters: true,
+    }
+
+    await router.push('/')
+
+    expect(router.currentRoute.value.name).toBe('dashboard')
+  })
+
   it('redirects legacy notification, demo, and system section links to their replacements', async () => {
     setActivePinia(createPinia())
     const auth = useAuthStore()

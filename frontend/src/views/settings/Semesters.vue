@@ -12,9 +12,9 @@ import { apiErrorMessage } from '@/api/client'
 import { highRiskConfirmation } from '@/api/highRisk'
 import {
   copySemester, createPeriodTable, createSemester, deletePeriodTable,
-  deleteSemester, getSemester, listSemesters, listTemplates,
+  deleteSemester, getSemester, listSemesters,
 } from '@/api/semesters'
-import type { CopyOptions, SemesterListItem, Semester, Template } from '@/api/semesters'
+import type { CopyOptions, SemesterListItem, Semester } from '@/api/semesters'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
@@ -28,7 +28,6 @@ const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 
 const semesters = ref<Semester[]>([])
-const templates = ref<Template[]>([])
 const initialLoading = ref(true)
 const refreshing = ref(false)
 const loadError = ref<string | null>(null)
@@ -44,14 +43,9 @@ const currentYear = new Date().getFullYear()
 const form = ref({
   academic_year: currentYear,
   term: 1,
-  template_key: 'junior_high_draft' as string | null,
 })
 const yearMin = computed(() => appConfig.config.academic_year.min)
 const yearMax = computed(() => appConfig.config.academic_year.max)
-const templateOptions = computed(() => [
-  { label: '不使用模板', value: '' },
-  ...templates.value.map((template) => ({ label: template.name, value: template.key })),
-])
 const termOptions = [
   { label: '第一学期', value: 1 },
   { label: '第二学期', value: 2 },
@@ -98,7 +92,6 @@ async function loadPage() {
   initialLoading.value = true
   loadError.value = null
   try {
-    templates.value = await listTemplates()
     await fetchSemesters()
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。')
@@ -128,7 +121,6 @@ async function onCreateSemester() {
     await createSemester({
       academic_year: form.value.academic_year,
       term: form.value.term,
-      template_key: form.value.template_key || null,
     })
     message.success('学期已创建')
     await refreshData()
@@ -155,12 +147,12 @@ async function onDeleteSemester(id: number) {
 
 const showAddTable = ref(false)
 const addTableTarget = ref<number | null>(null)
-const addTableForm = ref({ name: '', template_key: null as string | null, is_default: false })
+const addTableForm = ref({ name: '', num_weekdays: 5, is_default: false })
 
 function openAddTable(semesterId: number) {
   if (!canWriteSemester(semesterId)) return
   addTableTarget.value = semesterId
-  addTableForm.value = { name: '', template_key: null, is_default: false }
+  addTableForm.value = { name: '', num_weekdays: 5, is_default: false }
   showAddTable.value = true
 }
 
@@ -176,7 +168,7 @@ async function onAddTable() {
   try {
     await createPeriodTable(addTableTarget.value, {
       name: addTableForm.value.name.trim(),
-      template_key: addTableForm.value.template_key || null,
+      num_weekdays: addTableForm.value.num_weekdays,
       is_default: addTableForm.value.is_default,
     })
     showAddTable.value = false
@@ -330,7 +322,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
           <div>
             <p class="settings-eyebrow">{{ '新建工作面' }}</p>
             <h2>{{ '创建学期' }}</h2>
-            <p>{{ '选择学年、学期和可选模板，创建后仍可继续调整日期与作息。' }}</p>
+            <p>{{ '只创建学期本身，不会预填科目、教师、班级或作息。' }}</p>
           </div>
           <Clock3 :size="20" class="settings-heading-icon" aria-hidden="true" />
         </div>
@@ -342,10 +334,6 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
           <div class="settings-field">
             <span class="settings-field-label">{{ '学期' }}</span>
             <n-select v-model:value="form.term" :options="termOptions" />
-          </div>
-          <div class="settings-field">
-            <span class="settings-field-label">{{ '学校模板' }}</span>
-            <n-select v-model:value="form.template_key" :options="templateOptions" placeholder="选择学校模板" />
           </div>
         </div>
         <div class="settings-actions">
@@ -465,11 +453,11 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
         <div class="settings-modal-form">
           <div class="settings-field">
             <label for="period-table-name">{{ '名称' }}</label>
-            <n-input id="period-table-name" v-model:value="addTableForm.name" placeholder="例如：初中作息时间表" />
+            <n-input id="period-table-name" v-model:value="addTableForm.name" placeholder="例如：标准作息" />
           </div>
           <div class="settings-field">
-            <span class="settings-field-label">{{ '使用学校模板（可选）' }}</span>
-            <n-select v-model:value="addTableForm.template_key" :options="templateOptions" placeholder="不使用模板则创建空白表" />
+            <label for="period-table-weekdays">{{ '每周上课天数' }}</label>
+            <n-input-number id="period-table-weekdays" v-model:value="addTableForm.num_weekdays" :min="5" :max="6" />
           </div>
           <n-checkbox v-model:checked="addTableForm.is_default">{{ '设为该学期默认作息表' }}</n-checkbox>
           <div class="settings-modal-actions">

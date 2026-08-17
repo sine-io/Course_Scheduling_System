@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.db import Base
 
 SINGLETON_ID = 1
-TOTAL_STEPS = 5
+TOTAL_STEPS = 4
 
 
 class WizardState(Base):
@@ -18,6 +18,7 @@ class WizardState(Base):
     id: Mapped[int] = mapped_column(primary_key=True)  # 固定为 1
     current_step: Mapped[int] = mapped_column(Integer, default=0)  # 0..TOTAL_STEPS-1
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
     # 向导过程中创建的学期(续作时沿用)
     semester_id: Mapped[int | None] = mapped_column(
         ForeignKey("semesters.id", ondelete="SET NULL"), nullable=True

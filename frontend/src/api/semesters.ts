@@ -40,14 +40,6 @@ export interface Semester extends SemesterListItem {
   period_tables: PeriodTable[]
 }
 
-export interface Template {
-  key: string
-  name: string
-  minutes_per_period: number | null
-  subject_count: number
-  editable: boolean
-}
-
 export const PERIOD_TYPE_LABELS: Record<PeriodType, string> = {
   regular: '一般课',
   morning: '早自习',
@@ -62,7 +54,6 @@ export const STATUS_LABELS: Record<SemesterListItem['status'], string> = {
   archived: '已归档',
 }
 
-export const listTemplates = () => apiGet<Template[]>('/school-templates')
 export const listSemesters = () => apiGet<SemesterListItem[]>('/semesters')
 export const getSemester = (id: number) => apiGet<Semester>(`/semesters/${id}`)
 
@@ -81,7 +72,6 @@ export const switchSemesterContext = (semesterId: number, expectedRevision: numb
 export const createSemester = (body: {
   academic_year: number
   term: number
-  template_key?: string | null
   start_date?: string | null
   end_date?: string | null
 }) => apiPost<Semester>('/semesters', body)
@@ -111,7 +101,7 @@ export const copySemester = (id: number, body: CopyOptions) =>
 
 export const createPeriodTable = (
   semesterId: number,
-  body: { name: string; num_weekdays?: number; is_default?: boolean; template_key?: string | null },
+  body: { name: string; num_weekdays?: number; is_default?: boolean },
 ) => apiPost<PeriodTable>(`/semesters/${semesterId}/period-tables`, body)
 export const getPeriodTable = (id: number) => apiGet<PeriodTable>(`/period-tables/${id}`)
 

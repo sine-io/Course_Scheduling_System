@@ -29,12 +29,10 @@ from app.schemas.semester import (
     SemesterListItem,
     SemesterOut,
     SemesterUpdate,
-    TemplateOut,
 )
 from app.schemas.wizard import SemesterSummary
 from app.services import high_risk, semester_context
 from app.services import period_tables as pt_service
-from app.services import templates as tpl
 from app.services.calendar import readiness_issues
 from app.services.school_rules import validate_academic_year
 from app.services.semester_copy import CopyOptions, copy_semester
@@ -110,21 +108,6 @@ def _unset_other_defaults(db: Session, semester_id: int, keep_id: int | None) ->
             t.is_default = False
 
 
-# ── 学制模板 ──────────────────────────
-@router.get("/school-templates", response_model=list[TemplateOut])
-def list_templates(_: object = Depends(viewer)) -> list[TemplateOut]:
-    return [
-        TemplateOut(
-            key=t["key"],
-            name=t["name"],
-            minutes_per_period=t["minutes_per_period"],
-            subject_count=len(t.get("subjects", [])),
-            editable=bool(t.get("editable", False)),
-        )
-        for t in tpl.load_templates()
-    ]
-
-
 # ── 学期 ──────────────────────────────
 @router.get("/semester-context", response_model=SemesterContextOut)
 def get_semester_context(user: User = Depends(get_active_user), db: Session = Depends(get_db)):
@@ -175,25 +158,13 @@ def create_semester(
     if exists:
         raise HTTPException(status.HTTP_409_CONFLICT, "该学年学期已存在")
 
-    if body.template_key:
-        if tpl.get_template(body.template_key) is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的学校模板")
-        semester = tpl.create_semester_from_template(
-            db,
-            academic_year=body.academic_year,
-            term=body.term,
-            template_key=body.template_key,
-            start_date=body.start_date,
-            end_date=body.end_date,
-        )
-    else:
-        semester = Semester(
-            academic_year=body.academic_year,
-            term=body.term,
-            start_date=body.start_date,
-            end_date=body.end_date,
-        )
-        db.add(semester)
+    semester = Semester(
+        academic_year=body.academic_year,
+        term=body.term,
+        start_date=body.start_date,
+        end_date=body.end_date,
+    )
+    db.add(semester)
     db.flush()
     semester_context.set_initial_current(db, semester)
     db.commit()
@@ -358,17 +329,9 @@ def create_period_table(
 ) -> PeriodTable:
     _require_writable(db, semester_id)
 
-    if body.template_key:
-        template = tpl.get_template(body.template_key)
-        if template is None:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "未知的学校模板")
-        table = tpl.build_period_table_from_template(
-            template, name=body.name, is_default=body.is_default
-        )
-    else:
-        table = PeriodTable(
-            name=body.name, num_weekdays=body.num_weekdays, is_default=body.is_default
-        )
+    table = PeriodTable(
+        name=body.name, num_weekdays=body.num_weekdays, is_default=body.is_default
+    )
     table.semester_id = semester_id
     db.add(table)
     db.flush()

@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import {
-  NAlert, NButton, NEmpty, NInputNumber, NResult, NSelect,
+  NAlert, NButton, NDatePicker, NEmpty, NInput, NInputNumber, NResult, NSelect,
   NSpin, NStatistic, NStep, NSteps, useMessage,
 } from 'naive-ui'
 import {
-  CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Clock3,
-  LayoutTemplate, SkipForward, Upload,
+  CalendarRange, CheckCircle2, ChevronLeft, ChevronRight, CircleAlert, Clock3, Save,
 } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
-import { createSemester, getSemester, listTemplates } from '@/api/semesters'
-import type { Semester, Template } from '@/api/semesters'
+import { saveSchoolSettings } from '@/api/assignments'
+import { createSemester, getSemester, updateSemester } from '@/api/semesters'
+import type { Semester } from '@/api/semesters'
 import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
 import { canEditCore as canEditCoreRole } from '@/permissions'
@@ -29,10 +29,11 @@ const appConfig = useAppConfigStore()
 const semesterContext = useSemesterContextStore()
 
 const step = ref(0)
-const templates = ref<Template[]>([])
-const templateKey = ref<string | null>(null)
+const schoolName = ref(appConfig.config.school_name)
 const year = ref(new Date().getFullYear())
 const term = ref(1)
+const startDate = ref<string | null>(null)
+const endDate = ref<string | null>(null)
 const semesterId = ref<number | null>(null)
 const semester = ref<Semester | null>(null)
 const summary = ref<SemesterSummary | null>(null)
@@ -56,10 +57,18 @@ const canEditCore = computed(() => (
   // Isolated component tests mount without the router guard; the API remains the final boundary.
   !auth.user || canEditCoreRole(auth.user.roles)
 ))
+const canEditSchool = computed(() => !auth.user || auth.hasRole('admin'))
 const canEditSemester = computed(() => (
   canEditCore.value
   && (!semesterContext.authoritative || semesterContext.isCurrent(semesterId.value))
 ))
+
+function syncFormFromSemester(value: Semester) {
+  year.value = value.academic_year
+  term.value = value.term
+  startDate.value = value.start_date
+  endDate.value = value.end_date
+}
 
 async function loadSummary(id: number) {
   summaryLoading.value = true
@@ -87,17 +96,18 @@ async function retrySummary() {
 
 async function loadSemester(id: number) {
   semester.value = await getSemester(id)
+  if (semester.value) syncFormFromSemester(semester.value)
 }
 
 async function syncWizardState() {
-  step.value = wizard.state?.current_step ?? 0
+  step.value = Math.max(0, Math.min(wizard.state?.current_step ?? 0, 3))
   semesterId.value = wizard.state?.semester_id ?? null
   semester.value = null
   summary.value = null
   summaryError.value = null
   if (semesterId.value) {
     await loadSemester(semesterId.value)
-    if (step.value === 4) {
+    if (step.value === 3) {
       try {
         await loadSummary(semesterId.value)
       } catch {
@@ -112,12 +122,12 @@ async function loadWizardData() {
   initialError.value = null
   actionError.value = null
   try {
+    if (!appConfig.loaded) await appConfig.load()
+    schoolName.value = appConfig.config.school_name
     if (!wizard.loaded || wizard.error) await wizard.fetch()
     if (wizard.error && !wizard.state) throw new Error(wizard.error)
+    if (canEditCore.value && wizard.state?.paused) await wizard.patch({ paused: false })
     await semesterContext.load()
-    templates.value = await listTemplates()
-    templateKey.value ??= templates.value[0]?.key ?? null
-
     await syncWizardState()
   } catch (error) {
     initialError.value = apiErrorMessage(error, '无法读取设置向导，请稍后重试。')
@@ -136,61 +146,87 @@ async function persistStep(nextStep: number): Promise<boolean> {
   }
 }
 
+function validateFirstStep(): boolean {
+  const minYear = appConfig.config.academic_year.min
+  const maxYear = appConfig.config.academic_year.max
+  if (!Number.isInteger(year.value) || year.value < minYear || year.value > maxYear) {
+    actionError.value = `学年起始年须在 ${minYear} 至 ${maxYear} 之间。`
+    return false
+  }
+  if (![1, 2].includes(term.value)) {
+    actionError.value = '请选择有效的学期。'
+    return false
+  }
+  if (!startDate.value) {
+    actionError.value = '请填写开始日期。'
+    return false
+  }
+  if (!endDate.value) {
+    actionError.value = '请填写结束日期。'
+    return false
+  }
+  if (endDate.value < startDate.value) {
+    actionError.value = '结束日期不可早于开始日期。'
+    return false
+  }
+  return true
+}
+
+async function persistSchoolName(): Promise<void> {
+  if (!canEditSchool.value) return
+  const value = schoolName.value.trim()
+  if (!value) throw new Error('学校名称不能为空。')
+  if (value === appConfig.config.school_name) return
+  const saved = await saveSchoolSettings({ school_name: value })
+  appConfig.config.school_name = saved.school_name
+  schoolName.value = saved.school_name
+}
+
 async function goNext() {
   if (!canEditCore.value || busy.value) return
   actionError.value = null
-
-  if (step.value === 0 && !templateKey.value) {
-    actionError.value = '当前没有可用的学制模板，请重新加载。'
-    return
-  }
-  if (step.value === 1) {
-    const minYear = appConfig.config.academic_year.min
-    const maxYear = appConfig.config.academic_year.max
-    if (!Number.isInteger(year.value) || year.value < minYear || year.value > maxYear) {
-      actionError.value = `学年起始年须在 ${minYear} 至 ${maxYear} 之间。`
-      return
-    }
-    if (![1, 2].includes(term.value)) {
-      actionError.value = '请选择有效的学期。'
-      return
-    }
-  }
+  if (step.value === 0 && !validateFirstStep()) return
 
   const previousStep = step.value
   busy.value = true
   try {
-    // 每项都独立检查，以便从创建、保存或读取任一失败点继续重试。
-    if (step.value === 1) {
+    if (step.value === 0) {
+      await persistSchoolName()
       if (!semesterId.value) {
         const previousSemesterId = semesterContext.currentSemesterId
         const sem = await createSemester({
-          academic_year: year.value, term: term.value, template_key: templateKey.value,
+          academic_year: year.value,
+          term: term.value,
+          start_date: startDate.value,
+          end_date: endDate.value,
         })
         semesterId.value = sem.id
+        semester.value = sem
         if (previousSemesterId !== null && previousSemesterId !== sem.id) {
           await semesterContext.switchTo(sem.id)
         } else {
           await semesterContext.load()
         }
+      } else if (semester.value) {
+        await updateSemester(semesterId.value, {
+          start_date: startDate.value,
+          end_date: endDate.value,
+        })
       }
       if (wizard.state?.semester_id !== semesterId.value) {
         await wizard.patch({ semester_id: semesterId.value })
       }
-      if (semester.value?.id !== semesterId.value) {
-        await loadSemester(semesterId.value)
-      }
-      // 绑定向导学期后重新读取权威上下文，供后续步骤判断当前学期写权限。
+      if (semester.value?.id !== semesterId.value) await loadSemester(semesterId.value)
       await semesterContext.load()
     }
 
-    const nextStep = Math.min(step.value + 1, 4)
+    const nextStep = Math.min(step.value + 1, 3)
     step.value = nextStep
     if (!await persistStep(nextStep)) {
       step.value = previousStep
       return
     }
-    if (nextStep === 4 && semesterId.value) {
+    if (nextStep === 3 && semesterId.value) {
       try {
         await loadSummary(semesterId.value)
       } catch {
@@ -200,7 +236,7 @@ async function goNext() {
   } catch (error) {
     step.value = previousStep
     if (!actionError.value) {
-      actionError.value = apiErrorMessage(error, step.value === 1 ? '创建学期失败，请检查输入后重试。' : '无法进入下一步，请稍后重试。')
+      actionError.value = apiErrorMessage(error, previousStep === 0 ? '创建学期失败，请检查输入后重试。' : '无法进入下一步，请稍后重试。')
     }
   } finally {
     busy.value = false
@@ -218,13 +254,27 @@ async function goPrev() {
   busy.value = false
 }
 
+async function saveAndExit() {
+  if (!canEditCore.value || busy.value) return
+  busy.value = true
+  actionError.value = null
+  try {
+    await wizard.patch({ current_step: step.value, semester_id: semesterId.value, paused: true })
+    await router.push({ name: 'dashboard' })
+  } catch (error) {
+    actionError.value = apiErrorMessage(error, '无法保存当前进度，请重试。')
+  } finally {
+    busy.value = false
+  }
+}
+
 async function finish() {
   if (!canEditCore.value || busy.value) return
   busy.value = true
   actionError.value = null
   try {
     await wizard.patch({ completed: true })
-    message.success('初始设置完成')
+    message.success('基础设置已完成')
     await router.push({ name: 'assignments' })
   } catch (error) {
     actionError.value = apiErrorMessage(error, '无法完成设置，请稍后重试。')
@@ -233,23 +283,9 @@ async function finish() {
   }
 }
 
-async function skip() {
-  if (!canEditCore.value || busy.value) return
-  busy.value = true
-  actionError.value = null
-  try {
-    await wizard.patch({ completed: true })
-    await router.push({ name: 'dashboard' })
-  } catch (error) {
-    actionError.value = apiErrorMessage(error, '无法跳过设置，请稍后重试。')
-  } finally {
-    busy.value = false
-  }
-}
-
 function openPeriodEditor() {
   if (!canEditCore.value || !periodTable.value) {
-    actionError.value = '当前学期没有可编辑的作息时间表，请返回上一步重试。'
+    actionError.value = '当前学期还没有作息时间表，请在此步骤创建后再编辑。'
     return
   }
   void router.push({ name: 'period-table-editor', params: { id: periodTable.value.id } })
@@ -263,7 +299,7 @@ onMounted(loadWizardData)
     <header class="wizard-header">
       <div>
         <h1>{{ '设置向导' }}</h1>
-        <p>{{ '按顺序准备学期、作息时间表和基础数据，之后即可开始排课。' }}</p>
+        <p>{{ '先建立当前学期，再补齐基础数据和学校实际作息。' }}</p>
       </div>
       <div class="wizard-header-actions">
         <n-button
@@ -271,11 +307,11 @@ onMounted(loadWizardData)
           quaternary
           class="wizard-skip"
           :disabled="initialLoading || busy"
-          data-testid="wizard-skip"
-          @click="skip"
+          data-testid="wizard-save-exit"
+          @click="saveAndExit"
         >
-          <template #icon><SkipForward :size="16" aria-hidden="true" /></template>
-          {{ '跳过，稍后设置' }}
+          <template #icon><Save :size="16" aria-hidden="true" /></template>
+          {{ '保存并退出' }}
         </n-button>
       </div>
     </header>
@@ -283,7 +319,7 @@ onMounted(loadWizardData)
     <section v-if="initialLoading" class="wizard-state" data-testid="wizard-loading" role="status" aria-live="polite">
       <n-spin size="small" />
       <strong>{{ '正在读取设置向导' }}</strong>
-      <span>{{ '正在检查模板和已保存的进度。' }}</span>
+      <span>{{ '正在检查当前学期和已保存的进度。' }}</span>
     </section>
 
     <section v-else-if="initialError" class="wizard-state wizard-error" data-testid="wizard-load-error" role="alert">
@@ -296,32 +332,30 @@ onMounted(loadWizardData)
 
     <template v-else>
       <n-alert v-if="!canEditCore" type="info" data-testid="wizard-readonly">
-        当前角色只能查看设置向导，创建、导入和保存操作仅对排课管理员开放。
+        当前角色只能查看设置向导，创建、导入和保存操作仅对系统管理员和排课管理员开放。
       </n-alert>
 
       <nav class="wizard-progress" aria-label="设置步骤">
         <n-steps :current="step + 1" size="small">
-          <n-step :title="'学制模板'" />
-          <n-step :title="'学年学期'" />
-          <n-step :title="'作息时间表'" />
-          <n-step :title="'导入数据'" />
-          <n-step :title="'完成'" />
+          <n-step :title="'学校与学期'" />
+          <n-step :title="'基础数据'" />
+          <n-step :title="'作息安排'" />
+          <n-step :title="'完成检查'" />
         </n-steps>
       </nav>
 
       <section class="wizard-panel" aria-labelledby="wizard-step-title">
         <div class="wizard-panel-heading">
           <span class="wizard-panel-icon" aria-hidden="true">
-            <LayoutTemplate v-if="step === 0" :size="20" />
-            <CalendarRange v-else-if="step === 1" :size="20" />
+            <CalendarRange v-if="step === 0" :size="20" />
+            <CheckCircle2 v-else-if="step === 1" :size="20" />
             <Clock3 v-else-if="step === 2" :size="20" />
-            <Upload v-else-if="step === 3" :size="20" />
             <CheckCircle2 v-else :size="20" />
           </span>
           <div>
-            <p class="wizard-step-count">{{ `第 ${step + 1} 步 / 5` }}</p>
+            <p class="wizard-step-count">{{ `第 ${step + 1} 步 / 4` }}</p>
             <h2 id="wizard-step-title" data-testid="wizard-step-title">
-              {{ ['学制模板', '学年学期', '作息时间表', '导入数据', '完成'][step] }}
+              {{ ['学校与学期', '基础数据', '作息安排', '完成检查'][step] }}
             </h2>
           </div>
         </div>
@@ -331,46 +365,20 @@ onMounted(loadWizardData)
           <span>{{ actionError }}</span>
         </div>
 
-        <!-- 步骤 0：学校模板 -->
+        <!-- 步骤 0：学校与学期 -->
         <div v-if="step === 0" class="wizard-step-content">
-          <p class="wizard-step-intro">{{ '选择初中空白模板，系统会带入可编辑的科目参考项和空白作息时间表。' }}</p>
-          <div v-if="!templates.length" class="wizard-empty" data-testid="wizard-empty" role="status">
-            <n-empty :description="'暂无可用的学制模板'">
-              <template #extra>
-                <n-button @click="loadWizardData">{{ '重新读取模板' }}</n-button>
-              </template>
-            </n-empty>
-          </div>
-          <div v-else class="wizard-template-grid" role="radiogroup" aria-label="学制模板">
-            <label
-              v-for="t in templates"
-              :key="t.key"
-              class="wizard-template"
-              :class="{ 'is-selected': templateKey === t.key }"
-            >
-              <input
-                v-model="templateKey"
-                class="wizard-template-input"
-                type="radio"
-                name="wizard-template"
-                :value="t.key"
-                :disabled="!canEditCore"
-                :data-testid="`tpl-${t.key}`"
-              >
-              <span class="wizard-template-mark" aria-hidden="true"><LayoutTemplate :size="19" /></span>
-              <span class="wizard-template-copy">
-                <strong>{{ t.name }}</strong>
-                <span>{{ `空白作息时间表 · ${t.subject_count} 个科目参考项` }}</span>
-              </span>
-              <CheckCircle2 v-if="templateKey === t.key" class="wizard-template-check" :size="18" aria-hidden="true" />
+          <p class="wizard-step-intro">{{ '确认学校名称，并填写当前学期的真实起止日期。' }}</p>
+          <div class="wizard-semester-fields wizard-semester-fields-wide">
+            <label class="wizard-field wizard-field-wide">
+              <span>{{ '学校名称' }}</span>
+              <n-input
+                v-model:value="schoolName"
+                data-testid="wizard-school-name"
+                :disabled="!canEditSchool || !!semesterId"
+                maxlength="64"
+              />
+              <small v-if="!canEditSchool">{{ '仅系统管理员可以修改学校名称。' }}</small>
             </label>
-          </div>
-        </div>
-
-        <!-- 步骤 1：学年学期 -->
-        <div v-else-if="step === 1" class="wizard-step-content">
-          <p class="wizard-step-intro">{{ '设置本学期的学年起始年和学期。' }}</p>
-          <div class="wizard-semester-fields">
             <label class="wizard-field">
               <span>{{ '学年起始年' }}</span>
               <n-input-number
@@ -386,16 +394,50 @@ onMounted(loadWizardData)
               <span>{{ '学期' }}</span>
               <n-select v-model:value="term" :options="termOptions" :disabled="!!semesterId || !canEditCore" />
             </label>
+            <label class="wizard-field">
+              <span>{{ '开始日期' }}</span>
+              <n-date-picker
+                v-model:formatted-value="startDate"
+                data-testid="wizard-start-date"
+                value-format="yyyy-MM-dd"
+                type="date"
+                :disabled="!canEditCore"
+              />
+            </label>
+            <label class="wizard-field">
+              <span>{{ '结束日期' }}</span>
+              <n-date-picker
+                v-model:formatted-value="endDate"
+                data-testid="wizard-end-date"
+                value-format="yyyy-MM-dd"
+                type="date"
+                :disabled="!canEditCore"
+              />
+            </label>
           </div>
+          <n-alert type="info" class="wizard-neutral-note">
+            继续后只创建学期本身，不会自动生成科目、教师、班级或作息。
+          </n-alert>
           <p v-if="semesterId" class="wizard-success-note">
             <CheckCircle2 :size="16" aria-hidden="true" />
             <span>{{ '已创建：' }}{{ semester?.label }}</span>
           </p>
         </div>
 
-        <!-- 步骤 2：作息时间表 -->
+        <!-- 步骤 1：基础数据 -->
+        <div v-else-if="step === 1" class="wizard-step-content">
+          <p class="wizard-step-intro">{{ '录入排课需要的科目、教师、班级和教室；下一阶段将提供组合导入与向导内手工模式。' }}</p>
+          <ImportTab
+            v-if="semesterId"
+            :semester-id="semesterId"
+            :can-edit="canEditSemester"
+          />
+          <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-import-empty" />
+        </div>
+
+        <!-- 步骤 2：作息安排 -->
         <div v-else-if="step === 2" class="wizard-step-content">
-          <p class="wizard-step-intro">{{ '模板不会默认铃声和上课时段，请按学校实际作息填写。' }}</p>
+          <p class="wizard-step-intro">{{ '按学校实际情况设置每周上课日、节次类型和可选钟点时间。' }}</p>
           <div v-if="periodTable" class="wizard-period-summary">
             <strong>{{ periodTable.name }}</strong>
             <span>
@@ -416,18 +458,7 @@ onMounted(loadWizardData)
           <p class="wizard-help">{{ '离开编辑器后返回本向导时会自动回到此步骤。' }}</p>
         </div>
 
-        <!-- 步骤 3：导入数据 -->
-        <div v-else-if="step === 3" class="wizard-step-content">
-          <p class="wizard-step-intro">{{ '下载模板填写后上传，批量创建教师、班级和科目（可跳过，稍后在基础数据中补充）。' }}</p>
-          <ImportTab
-            v-if="semesterId"
-            :semester-id="semesterId"
-            :can-edit="canEditSemester"
-          />
-          <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-import-empty" />
-        </div>
-
-        <!-- 步骤 4：完成 -->
+        <!-- 步骤 3：完成检查 -->
         <div v-else class="wizard-step-content wizard-finish-content">
           <section v-if="summaryLoading" class="wizard-state" data-testid="wizard-summary-loading" role="status" aria-live="polite">
             <n-spin size="small" />
@@ -438,7 +469,7 @@ onMounted(loadWizardData)
             <strong>{{ summaryError }}</strong>
             <n-button type="primary" @click="retrySummary">{{ '重新读取摘要' }}</n-button>
           </section>
-          <n-result v-else status="success" :title="'初始设置即将完成'" :description="'以下是目前已创建的数据摘要'">
+          <n-result v-else status="success" :title="'基础设置即将完成'" :description="'以下是目前已创建的数据摘要'">
             <template #footer>
               <div class="wizard-summary-grid">
                 <n-statistic :label="'科目'" :value="summary?.subjects ?? 0" />
@@ -457,11 +488,11 @@ onMounted(loadWizardData)
           {{ '上一步' }}
         </n-button>
         <n-button
-          v-if="step < 4"
+          v-if="step < 3"
           data-testid="wizard-next"
           type="primary"
           :loading="busy"
-          :disabled="(!templates.length && step === 0) || !canEditCore"
+          :disabled="busy || !canEditCore"
           @click="goNext"
         >
           {{ '下一步' }}
@@ -516,7 +547,7 @@ onMounted(loadWizardData)
 
 .wizard-skip { flex: 0 0 auto; color: var(--app-text-muted); }
 .wizard-progress { overflow-x: auto; margin-bottom: 18px; padding: 4px 2px 8px; }
-.wizard-progress :deep(.n-steps) { min-width: 620px; }
+.wizard-progress :deep(.n-steps) { min-width: 560px; }
 
 .wizard-panel {
   min-width: 0;
@@ -555,49 +586,16 @@ onMounted(loadWizardData)
 
 .wizard-step-content { min-width: 0; }
 .wizard-step-intro { margin: 0 0 20px; color: var(--app-text-muted); font-size: 14px; line-height: 1.65; }
-.wizard-template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-
-.wizard-template {
-  position: relative;
-  display: flex;
-  min-width: 0;
-  min-height: 92px;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-sm);
-  background: var(--app-surface);
-  color: var(--app-text);
-  text-align: left;
-  cursor: pointer;
-  transition: border-color var(--app-motion-duration) var(--app-motion-ease), background var(--app-motion-duration) var(--app-motion-ease);
-}
-
-.wizard-template-input {
-  position: absolute;
-  z-index: 1;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  margin: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.wizard-template:hover { border-color: var(--app-primary-border); background: var(--app-primary-soft); }
-.wizard-template.is-selected { border-color: var(--app-primary); background: var(--app-primary-soft); box-shadow: inset 0 0 0 1px var(--app-primary); }
-.wizard-template-mark { display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; border-radius: var(--app-radius-sm); background: var(--app-surface-muted); color: var(--app-primary-strong); }
-.wizard-template-copy { display: grid; min-width: 0; gap: 4px; }
-.wizard-template-copy strong { overflow-wrap: anywhere; font-size: 14px; }
-.wizard-template-copy span { color: var(--app-text-muted); font-size: 12px; line-height: 1.45; }
-.wizard-template-check { margin-left: auto; flex: 0 0 auto; color: var(--app-primary); }
-
-.wizard-empty { display: grid; min-height: 180px; place-items: center; border: 1px dashed var(--app-border-strong); border-radius: var(--app-radius-sm); }
 .wizard-semester-fields { display: grid; max-width: 480px; grid-template-columns: minmax(0, 1fr) minmax(140px, 0.7fr); gap: 14px; }
+.wizard-semester-fields-wide { max-width: 720px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wizard-field-wide { grid-column: 1 / -1; }
 .wizard-field { display: grid; gap: 7px; color: var(--app-text-muted); font-size: 13px; font-weight: 650; }
+.wizard-field small { color: var(--app-text-faint); font-size: 12px; font-weight: 400; }
+.wizard-field :deep(.n-input),
 .wizard-field :deep(.n-input-number),
-.wizard-field :deep(.n-select) { width: 100%; }
+.wizard-field :deep(.n-select),
+.wizard-field :deep(.n-date-picker) { width: 100%; }
+.wizard-neutral-note { max-width: 720px; margin-top: 18px; }
 .wizard-success-note { gap: 7px; margin: 18px 0 0; color: var(--app-success); font-size: 13px; }
 .wizard-period-summary { flex-wrap: wrap; gap: 8px; margin-bottom: 20px; padding: 14px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface-muted); }
 .wizard-period-summary span { color: var(--app-text-muted); font-size: 13px; }
@@ -632,7 +630,6 @@ onMounted(loadWizardData)
   .wizard-header { align-items: flex-start; flex-direction: column; gap: 14px; }
   .wizard-header-actions { justify-content: flex-start; }
   .wizard-skip { align-self: flex-start; }
-  .wizard-template-grid { grid-template-columns: 1fr; }
   .wizard-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 }
 
@@ -642,7 +639,9 @@ onMounted(loadWizardData)
   .wizard-header p:last-child { font-size: 13px; }
   .wizard-panel { padding: 20px 16px; }
   .wizard-panel-heading { margin-bottom: 22px; }
-  .wizard-semester-fields { grid-template-columns: 1fr; }
+  .wizard-semester-fields,
+  .wizard-semester-fields-wide { grid-template-columns: 1fr; }
+  .wizard-field-wide { grid-column: auto; }
   .wizard-actions { align-items: stretch; }
   .wizard-actions :deep(.n-button) { flex: 1; }
 }

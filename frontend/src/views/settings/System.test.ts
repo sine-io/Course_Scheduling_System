@@ -119,10 +119,10 @@ describe('System', () => {
     assignmentMocks.getSchedulingSettings.mockResolvedValue(adminSettings.scheduling)
     assignmentMocks.getSchoolSettings.mockResolvedValue(adminSettings.school)
     notificationMocks.getSmtp.mockResolvedValue(adminSettings.smtp)
-    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, completed: true, semester_id: null, total_steps: 5, has_semesters: false })
+    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, completed: true, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
     backupMocks.createBackup.mockResolvedValue(backup)
     backupMocks.deleteBackup.mockResolvedValue({ deleted: backup.name })
-    wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, semester_id: null, total_steps: 5, has_semesters: false })
+    wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
   })
 
   it('非管理员保持原有可见性，只显示设置向导且不读取管理员接口', async () => {
@@ -295,7 +295,7 @@ describe('System', () => {
 
     expect(wizardMocks.resetWizard).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="reset-wizard"]').attributes('disabled')).toBeDefined()
-    reset.resolve({ current_step: 0, completed: false, semester_id: null, total_steps: 5, has_semesters: false })
+    reset.resolve({ current_step: 0, completed: false, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
     await flushPromises()
   })
 

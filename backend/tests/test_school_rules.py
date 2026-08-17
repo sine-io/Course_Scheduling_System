@@ -111,7 +111,6 @@ def test_calendar_api_crud_and_readiness_confirmation(env):
         json={
             "academic_year": 2026,
             "term": 1,
-            "template_key": "junior_high_draft",
             "start_date": "2026-09-01",
             "end_date": "2027-01-31",
         },
@@ -137,7 +136,12 @@ def test_calendar_api_crud_and_readiness_confirmation(env):
     assert blocked.status_code == 409
     assert blocked.json()["detail"]["code"] == "semester_not_ready"
 
-    table_id = semester["period_tables"][0]["id"]
+    table_response = client.post(
+        f"/api/semesters/{sid}/period-tables",
+        json={"name": "标准作息", "is_default": True},
+    )
+    assert table_response.status_code == 201
+    table_id = table_response.json()["id"]
     periods = [
         {"weekday": weekday, "period_no": 1, "name": "第一节", "type": "regular"}
         for weekday in range(1, 6)

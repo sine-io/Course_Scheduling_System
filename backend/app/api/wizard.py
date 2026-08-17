@@ -32,6 +32,7 @@ def _to_out(db: Session, state: WizardState) -> WizardStateOut:
     return WizardStateOut(
         current_step=state.current_step,
         completed=state.completed,
+        paused=state.paused,
         semester_id=state.semester_id,
         total_steps=TOTAL_STEPS,
         has_semesters=has_semesters,
@@ -53,6 +54,8 @@ def update_state(
         state.current_step = max(0, min(data["current_step"], TOTAL_STEPS - 1))
     if "completed" in data and data["completed"] is not None:
         state.completed = data["completed"]
+    if "paused" in data and data["paused"] is not None:
+        state.paused = data["paused"]
     if "semester_id" in data:
         if data["semester_id"] is not None:
             try:
@@ -72,6 +75,7 @@ def reset_state(db: Session = Depends(get_db), _: object = Depends(editor)) -> W
     state = _get_or_create(db)
     state.current_step = 0
     state.completed = False
+    state.paused = False
     state.semester_id = None
     db.commit()
     db.refresh(state)

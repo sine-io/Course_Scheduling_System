@@ -23,8 +23,9 @@ def test_initial_state_is_step0_incomplete(scheduler):
     body = r.json()
     assert body["current_step"] == 0
     assert body["completed"] is False
+    assert body["paused"] is False
     assert body["has_semesters"] is False
-    assert body["total_steps"] == 5
+    assert body["total_steps"] == 4
     assert "route" not in body
 
 
@@ -45,29 +46,34 @@ def test_removed_onboarding_endpoints_are_not_exposed(scheduler, method, path):
 def test_progress_persists(scheduler):
     """验收②:更新步骤后再读,状态保留(模拟关浏览器后续作)。"""
     sem = scheduler.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
-    scheduler.patch("/api/wizard/state", json={"current_step": 3, "semester_id": sem["id"]})
+    scheduler.patch(
+        "/api/wizard/state",
+        json={"current_step": 2, "semester_id": sem["id"], "paused": True},
+    )
     scheduler.post("/api/auth/logout")
     scheduler.post("/api/auth/login", json={"username": "s", "password": PW})
     body = scheduler.get("/api/wizard/state").json()
-    assert body["current_step"] == 3
+    assert body["current_step"] == 2
     assert body["semester_id"] == sem["id"]
+    assert body["paused"] is True
     assert body["has_semesters"] is True
 
 
 def test_complete_and_reset(scheduler):
-    scheduler.patch("/api/wizard/state", json={"completed": True, "current_step": 4})
+    scheduler.patch("/api/wizard/state", json={"completed": True, "current_step": 3})
     assert scheduler.get("/api/wizard/state").json()["completed"] is True
     # 重新启动向导
     r = scheduler.post("/api/wizard/reset")
     body = r.json()
     assert body["completed"] is False
     assert body["current_step"] == 0
+    assert body["paused"] is False
     assert body["semester_id"] is None
 
 
 def test_step_clamped_to_valid_range(scheduler):
     scheduler.patch("/api/wizard/state", json={"current_step": 99})
-    assert scheduler.get("/api/wizard/state").json()["current_step"] == 4  # TOTAL_STEPS-1
+    assert scheduler.get("/api/wizard/state").json()["current_step"] == 3  # TOTAL_STEPS-1
 
 
 def test_semester_summary_counts(scheduler):

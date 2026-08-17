@@ -8,7 +8,6 @@ import Semesters from './Semesters.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const mocks = vi.hoisted(() => ({
-  listTemplates: vi.fn(),
   listSemesters: vi.fn(),
   getSemester: vi.fn(),
   createSemester: vi.fn(),
@@ -76,40 +75,50 @@ async function mountSemesters(options: Record<string, unknown> = {}, role = 'sch
 describe('Semesters', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    mocks.listTemplates.mockResolvedValue([])
     mocks.listSemesters.mockResolvedValue([])
   })
 
-  it('读取学期与模板期间显示明确的加载状态', async () => {
-    const templatesRequest = deferred<never[]>()
-    mocks.listTemplates.mockReturnValue(templatesRequest.promise)
+  it('读取学期期间显示明确的加载状态', async () => {
+    const semestersRequest = deferred<never[]>()
+    mocks.listSemesters.mockReturnValue(semestersRequest.promise)
 
     const wrapper = await mountSemesters()
     await nextTick()
 
     expect(wrapper.get('[data-testid="semesters-loading"]').text()).toContain('正在读取学期与作息时间表')
 
-    templatesRequest.resolve([])
+    semestersRequest.resolve([])
     await flushPromises()
   })
 
   it('读取失败时保留设置页并提供重试入口', async () => {
-    let attempts = 0
-    mocks.listTemplates.mockImplementation(() => {
-      attempts += 1
-      return attempts === 1
-        ? Promise.reject({ detail: '模板服务暂时不可用' })
-        : Promise.resolve([])
-    })
+    mocks.listSemesters.mockRejectedValue({ detail: '学期服务暂时不可用' })
 
     const wrapper = await mountSemesters()
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="semesters-error"]').text()).toContain('模板服务暂时不可用')
+    expect(wrapper.get('[data-testid="semesters-error"]').text()).toContain('学期服务暂时不可用')
+    mocks.listSemesters.mockResolvedValue([])
     await wrapper.get('[data-testid="semesters-retry"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="semesters-error"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('尚未创建任何学期')
+  })
+
+  it('创建学期时不显示或提交学校模板', async () => {
+    mocks.createSemester.mockResolvedValue(semester)
+
+    const wrapper = await mountSemesters()
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('学校模板')
+    await wrapper.get('[data-testid="semester-create"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.createSemester).toHaveBeenCalledWith({
+      academic_year: expect.any(Number),
+      term: 1,
+    })
   })
 
   it('删除学期进行中时重复确认只发送一次请求', async () => {

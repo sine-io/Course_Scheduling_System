@@ -228,7 +228,7 @@ router.beforeEach(async (to) => {
   if (canSetup && to.name !== 'wizard' && !AUTH_PAGES.has(to.name as string)) {
     const wizard = useWizardStore()
     if (!wizard.loaded) await wizard.fetch()
-    if (wizard.state && !wizard.state.completed) {
+    if (wizard.state && !wizard.state.completed && !wizard.state.paused) {
       return { name: 'wizard' }
     }
   }

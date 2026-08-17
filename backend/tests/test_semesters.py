@@ -15,54 +15,91 @@ def login(client, db, roles=(Role.scheduler,), username="s"):
     assert response.status_code == 200
 
 
-def test_public_template_is_only_empty_junior_high_template(env):
+def test_school_templates_are_not_a_public_api(env):
     client, db = env
     login(client, db)
 
     response = client.get("/api/school-templates")
 
-    assert response.status_code == 200
-    assert response.json() == [
-        {
-            "key": "junior_high_draft",
-            "name": "初中（空白模板）",
-            "minutes_per_period": None,
-            "subject_count": 13,
-            "editable": True,
-        }
-    ]
+    assert response.status_code == 404
 
 
-def test_create_semester_from_blank_template(env):
+def test_create_semester_starts_from_a_neutral_empty_state(env):
     client, db = env
     login(client, db)
 
     response = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1, "template_key": "junior_high_draft"},
+        json={"academic_year": 2026, "term": 1},
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["label"] == "2026-2027学年第一学期"
-    assert len(body["period_tables"]) == 1
-    assert body["period_tables"][0]["name"] == "作息时间表（待完善）"
-    assert body["period_tables"][0]["periods"] == []
+    assert body["period_tables"] == []
     subjects = client.get(f"/api/subjects?semester_id={body['id']}").json()
-    assert {subject["name"] for subject in subjects} >= {"语文", "数学", "英语"}
+    assert subjects == []
     assert client.get(f"/api/semesters/{body['id']}/calendar-exceptions").json() == []
 
 
-def test_old_template_keys_are_rejected(env):
+def test_create_semester_rejects_reversed_dates(env):
     client, db = env
     login(client, db)
 
     response = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1, "template_key": "junior_high"},
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2026-08-31",
+        },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
+
+
+def test_template_fields_are_rejected_by_creation_contracts(env):
+    client, db = env
+    login(client, db)
+
+    semester_response = client.post(
+        "/api/semesters",
+        json={"academic_year": 2026, "term": 1, "template_key": "junior_high_draft"},
+    )
+    assert semester_response.status_code == 422
+
+    semester = client.post(
+        "/api/semesters", json={"academic_year": 2026, "term": 1}
+    ).json()
+    table_response = client.post(
+        f"/api/semesters/{semester['id']}/period-tables",
+        json={"name": "空白作息时间表", "template_key": "junior_high_draft"},
+    )
+    assert table_response.status_code == 422
+
+
+def test_create_period_table_starts_empty_and_keeps_explicit_shape(env):
+    client, db = env
+    login(client, db)
+    semester = client.post(
+        "/api/semesters", json={"academic_year": 2026, "term": 1}
+    ).json()
+
+    response = client.post(
+        f"/api/semesters/{semester['id']}/period-tables",
+        json={"name": "六天作息", "num_weekdays": 6, "is_default": True},
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {
+        "id": response.json()["id"],
+        "semester_id": semester["id"],
+        "name": "六天作息",
+        "num_weekdays": 6,
+        "is_default": True,
+        "periods": [],
+    }
 
 
 def test_create_duplicate_semester_conflict(env):
