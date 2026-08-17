@@ -18,6 +18,7 @@ const props = withDefaults(
   defineProps<{ semesterId: number; canEdit?: boolean; canDelete?: boolean }>(),
   { canEdit: true, canDelete: false },
 )
+const emit = defineEmits<{ changed: [] }>()
 const message = useMessage()
 
 const items = ref<Subject[]>([])
@@ -102,6 +103,7 @@ async function save() {
     show.value = false
     message.success('已保存')
     await reload()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '保存失败'))
   } finally {
@@ -116,6 +118,7 @@ async function remove(subject: Subject) {
     await deleteSubject(subject.id, highRiskConfirmation(`subject:${subject.id}`))
     message.success('已删除')
     await reload()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '删除失败'))
   } finally {

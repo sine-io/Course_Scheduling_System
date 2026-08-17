@@ -25,6 +25,7 @@ import type {
   ImportResult,
 } from '@/api/imports'
 import { highRiskConfirmation } from '@/api/highRisk'
+import ManualEntry from './ManualEntry.vue'
 import './basedata-workspace.css'
 
 const props = withDefaults(
@@ -40,6 +41,7 @@ const message = useMessage()
 const dialog = useDialog()
 const labels = ENTITY_LABELS
 
+const workspaceMode = ref<'batch' | 'manual'>('batch')
 const mode = ref<'combined' | 'single'>('combined')
 
 const combinedFileList = ref<UploadFileInfo[]>([])
@@ -213,281 +215,297 @@ function onSingleUpload() {
 <template>
   <div class="basedata-tab-content basedata-import" data-testid="import-workspace">
     <n-alert v-if="!canEdit" type="info" data-testid="import-readonly">
-      {{ '当前角色没有批量导入权限；仍可选择导入方式并下载模板。' }}
+      {{ '当前角色没有基础数据写入权限；仍可查看手工录入状态并下载导入模板。' }}
     </n-alert>
 
-    <div role="radiogroup" aria-label="选择导入方式">
-      <n-radio-group v-model:value="mode" class="basedata-import-entities">
-        <n-radio-button value="combined">{{ '组合工作簿' }}</n-radio-button>
-        <n-radio-button value="single">{{ '按表导入' }}</n-radio-button>
+    <div role="radiogroup" aria-label="选择基础数据录入方式">
+      <n-radio-group v-model:value="workspaceMode" class="basedata-import-entities" data-testid="entry-mode">
+        <n-radio-button value="batch">{{ '批量导入' }}</n-radio-button>
+        <n-radio-button value="manual">{{ '手工录入' }}</n-radio-button>
       </n-radio-group>
     </div>
 
-    <div v-if="mode === 'combined'" data-testid="combined-import-panel">
-      <div class="combined-import-heading">
-        <div>
-          <strong>{{ '组合工作簿' }}</strong>
-          <p>{{ '一次核对科目、教师、班级和教室，确认后统一写入。' }}</p>
-        </div>
-        <div class="combined-sheet-tags" aria-label="工作表内容">
-          <n-tag size="small">{{ '科目' }}</n-tag>
-          <n-tag size="small">{{ '教师' }}</n-tag>
-          <n-tag size="small">{{ '班级' }}</n-tag>
-          <n-tag size="small">{{ '教室' }}</n-tag>
-        </div>
+    <div v-if="workspaceMode === 'batch'" class="basedata-import-batch">
+      <div role="radiogroup" aria-label="选择批量导入方式">
+        <n-radio-group v-model:value="mode" class="basedata-import-entities">
+          <n-radio-button value="combined">{{ '组合工作簿' }}</n-radio-button>
+          <n-radio-button value="single">{{ '按表导入' }}</n-radio-button>
+        </n-radio-group>
       </div>
 
-      <section class="basedata-import-step">
-        <div class="basedata-import-step-heading">
-          <Download :size="18" aria-hidden="true" />
-          <strong>{{ '工作簿' }}</strong>
+      <div v-if="mode === 'combined'" data-testid="combined-import-panel">
+        <div class="combined-import-heading">
+          <div>
+            <strong>{{ '组合工作簿' }}</strong>
+            <p>{{ '一次核对科目、教师、班级和教室，确认后统一写入。' }}</p>
+          </div>
+          <div class="combined-sheet-tags" aria-label="工作表内容">
+            <n-tag size="small">{{ '科目' }}</n-tag>
+            <n-tag size="small">{{ '教师' }}</n-tag>
+            <n-tag size="small">{{ '班级' }}</n-tag>
+            <n-tag size="small">{{ '教室' }}</n-tag>
+          </div>
         </div>
-        <n-button
-          data-testid="combined-download"
-          :loading="combinedDownloading"
-          :disabled="combinedBusy"
-          @click="onCombinedDownload"
-        >
-          <template #icon><Download :size="15" aria-hidden="true" /></template>
-          {{ '下载组合模板' }}
-        </n-button>
-      </section>
 
-      <section v-if="canEdit" class="basedata-import-step">
-        <div class="basedata-import-step-heading">
-          <Eye :size="18" aria-hidden="true" />
-          <strong>{{ '导入预览' }}</strong>
-        </div>
-        <n-upload
-          v-model:file-list="combinedFileList"
-          :max="1"
-          :default-upload="false"
-          accept=".xlsx"
-          @change="onCombinedFileChange"
-        >
-          <n-button data-testid="combined-file">
-            <template #icon><FileSpreadsheet :size="15" aria-hidden="true" /></template>
-            {{ '选择已填写的工作簿' }}
-          </n-button>
-        </n-upload>
-        <div>
+        <section class="basedata-import-step">
+          <div class="basedata-import-step-heading">
+            <Download :size="18" aria-hidden="true" />
+            <strong>{{ '工作簿' }}</strong>
+          </div>
           <n-button
-            type="primary"
-            data-testid="combined-preview"
-            :loading="combinedBusy && !combinedPreview"
-            :disabled="!combinedFile || combinedBusy"
-            @click="onCombinedPreview"
+            data-testid="combined-download"
+            :loading="combinedDownloading"
+            :disabled="combinedBusy"
+            @click="onCombinedDownload"
           >
-            <template #icon><Eye :size="15" aria-hidden="true" /></template>
-            {{ combinedPreview ? '重新预览' : '预览导入结果' }}
+            <template #icon><Download :size="15" aria-hidden="true" /></template>
+            {{ '下载组合模板' }}
           </n-button>
-        </div>
-      </section>
+        </section>
 
-      <n-alert v-if="combinedError" type="error" data-testid="combined-import-error" role="alert">
-        {{ combinedError }}
-      </n-alert>
+        <section v-if="canEdit" class="basedata-import-step">
+          <div class="basedata-import-step-heading">
+            <Eye :size="18" aria-hidden="true" />
+            <strong>{{ '导入预览' }}</strong>
+          </div>
+          <n-upload
+            v-model:file-list="combinedFileList"
+            :max="1"
+            :default-upload="false"
+            accept=".xlsx"
+            @change="onCombinedFileChange"
+          >
+            <n-button data-testid="combined-file">
+              <template #icon><FileSpreadsheet :size="15" aria-hidden="true" /></template>
+              {{ '选择已填写的工作簿' }}
+            </n-button>
+          </n-upload>
+          <div>
+            <n-button
+              type="primary"
+              data-testid="combined-preview"
+              :loading="combinedBusy && !combinedPreview"
+              :disabled="!combinedFile || combinedBusy"
+              @click="onCombinedPreview"
+            >
+              <template #icon><Eye :size="15" aria-hidden="true" /></template>
+              {{ combinedPreview ? '重新预览' : '预览导入结果' }}
+            </n-button>
+          </div>
+        </section>
 
-      <section
-        v-if="combinedPreview"
-        class="combined-preview"
-        data-testid="combined-preview-results"
-        aria-live="polite"
-      >
-        <div class="combined-counts" aria-label="导入预览统计">
-          <span data-status="new"><strong>{{ `新增 ${combinedPreview.counts.new}` }}</strong></span>
-          <span data-status="unchanged">{{ `未变化 ${combinedPreview.counts.unchanged}` }}</span>
-          <span data-status="changed"><strong>{{ `将修改 ${combinedPreview.counts.changed}` }}</strong></span>
-          <span data-status="conflict"><strong>{{ `冲突 ${combinedPreview.counts.conflict}` }}</strong></span>
-        </div>
+        <n-alert v-if="combinedError" type="error" data-testid="combined-import-error" role="alert">
+          {{ combinedError }}
+        </n-alert>
+
+        <section
+          v-if="combinedPreview"
+          class="combined-preview"
+          data-testid="combined-preview-results"
+          aria-live="polite"
+        >
+          <div class="combined-counts" aria-label="导入预览统计">
+            <span data-status="new"><strong>{{ `新增 ${combinedPreview.counts.new}` }}</strong></span>
+            <span data-status="unchanged">{{ `未变化 ${combinedPreview.counts.unchanged}` }}</span>
+            <span data-status="changed"><strong>{{ `将修改 ${combinedPreview.counts.changed}` }}</strong></span>
+            <span data-status="conflict"><strong>{{ `冲突 ${combinedPreview.counts.conflict}` }}</strong></span>
+          </div>
+
+          <n-alert
+            v-if="combinedPreview.errors.length"
+            type="error"
+            :title="'存在冲突，当前不会写入任何数据'"
+            data-testid="combined-conflicts"
+          >
+            <n-list>
+              <n-list-item v-for="error in combinedPreview.errors" :key="`${error.sheet}-${error.row}-${error.field}-${error.message}`">
+                <strong>{{ `${error.sheet} · 第 ${error.row} 行 · ${error.field}` }}</strong>
+                <span>{{ error.message }}</span>
+              </n-list-item>
+            </n-list>
+          </n-alert>
+
+          <section v-for="sheet in combinedPreview.sheets" :key="sheet.key" class="combined-sheet-preview">
+            <div class="combined-sheet-title">
+              <h3>{{ sheet.label }}</h3>
+              <span>{{ `${sheet.rows.length} 行` }}</span>
+            </div>
+            <div v-if="sheet.rows.length" class="combined-table-scroll">
+              <table class="combined-preview-table">
+                <thead>
+                  <tr><th>{{ '行' }}</th><th>{{ '记录' }}</th><th>{{ '状态' }}</th><th>{{ '具体变化或冲突' }}</th></tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="row in sheet.rows"
+                    :key="`${sheet.key}-${row.row}`"
+                    :data-testid="`combined-row-${sheet.key}-${row.row}`"
+                  >
+                    <td>{{ row.row }}</td>
+                    <td>{{ row.identity }}</td>
+                    <td>
+                      <n-tag size="small" :type="statusMeta[row.status].type as never">
+                        {{ statusMeta[row.status].label }}
+                      </n-tag>
+                    </td>
+                    <td>
+                      <span v-if="row.changes.length" class="combined-change-list">
+                        <span v-for="change in row.changes" :key="change.field">
+                          {{ `${change.field}：${formatValue(change.before)} → ${formatValue(change.after)}` }}
+                        </span>
+                      </span>
+                      <span v-else-if="row.errors.length" class="combined-error-list">
+                        <span v-for="error in row.errors" :key="`${error.field}-${error.message}`">
+                          {{ `${error.field}：${error.message}` }}
+                        </span>
+                      </span>
+                      <span v-else class="combined-muted">{{ row.status === 'new' ? '将创建' : '无需处理' }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p v-else class="combined-empty">{{ '此工作表没有待处理行' }}</p>
+          </section>
+
+          <div v-if="combinedPreview.can_commit" class="combined-commit-area">
+            <n-checkbox
+              v-if="combinedPreview.has_changes"
+              v-model:checked="confirmChanges"
+              data-testid="combined-confirm-changes"
+            >
+              {{ `我已核对并确认修改 ${combinedPreview.counts.changed} 条现有数据` }}
+            </n-checkbox>
+            <n-alert v-else type="success" :show-icon="true">
+              {{ '没有冲突，也不会修改现有记录。' }}
+            </n-alert>
+            <n-button
+              type="primary"
+              data-testid="combined-commit"
+              :loading="combinedBusy"
+              :disabled="!canCommitCombined"
+              @click="onCombinedCommit"
+            >
+              <template #icon><CheckCircle2 :size="15" aria-hidden="true" /></template>
+              {{ '确认并导入全部工作表' }}
+            </n-button>
+          </div>
+        </section>
 
         <n-alert
-          v-if="combinedPreview.errors.length"
-          type="error"
-          :title="'存在冲突，当前不会写入任何数据'"
-          data-testid="combined-conflicts"
+          v-if="combinedResult"
+          type="success"
+          data-testid="combined-import-success"
+          role="status"
         >
+          {{ `导入完成：新增 ${combinedResult.total_created} 条，更新 ${combinedResult.total_updated} 条，${combinedResult.total_unchanged} 条未变化。` }}
+        </n-alert>
+      </div>
+
+      <div v-else class="single-import-panel" data-testid="single-import-panel">
+        <n-alert type="info" :show-icon="true">
+          {{ '按表导入适合补录单类数据；跨表引用必须已经存在。' }}
+        </n-alert>
+
+        <section class="basedata-import-step">
+          <div class="basedata-import-step-heading">
+            <FileSpreadsheet :size="18" aria-hidden="true" />
+            <strong>{{ '数据类型' }}</strong>
+          </div>
+          <div role="radiogroup" aria-label="选择导入数据类型">
+            <n-radio-group v-model:value="entity" class="basedata-import-entities">
+              <n-radio-button v-for="(label, key) in labels" :key="key" :value="key">
+                {{ label }}
+              </n-radio-button>
+            </n-radio-group>
+          </div>
+        </section>
+
+        <section class="basedata-import-step">
+          <div class="basedata-import-step-heading">
+            <Download :size="18" aria-hidden="true" />
+            <strong>{{ '模板' }}</strong>
+          </div>
+          <n-button
+            data-testid="import-download"
+            :loading="singleDownloading"
+            :disabled="singleUploading"
+            @click="onSingleDownload"
+          >
+            <template #icon><Download :size="15" aria-hidden="true" /></template>
+            {{ '下载' }}「{{ labels[entity] }}」{{ '模板' }}
+          </n-button>
+        </section>
+
+        <section v-if="canEdit" class="basedata-import-step">
+          <div class="basedata-import-step-heading">
+            <Upload :size="18" aria-hidden="true" />
+            <strong>{{ '上传文件' }}</strong>
+          </div>
+          <n-checkbox v-if="isTeacher && canManageAccounts" v-model:checked="createAccounts">
+            {{ '同时创建教师登录账号（默认密码，首次登录需修改）' }}
+          </n-checkbox>
+          <n-upload
+            v-model:file-list="singleFileList"
+            :max="1"
+            :default-upload="false"
+            accept=".xlsx"
+            @change="onSingleFileChange"
+          >
+            <n-button data-testid="import-file">
+              <template #icon><FileSpreadsheet :size="15" aria-hidden="true" /></template>
+              {{ '选择文件' }}
+            </n-button>
+          </n-upload>
+          <n-button
+            type="primary"
+            data-testid="import-upload"
+            :loading="singleUploading"
+            :disabled="!singleFile || singleUploading"
+            @click="onSingleUpload"
+          >
+            <template #icon>
+              <RotateCcw v-if="singleResult?.errors.length" :size="15" aria-hidden="true" />
+              <Upload v-else :size="15" aria-hidden="true" />
+            </template>
+            {{ singleResult?.errors.length ? '修正文件后重试' : '开始导入' }}
+          </n-button>
+        </section>
+
+        <n-alert v-if="singleError" type="error" data-testid="import-error" role="alert">
+          {{ singleError }}
+        </n-alert>
+        <n-alert
+          v-if="singleResult && singleResult.errors.length === 0"
+          type="success"
+          data-testid="import-success"
+          role="status"
+        >
+          {{ `成功导入 ${singleResult.imported} 条数据。` }}
+        </n-alert>
+        <n-alert
+          v-if="singleResult && singleResult.errors.length > 0"
+          type="error"
+          :title="'导入失败（数据库未写入）'"
+          data-testid="import-result-errors"
+          role="alert"
+        >
+          <template #icon><AlertTriangle :size="17" aria-hidden="true" /></template>
           <n-list>
-            <n-list-item v-for="error in combinedPreview.errors" :key="`${error.sheet}-${error.row}-${error.field}-${error.message}`">
-              <strong>{{ `${error.sheet} · 第 ${error.row} 行 · ${error.field}` }}</strong>
-              <span>{{ error.message }}</span>
+            <n-list-item v-for="(error, index) in singleResult.errors" :key="index">
+              {{ error }}
             </n-list-item>
           </n-list>
         </n-alert>
-
-        <section v-for="sheet in combinedPreview.sheets" :key="sheet.key" class="combined-sheet-preview">
-          <div class="combined-sheet-title">
-            <h3>{{ sheet.label }}</h3>
-            <span>{{ `${sheet.rows.length} 行` }}</span>
-          </div>
-          <div v-if="sheet.rows.length" class="combined-table-scroll">
-            <table class="combined-preview-table">
-              <thead>
-                <tr><th>{{ '行' }}</th><th>{{ '记录' }}</th><th>{{ '状态' }}</th><th>{{ '具体变化或冲突' }}</th></tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="row in sheet.rows"
-                  :key="`${sheet.key}-${row.row}`"
-                  :data-testid="`combined-row-${sheet.key}-${row.row}`"
-                >
-                  <td>{{ row.row }}</td>
-                  <td>{{ row.identity }}</td>
-                  <td>
-                    <n-tag size="small" :type="statusMeta[row.status].type as never">
-                      {{ statusMeta[row.status].label }}
-                    </n-tag>
-                  </td>
-                  <td>
-                    <span v-if="row.changes.length" class="combined-change-list">
-                      <span v-for="change in row.changes" :key="change.field">
-                        {{ `${change.field}：${formatValue(change.before)} → ${formatValue(change.after)}` }}
-                      </span>
-                    </span>
-                    <span v-else-if="row.errors.length" class="combined-error-list">
-                      <span v-for="error in row.errors" :key="`${error.field}-${error.message}`">
-                        {{ `${error.field}：${error.message}` }}
-                      </span>
-                    </span>
-                    <span v-else class="combined-muted">{{ row.status === 'new' ? '将创建' : '无需处理' }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p v-else class="combined-empty">{{ '此工作表没有待处理行' }}</p>
-        </section>
-
-        <div v-if="combinedPreview.can_commit" class="combined-commit-area">
-          <n-checkbox
-            v-if="combinedPreview.has_changes"
-            v-model:checked="confirmChanges"
-            data-testid="combined-confirm-changes"
-          >
-            {{ `我已核对并确认修改 ${combinedPreview.counts.changed} 条现有数据` }}
-          </n-checkbox>
-          <n-alert v-else type="success" :show-icon="true">
-            {{ '没有冲突，也不会修改现有记录。' }}
-          </n-alert>
-          <n-button
-            type="primary"
-            data-testid="combined-commit"
-            :loading="combinedBusy"
-            :disabled="!canCommitCombined"
-            @click="onCombinedCommit"
-          >
-            <template #icon><CheckCircle2 :size="15" aria-hidden="true" /></template>
-            {{ '确认并导入全部工作表' }}
-          </n-button>
-        </div>
-      </section>
-
-      <n-alert
-        v-if="combinedResult"
-        type="success"
-        data-testid="combined-import-success"
-        role="status"
-      >
-        {{ `导入完成：新增 ${combinedResult.total_created} 条，更新 ${combinedResult.total_updated} 条，${combinedResult.total_unchanged} 条未变化。` }}
-      </n-alert>
+      </div>
     </div>
 
-    <div v-else class="single-import-panel" data-testid="single-import-panel">
-      <n-alert type="info" :show-icon="true">
-        {{ '按表导入适合补录单类数据；跨表引用必须已经存在。' }}
-      </n-alert>
-
-      <section class="basedata-import-step">
-        <div class="basedata-import-step-heading">
-          <FileSpreadsheet :size="18" aria-hidden="true" />
-          <strong>{{ '数据类型' }}</strong>
-        </div>
-        <div role="radiogroup" aria-label="选择导入数据类型">
-          <n-radio-group v-model:value="entity" class="basedata-import-entities">
-            <n-radio-button v-for="(label, key) in labels" :key="key" :value="key">
-              {{ label }}
-            </n-radio-button>
-          </n-radio-group>
-        </div>
-      </section>
-
-      <section class="basedata-import-step">
-        <div class="basedata-import-step-heading">
-          <Download :size="18" aria-hidden="true" />
-          <strong>{{ '模板' }}</strong>
-        </div>
-        <n-button
-          data-testid="import-download"
-          :loading="singleDownloading"
-          :disabled="singleUploading"
-          @click="onSingleDownload"
-        >
-          <template #icon><Download :size="15" aria-hidden="true" /></template>
-          {{ '下载' }}「{{ labels[entity] }}」{{ '模板' }}
-        </n-button>
-      </section>
-
-      <section v-if="canEdit" class="basedata-import-step">
-        <div class="basedata-import-step-heading">
-          <Upload :size="18" aria-hidden="true" />
-          <strong>{{ '上传文件' }}</strong>
-        </div>
-        <n-checkbox v-if="isTeacher && canManageAccounts" v-model:checked="createAccounts">
-          {{ '同时创建教师登录账号（默认密码，首次登录需修改）' }}
-        </n-checkbox>
-        <n-upload
-          v-model:file-list="singleFileList"
-          :max="1"
-          :default-upload="false"
-          accept=".xlsx"
-          @change="onSingleFileChange"
-        >
-          <n-button data-testid="import-file">
-            <template #icon><FileSpreadsheet :size="15" aria-hidden="true" /></template>
-            {{ '选择文件' }}
-          </n-button>
-        </n-upload>
-        <n-button
-          type="primary"
-          data-testid="import-upload"
-          :loading="singleUploading"
-          :disabled="!singleFile || singleUploading"
-          @click="onSingleUpload"
-        >
-          <template #icon>
-            <RotateCcw v-if="singleResult?.errors.length" :size="15" aria-hidden="true" />
-            <Upload v-else :size="15" aria-hidden="true" />
-          </template>
-          {{ singleResult?.errors.length ? '修正文件后重试' : '开始导入' }}
-        </n-button>
-      </section>
-
-      <n-alert v-if="singleError" type="error" data-testid="import-error" role="alert">
-        {{ singleError }}
-      </n-alert>
-      <n-alert
-        v-if="singleResult && singleResult.errors.length === 0"
-        type="success"
-        data-testid="import-success"
-        role="status"
-      >
-        {{ `成功导入 ${singleResult.imported} 条数据。` }}
-      </n-alert>
-      <n-alert
-        v-if="singleResult && singleResult.errors.length > 0"
-        type="error"
-        :title="'导入失败（数据库未写入）'"
-        data-testid="import-result-errors"
-        role="alert"
-      >
-        <template #icon><AlertTriangle :size="17" aria-hidden="true" /></template>
-        <n-list>
-          <n-list-item v-for="(error, index) in singleResult.errors" :key="index">
-            {{ error }}
-          </n-list-item>
-        </n-list>
-      </n-alert>
-    </div>
+    <ManualEntry
+      v-else
+      :semester-id="semesterId"
+      :can-edit="canEdit"
+      @changed="emit('imported')"
+    />
   </div>
 </template>
 

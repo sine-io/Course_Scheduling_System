@@ -26,6 +26,7 @@ const props = withDefaults(
   }>(),
   { canEdit: true, canDelete: false, canManageAccounts: false },
 )
+const emit = defineEmits<{ changed: [] }>()
 const message = useMessage()
 const dialog = useDialog()
 
@@ -180,6 +181,7 @@ async function persistSave(body: Record<string, unknown>, bindingChanged: boolea
     show.value = false
     message.success('已保存')
     await reload()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '保存失败'))
   } finally {
@@ -229,6 +231,7 @@ async function remove(teacher: Teacher) {
     await deleteTeacher(teacher.id, highRiskConfirmation(`teacher:${teacher.id}`))
     message.success('已删除')
     await reload()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '删除失败'))
   } finally {

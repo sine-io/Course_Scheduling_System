@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { NDialogProvider, NMessageProvider, NUpload } from 'naive-ui'
+import { NDialogProvider, NMessageProvider, NRadioGroup, NUpload } from 'naive-ui'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import type { CombinedImportPreview } from '@/api/imports'
@@ -69,7 +69,13 @@ async function mountTab(canEdit = true) {
       }),
     }),
   }
-  const wrapper = mount(Host)
+  const wrapper = mount(Host, {
+    global: {
+      stubs: {
+        ManualEntry: { template: '<div data-testid="manual-entry-stub" />' },
+      },
+    },
+  })
   await flushPromises()
   return wrapper
 }
@@ -108,6 +114,19 @@ describe('ImportTab combined setup import', () => {
     expect(wrapper.text()).toContain('班级')
     expect(wrapper.text()).toContain('教室')
     expect(wrapper.text()).not.toContain('创建教师登录账号')
+  })
+
+  it('默认进入批量导入，并可切换到手工录入', async () => {
+    const wrapper = await mountTab()
+
+    expect(wrapper.get('[data-testid="combined-import-panel"]')).toBeTruthy()
+    expect(wrapper.find('[data-testid="manual-entry-stub"]').exists()).toBe(false)
+
+    await wrapper.findAllComponents(NRadioGroup)[0].vm.$emit('update:value', 'manual')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="manual-entry-stub"]')).toBeTruthy()
+    expect(wrapper.find('[data-testid="combined-import-panel"]').exists()).toBe(false)
   })
 
   it('预览逐行状态，修改项确认前不可提交', async () => {
