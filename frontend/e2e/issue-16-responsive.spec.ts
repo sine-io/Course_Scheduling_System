@@ -123,10 +123,12 @@ async function mockApplication(page: Page, options: MockOptions = {}) {
       roles: options.roles ?? USER.roles,
     })
     if (path === '/api/wizard/state') return fulfillJson(route, {
-      current_step: 4,
+      current_step: 3,
+      resume_step: 3,
       completed: true,
+      paused: false,
       semester_id: SEMESTER.id,
-      total_steps: 5,
+      total_steps: 4,
       has_semesters: !options.noSemesters,
     })
     if (path === '/api/notifications/mine' || path === '/api/notifications/mine/unread-count') {

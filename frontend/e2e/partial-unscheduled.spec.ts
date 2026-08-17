@@ -21,7 +21,6 @@ const get = async (page: Page, url: string) => (await page.request.get(url)).jso
 test('部分排课:完全排不下的课列入未排列表并说明原因,发布后仍查得到', async ({ page }) => {
   test.setTimeout(180_000)
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
 
   const sem = await createTestSemester(page, YEAR, { subjects: [] })

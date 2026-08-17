@@ -24,7 +24,6 @@ async function selectSemester(page: Page, year: number) {
 
 /** 建学期 + 王师请假 + 指派陈老师代课。返回 { sid }。 */
 async function seed(page: Page, year: number): Promise<number> {
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, year, 1)
   const sid = (await createTestSemester(page, year, { subjects: [] })).id
   const q = `?semester_id=${sid}`

@@ -80,26 +80,26 @@ def _clock(value: str) -> time:
 
 
 def _create_fixture_semester(
-    db: Session, academic_year: int, term: int, template_key: str
+    db: Session, academic_year: int, term: int, dataset_key: str
 ) -> Semester:
-    """直接构建测试数据，不依赖公开学校模板。"""
-    if template_key not in _SUBJECTS:
-        raise ValueError(f"未知测试数据类型：{template_key}")
+    """直接构建测试数据，不依赖任何公开初始化预设。"""
+    if dataset_key not in _SUBJECTS:
+        raise ValueError(f"未知测试数据类型：{dataset_key}")
     semester = Semester(academic_year=academic_year, term=term)
     table = PeriodTable(
         name={
             "elementary": "小学作息时间表",
             "junior_high": "初中作息时间表",
             "vocational": "中职作息时间表",
-        }[template_key],
+        }[dataset_key],
         num_weekdays=5,
         is_default=True,
     )
-    slots = _LONG_SLOTS if template_key == "vocational" else _JUNIOR_SLOTS
+    slots = _LONG_SLOTS if dataset_key == "vocational" else _JUNIOR_SLOTS
     for weekday in range(1, 6):
         for period_no, name, start, end, period_type in slots:
             cell_type = period_type
-            if template_key == "elementary" and weekday == 3 and period_no in {7, 8, 9}:
+            if dataset_key == "elementary" and weekday == 3 and period_no in {7, 8, 9}:
                 cell_type = PeriodType.reserved
             table.periods.append(
                 Period(
@@ -114,7 +114,7 @@ def _create_fixture_semester(
     semester.period_tables.append(table)
     db.add(semester)
     db.flush()
-    for name in _SUBJECTS[template_key]:
+    for name in _SUBJECTS[dataset_key]:
         db.add(Subject(semester_id=semester.id, name=name))
     db.flush()
     return semester
@@ -141,9 +141,9 @@ class Fixture:
 class Builder:
     """直接创建测试学期，再逐步添加教师、班级、教室/场地和教学任务。"""
 
-    def __init__(self, db: Session, academic_year: int, term: int, template_key: str) -> None:
+    def __init__(self, db: Session, academic_year: int, term: int, dataset_key: str) -> None:
         self.db = db
-        self.semester = _create_fixture_semester(db, academic_year, term, template_key)
+        self.semester = _create_fixture_semester(db, academic_year, term, dataset_key)
         self.table = self.semester.period_tables[0]
         self.subjects: dict[str, Subject] = {
             s.name: s

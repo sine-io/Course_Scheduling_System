@@ -69,7 +69,6 @@ test('请假登记:排课管理员代登全天假,展开受影响节次,销假�
   test.setTimeout(120_000)
   const YEAR = 2049
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
   await seedPublishedSchool(page, YEAR)
 
@@ -116,7 +115,6 @@ test('请假登记:跨周末只展开上课日;上午请假不含下午的课', 
   test.setTimeout(120_000)
   const YEAR = 2050
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const { sid, teacherId } = await seedPublishedSchool(page, YEAR)
 

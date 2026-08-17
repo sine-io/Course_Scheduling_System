@@ -12,7 +12,6 @@ const post = async (page: Page, url: string, data: object) =>
 const get = async (page: Page, url: string) => (await page.request.get(url)).json()
 
 async function seed(page: Page, year: number): Promise<number> {
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, year, 1)
   const sid = (await createTestSemester(page, year, { subjects: [] })).id
   const q = `?semester_id=${sid}`

@@ -12,7 +12,6 @@ const SHOTS = 'e2e/screenshots'
 test('科目管理:勾选主科后列表显示标签,重新加载仍保留', async ({ page }) => {
   const YEAR = 2044
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR, { subjects: [] })

@@ -12,7 +12,6 @@ const SHOTS = 'e2e/screenshots'
 // M2-0：教师表单新增联系信息与账号绑定字段。
 test('教师联系信息：新增教师并保存电子邮箱', async ({ page }) => {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   // 前置(API):创建干净的测试学期
   await deleteSemesterByYearTerm(page, YEAR, 1)

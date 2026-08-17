@@ -192,7 +192,7 @@ test('生成操作手册截图（01–02，需要全新未设置站点）', asyn
   await page.waitForTimeout(500)
   await page.screenshot({ path: `${SHOTS}/01-login.png` })
 
-  // ── 02 设置向导(第一步:选学制模板)──
+  // ── 02 设置向导(第一步:学校与学期)──
   await loginAsAdmin(page)
   await page.goto('/wizard')
   await expect(page.getByRole('heading', { name: '设置向导' })).toBeVisible({ timeout: 20_000 })
@@ -205,8 +205,11 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
 
   await loginAsAdmin(page)
   const sid = await ensureManualData(page)
-  // 向导标记完成,否则路由守卫会把每一页导回向导
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
+  // 通过与产品相同的完成检查放行后续页面，不从测试侧直接改完成标记。
+  const completed = await page.request.post('/api/wizard/complete', {
+    data: { semester_id: sid, acknowledge_warnings: true },
+  })
+  expect(completed.ok(), `完成设置失败：${await completed.text()}`).toBeTruthy()
 
   // ── 03 教学任务管理 ──
   await page.goto('/scheduling/assignments')

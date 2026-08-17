@@ -30,7 +30,6 @@ async function selectSemester(page: Page, year: number) {
 test('版本与发布:未排完出现警告列表,确认后强制发布;发布新版旧版转归档', async ({ page }) => {
   const YEAR = 2042
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR, { subjects: [] })
@@ -109,7 +108,6 @@ test.describe('教师端(手机)', () => {
   test('teacher 角色登录手机浏览器,课表查询默认显示本人课表', async ({ page }) => {
     const YEAR = 2043
     await login(page) // 先以排课管理员构建数据
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
     await deleteSemesterByYearTerm(page, YEAR, 1)
     const sem = await createTestSemester(page, YEAR, { subjects: [] })

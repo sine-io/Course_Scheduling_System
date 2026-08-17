@@ -35,7 +35,6 @@ const cell = (page: Page, weekday: number, period: number) =>
 
 test('排课工作台:冲突红框、拖放排课、锁定、拖回移除、Ctrl+Z、三视角一致、排满归零', async ({ page }) => {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   // ── 前置(API):学期 + 2 班 + 8 位教师 + 8 科 + 教学任务 ──
   await deleteSemesterByYearTerm(page, YEAR, 1)

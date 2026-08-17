@@ -15,7 +15,6 @@ const SHOTS = 'e2e/screenshots'
 test('混合学制:班级可指定作息时间表(≥2 套时出现下拉)', async ({ page }) => {
   await login(page)
   // 标记向导已完成,避免首登守卫把导航转向 /wizard
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   // 前置(API):清掉测试学期后,创建含两套作息时间表的学期
   await deleteSemesterByYearTerm(page, YEAR, 1)

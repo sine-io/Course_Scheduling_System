@@ -18,7 +18,6 @@ const EXPECT_END = '2034-07-20'
 
 test('开新学期:复制到新学期,带起止日与排课偏好设置', async ({ page }) => {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   // 前置:清掉测试学期,创建来源学期(初中模板 → 含作息时间表+科目)
   await deleteSemesterByYearTerm(page, SRC, 1)

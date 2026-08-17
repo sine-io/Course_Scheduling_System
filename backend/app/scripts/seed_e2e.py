@@ -7,8 +7,8 @@
 - 兼任账号 e2e_scheduler_teacher / e2ecombined1234(验证管理视角与本人入口并存)
 - **首次登录账号** e2e_newuser / e2enewuser1234(`must_change_password=True`)
 - 清理 Issue #33 浏览器测试创建的归档学期夹具
-- 将设置向导标记为已完成(否则路由守卫会把排课管理员导回 /wizard,
-  wizard.spec 会自行 reset 再走完整流程,不受影响)
+- 将设置向导标记为已完成(否则路由守卫会把排课管理员导回 /wizard；
+  wizard.spec 会通过公开的恢复与完成接口走完整流程并恢复此状态)
 
 幂等:已存在的账号不重建、不改密码。**唯一例外是 e2e_newuser**——见下方说明。
 用法(容器内):

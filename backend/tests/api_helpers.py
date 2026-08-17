@@ -1,4 +1,4 @@
-"""API 测试使用的数据构建工具，不依赖公开学校模板。"""
+"""API 测试使用的数据构建工具，不依赖公开初始化预设。"""
 
 from collections.abc import Iterable
 

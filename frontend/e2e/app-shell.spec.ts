@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { browserApiRequest, login } from './helpers'
+import { login } from './helpers'
 
 const viewports = [
   { width: 1920, height: 1080, sidebarWidth: 228 },
@@ -10,12 +10,6 @@ const viewports = [
 test.describe('生产应用壳层', () => {
   test.beforeEach(async ({ page }) => {
     await login(page)
-    expect(await browserApiRequest(
-      page,
-      'PATCH',
-      '/api/wizard/state',
-      { completed: true },
-    )).toBe(200)
   })
 
   for (const viewport of viewports) {

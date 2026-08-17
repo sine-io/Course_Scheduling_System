@@ -18,17 +18,30 @@ export function highRiskData(target: string) {
 }
 
 export async function createAdminApiContext(page: Page): Promise<APIRequestContext> {
+  return createAuthenticatedApiContext(page, E2E_ADMIN_USER, E2E_ADMIN_PASS, '管理员')
+}
+
+export async function createSchedulerApiContext(page: Page): Promise<APIRequestContext> {
+  return createAuthenticatedApiContext(page, E2E_USER, E2E_PASS, '排课管理员')
+}
+
+async function createAuthenticatedApiContext(
+  page: Page,
+  username: string,
+  password: string,
+  accountLabel: string,
+): Promise<APIRequestContext> {
   const currentUrl = page.url()
   const baseURL = currentUrl.startsWith('http')
     ? new URL(currentUrl).origin
     : (process.env.E2E_BASE_URL || 'http://localhost')
   const context = await request.newContext({ baseURL })
   const loginResponse = await context.post('/api/auth/login', {
-    data: { username: E2E_ADMIN_USER, password: E2E_ADMIN_PASS },
+    data: { username, password },
   })
   if (!loginResponse.ok()) {
     await context.dispose()
-    throw new Error(`管理员 E2E 账号登录失败：${await loginResponse.text()}`)
+    throw new Error(`${accountLabel} E2E 账号登录失败：${await loginResponse.text()}`)
   }
   return context
 }
@@ -189,23 +202,6 @@ export async function publishCheckedTimetable(
   return page.request.post(`/api/timetables/${timetableId}/publish`, {
     data: { fingerprint: checked.fingerprint, force },
   })
-}
-
-export async function browserApiRequest(
-  page: Page,
-  method: 'PATCH' | 'PUT',
-  path: string,
-  data: unknown,
-): Promise<number> {
-  return page.evaluate(async ({ requestMethod, requestPath, requestData }) => {
-    const response = await fetch(requestPath, {
-      method: requestMethod,
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(requestData),
-    })
-    return response.status
-  }, { requestMethod: method, requestPath: path, requestData: data })
 }
 
 /** 删除指定学年学期(idempotent),避免测试数据残留或冲突。 */

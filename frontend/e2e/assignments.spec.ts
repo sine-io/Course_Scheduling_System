@@ -12,7 +12,6 @@ const SHOTS = 'e2e/screenshots'
 // M2-1:单班教学任务 + 教师课时实时统计(超课时红字)。
 test('教学任务管理:创建单班教学任务并显示教师超课时', async ({ page }) => {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   // 前置(API):建学期(初中模板含作息时间表)+ 班级、科目、教师(基本课时 2)
   await deleteSemesterByYearTerm(page, YEAR, 1)

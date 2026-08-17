@@ -58,7 +58,6 @@ test('自动排课:显示进度,提前结束取当前最佳解并生成新草稿
   test.setTimeout(180_000)
   const YEAR = 2045
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR)
@@ -107,7 +106,6 @@ test('自动排课:显示进度,提前结束取当前最佳解并生成新草稿
 test('自动排课:数据未通过前置检查时拦截,并列出待修正项目', async ({ page }) => {
   const YEAR = 2046
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR)
@@ -153,7 +151,6 @@ async function seedInfeasible(page: Page, sid: number) {
 
 async function setupInfeasible(page: Page, year: number) {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, year, 1)
   const sem = await createTestSemester(page, year)
   await seedInfeasible(page, sem.id)

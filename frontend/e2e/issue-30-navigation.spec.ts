@@ -74,7 +74,6 @@ test.describe('角色导航与页面兼容', () => {
   for (const roleCase of ROLE_CASES) {
     test(`${roleCase.title}看到直接分组导航`, async ({ page }) => {
       await login(page, roleCase.username, roleCase.password)
-      await page.request.patch('/api/wizard/state', { data: { completed: true } })
       await page.goto('/')
 
       const nav = page.getByTestId('shell-nav')
@@ -95,7 +94,6 @@ test.describe('角色导航与页面兼容', () => {
 
   test('仪表盘快捷入口固定且随角色变化', async ({ page }) => {
     await login(page, 'e2e_teacher', 'e2eteacher1234')
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await page.goto('/')
     await expect(page.locator('[data-testid^="dash-shortcut-"]')).toHaveCount(3)
     await expect(page.getByTestId('dash-shortcut-timetable-query')).toBeVisible()
@@ -106,7 +104,6 @@ test.describe('角色导航与页面兼容', () => {
 
   test('旧通知、演示和系统分区链接重定向到新页面', async ({ page }) => {
     await login(page, 'e2e_scheduler', 'e2etest1234')
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
     await page.goto('/notification-board')
     await expect(page).toHaveURL(/\/notifications\?view=board$/)
@@ -116,7 +113,6 @@ test.describe('角色导航与页面兼容', () => {
 
     await page.request.post('/api/auth/logout')
     await login(page, 'e2e_admin', 'e2eadmin1234')
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await page.goto('/settings/system?section=backup')
     await expect(page).toHaveURL(/\/settings\/backup$/)
     await expect(page.getByRole('heading', { name: '备份恢复', level: 1 })).toBeVisible()

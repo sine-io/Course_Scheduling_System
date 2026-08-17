@@ -71,7 +71,6 @@ const ALLOWED_TEACHER_API_PATHS = new Set([
 
 test('生产发布不暴露原型路由、变体切换器或状态模拟器', async ({ page }) => {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await page.goto('/prototype/ui-style?variant=C')
 
@@ -99,7 +98,6 @@ for (const [viewportIndex, viewport] of VIEWPORTS.entries()) {
         remoteRequests.push(request.url())
       }
     })
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await deleteSemesterByYearTerm(page, year, 1)
     const semester = await createTestSemester(page, year)
     const detail = await page.request.get(`/api/semesters/${semester.id}`)
@@ -160,10 +158,8 @@ test('A4 通知单保留独立打印版式且打印时隐藏操作按钮', async
   const year = 2075
 
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, year, 1)
   const semester = await createTestSemester(page, year)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   try {
     await page.goto(`/daily-board/print?semester_id=${semester.id}&date=${WED}`)

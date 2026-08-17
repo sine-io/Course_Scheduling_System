@@ -49,12 +49,9 @@ async function mockSurfaceData(
   }
 
   if (surface === 'wizard') {
-    await page.route('**/api/school-templates', (route) => fulfillJson(route, [{
-      key: 'junior_high_draft', name: '初中（空白模板）', minutes_per_period: 40,
-      subject_count: 13, editable: true,
-    }]))
     await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-      current_step: 0, completed: false, semester_id: null, total_steps: 5, has_semesters: false,
+      current_step: 0, resume_step: 0, completed: false, paused: false,
+      semester_id: null, total_steps: 4, has_semesters: false,
     }))
     return
   }
@@ -83,7 +80,8 @@ async function mockSurfaceData(
       },
     }))
     await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-      current_step: 4, completed: true, semester_id: 12, total_steps: 5, has_semesters: true,
+      current_step: 3, resume_step: 3, completed: true, paused: false,
+      semester_id: 12, total_steps: 4, has_semesters: true,
     }))
     await page.route('**/api/semester-context', (route) => fulfillJson(route, {
       current_semester: { ...DASHBOARD_SEMESTER, is_current: true },
@@ -177,7 +175,7 @@ for (const viewport of VIEWPORTS) {
     ])
   })
 
-  test(`设置向导 ${viewport.width}x${viewport.height} 保持五步控件可见`, async ({ page }) => {
+  test(`设置向导 ${viewport.width}x${viewport.height} 保持四步控件可见`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await mockSurfaceData(page, 'wizard')
@@ -185,7 +183,7 @@ for (const viewport of VIEWPORTS) {
 
     await expect(page).toHaveURL(/\/wizard$/)
     await expect(page.getByRole('heading', { name: '设置向导' })).toBeVisible()
-    await expect(page.getByTestId('wizard-step-title')).toHaveText('学制模板')
+    await expect(page.getByTestId('wizard-step-title')).toHaveText('学校与学期')
     await expect(page.getByTestId('wizard-next')).toBeVisible()
     await expectNoRootOverflow(page)
     await expectVisibleFlow(page, [

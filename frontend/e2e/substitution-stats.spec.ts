@@ -106,7 +106,6 @@ test.describe('代课课时统计', () => {
   test('排课管理员看月结汇总与明细,可导出 Excel;教师只看自己', async ({ page }) => {
     test.setTimeout(180_000)
     await login(page)
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await deleteSemesterByYearTerm(page, 2057, 1)
     const sem = await createTestSemester(page, 2057, { subjects: [] })
     const chenId = await bindTeacher(page, sem.id)

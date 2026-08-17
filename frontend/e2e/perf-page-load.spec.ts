@@ -55,7 +55,6 @@ test.describe('页面加载性能(60 班)', () => {
   test('教学任务页、排课工作台与课表查询页加载 p95 < 2s', async ({ page }) => {
     test.setTimeout(300_000)
     await login(page)
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await deleteSemesterByYearTerm(page, YEAR, 1)
     const sem = await createTestSemester(page, YEAR)
     await seed60(page, sem.id)

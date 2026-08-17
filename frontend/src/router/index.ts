@@ -223,7 +223,7 @@ router.beforeEach(async (to) => {
     return { name: fallback }
   }
 
-  // 首次登录引导:排课管理员/管理员在尚未完成初始设置时,自动进入向导(向导内可跳过)
+  // 首次登录引导:排课管理员/管理员在尚未完成初始设置时自动进入向导；暂停后可使用其他页面。
   const canSetup = auth.hasRole('scheduler') || auth.hasRole('admin')
   if (canSetup && to.name !== 'wizard' && !AUTH_PAGES.has(to.name as string)) {
     const wizard = useWizardStore()

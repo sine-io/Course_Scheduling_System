@@ -57,10 +57,12 @@ async function mockSession(page: Page, currentSemester: () => typeof SEMESTER | 
   await page.route('**/api/auth/login', (route) => fulfillJson(route, USER))
   await page.route('**/api/auth/me', (route) => fulfillJson(route, USER))
   await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-    current_step: 4,
+    current_step: 3,
+    resume_step: 3,
     completed: true,
+    paused: false,
     semester_id: 44,
-    total_steps: 5,
+    total_steps: 4,
     has_semesters: true,
   }))
   await page.route('**/api/app-config', (route) => fulfillJson(route, {
@@ -119,7 +121,6 @@ for (const viewport of VIEWPORTS) {
       ].includes(path)) requestedAdminPaths.push(path)
     })
 
-    await page.route('**/api/school-templates', (route) => fulfillJson(route, []))
     await page.route('**/api/semesters', (route) => fulfillJson(
       route,
       semesterMode === 'empty' ? [] : [SEMESTER],

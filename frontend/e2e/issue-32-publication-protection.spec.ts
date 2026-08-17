@@ -21,7 +21,6 @@ async function post(page: Page, path: string, data: object) {
 
 test('发布入口统一经过检查确认，取消不发布且尝试均可审计', async ({ page }) => {
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
 
   const semester = await createTestSemester(page, YEAR, { subjects: [] })

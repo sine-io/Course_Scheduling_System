@@ -417,7 +417,7 @@ flowchart LR
 安装三步骤(deploy/README 首页):
 1. 安装 Docker(附各操作系统说明)
 2. 运行 Windows 或 Linux/macOS/NAS 一键安装脚本；也可手工下载 docker-compose.yml 与 .env 示例
-3. 在浏览器打开 `http://<主机IP>`，进入五步设置向导
+3. 在浏览器打开 `http://<主机IP>`，依四步设置向导完成学校与学期、基础数据、作息安排和完成检查
 ```
 
 - **硬件最低需求**:2 核 4GB RAM、10GB 磁盘(自动排课建议 4 核 8GB;求解期间 CPU 满载属正常,文件需注明)。兼容 x86-64 与 ARM64(NAS/树莓派),CI 产出双架构 image。

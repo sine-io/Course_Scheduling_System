@@ -27,7 +27,6 @@ async function api(page: Page, url: string, data: object) {
 test('教学任务管理:走班群组创建、协同教师+连堂、班级超节数警告', async ({ page }) => {
   const YEAR = 2038
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR)
@@ -112,7 +111,6 @@ test('教学任务管理:走班群组创建、协同教师+连堂、班级超节
 test('批量导入:教学任务 Excel 导入(单班×协同教师×连堂)', async ({ page }) => {
   const YEAR = 2039
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR)
@@ -127,6 +125,7 @@ test('批量导入:教学任务 Excel 导入(单班×协同教师×连堂)', asy
   await page.goto('/basedata')
   await selectSemester(page, YEAR)
   await page.locator('.n-tabs-tab', { hasText: '批量导入' }).click()
+  await page.locator('.n-radio-button', { hasText: '按表导入' }).click()
   await page.locator('.n-radio-button', { hasText: '教学任务' }).click()
 
   const file = fileURLToPath(new URL('./fixtures/assignments_import.xlsx', import.meta.url))

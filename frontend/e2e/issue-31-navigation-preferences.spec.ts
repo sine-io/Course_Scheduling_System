@@ -9,7 +9,6 @@ test.describe('固定导航与仪表盘快捷入口', () => {
     })
 
     await login(page, 'e2e_scheduler', 'e2etest1234')
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await page.goto('/')
 
     await expect(page.getByTestId('shell-nav')).toBeVisible()
@@ -22,7 +21,6 @@ test.describe('固定导航与仪表盘快捷入口', () => {
 
   test('刷新后仪表盘快捷入口保持角色固定顺序', async ({ page }) => {
     await login(page, 'e2e_scheduler', 'e2etest1234')
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await page.goto('/')
 
     const shortcuts = page.locator('[data-testid^="dash-shortcut-"]')

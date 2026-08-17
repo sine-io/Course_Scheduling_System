@@ -118,7 +118,6 @@ test.describe('通知系统', () => {
     test.setTimeout(180_000)
     const YEAR = 2053
     await login(page)
-    await page.request.patch('/api/wizard/state', { data: { completed: true } })
     await deleteSemesterByYearTerm(page, YEAR, 1)
 
     const sem = await createTestSemester(page, YEAR, { subjects: [] })
@@ -147,7 +146,6 @@ test.describe('通知系统', () => {
       test.setTimeout(180_000)
       const YEAR = 2054
       await login(page)
-      await page.request.patch('/api/wizard/state', { data: { completed: true } })
       await deleteSemesterByYearTerm(page, YEAR, 1)
       const sem = await createTestSemester(page, YEAR, { subjects: [] })
       const chenId = await bindTeacher(page, sem.id)

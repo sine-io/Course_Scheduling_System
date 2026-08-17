@@ -87,7 +87,6 @@ test('调课与代课处理：优先推荐同科教师、过滤已有课教师�
   test.setTimeout(120_000)
   const YEAR = 2051
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
   await seed(page, YEAR)
 
@@ -127,7 +126,6 @@ test('调课与代课处理:无人可代时提示合班/自习并可直接设置
   test.setTimeout(120_000)
   const YEAR = 2052
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
 
   // 只有王师与陈师,且陈师该节也有课 → 无人可代

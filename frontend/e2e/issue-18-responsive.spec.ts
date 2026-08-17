@@ -136,10 +136,12 @@ async function mockSession(
   }
   await page.route('**/api/auth/me', (route) => fulfillJson(route, user))
   await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-    current_step: 4,
+    current_step: 3,
+    resume_step: 3,
     completed: true,
+    paused: false,
     semester_id: 44,
-    total_steps: 5,
+    total_steps: 4,
     has_semesters: true,
   }))
   await page.route('**/api/app-config', (route) => fulfillJson(route, {
@@ -465,6 +467,10 @@ for (const viewport of VIEWPORTS) {
     await expectNoRootOverflow(page)
 
     await tab(page, '批量导入').click()
+    await expect(page.getByTestId('combined-import-panel')).toBeVisible()
+    await expect(page.getByTestId('combined-download')).toBeVisible()
+    await expect(page.getByTestId('combined-preview')).toBeDisabled()
+    await page.locator('.n-radio-button', { hasText: '按表导入' }).click()
     await expect(page.getByRole('radiogroup', { name: '选择导入数据类型' })).toBeVisible()
     await expect(page.getByTestId('import-download')).toBeVisible()
     await expect(page.getByTestId('import-upload')).toBeDisabled()
@@ -534,7 +540,12 @@ test('教务主任仅能查看基础数据且不会触发写请求', async ({ pa
   await tab(page, '教室/场地').click()
   await expect(page.getByTestId('room-add')).toHaveCount(0)
   await tab(page, '批量导入').click()
-  await expect(page.getByTestId('import-readonly')).toContainText('没有批量导入权限')
+  await expect(page.getByTestId('import-readonly')).toContainText('没有基础数据写入权限')
+  await expect(page.getByTestId('combined-import-panel')).toBeVisible()
+  await expect(page.getByTestId('combined-download')).toBeVisible()
+  await expect(page.getByTestId('combined-file')).toHaveCount(0)
+  await expect(page.getByTestId('combined-preview')).toHaveCount(0)
+  await page.locator('.n-radio-button', { hasText: '按表导入' }).click()
   await expect(page.getByRole('radiogroup', { name: '选择导入数据类型' })).toBeVisible()
   await expect(page.getByTestId('import-download')).toBeVisible()
   await expect(page.getByTestId('import-file')).toHaveCount(0)

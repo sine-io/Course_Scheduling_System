@@ -60,7 +60,6 @@ async function seedSchool(page: Page, sid: number) {
 test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 月结,一路串到底', async ({ page }) => {
   test.setTimeout(240_000)
   await login(page)
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, YEAR, 1)
 
   // ── 1) 建学期 + 基础数据(API 准备)──

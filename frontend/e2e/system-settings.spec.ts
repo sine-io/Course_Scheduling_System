@@ -23,7 +23,7 @@ test('系统管理与备份恢复页面可独立打开并完成备份操作', as
   // 系统配置页只显示系统配置职责
   await expect(page.getByTestId('smtp-status')).toBeVisible()
   await expect(page.getByTestId('backup-card')).toHaveCount(0)
-  await expect(page.getByText('重新启动设置向导')).toBeVisible()
+  await expect(page.getByTestId('reset-wizard')).toHaveText('检查并补全当前学期')
   await page.screenshot({ path: `${SHOTS}/system-1-page.png` })
 
   await page.getByRole('link', { name: '备份恢复' }).click()
