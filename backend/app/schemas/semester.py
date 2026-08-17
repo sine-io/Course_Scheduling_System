@@ -18,6 +18,68 @@ class PeriodIn(BaseModel):
     type: PeriodType = PeriodType.regular
 
 
+class PeriodSetupPatternIn(BaseModel):
+    """向导中一行节次的定义；同一行可覆盖一个或多个工作日。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    period_no: int = Field(ge=1)
+    weekdays: list[int] = Field(min_length=1, max_length=6)
+    name: str = Field(min_length=1, max_length=32)
+    start_time: time | None = None
+    end_time: time | None = None
+    type: PeriodType = PeriodType.regular
+
+    @model_validator(mode="after")
+    def _validate_weekdays_and_times(self) -> "PeriodSetupPatternIn":
+        if len(set(self.weekdays)) != len(self.weekdays) or any(
+            weekday < 1 or weekday > 6 for weekday in self.weekdays
+        ):
+            raise ValueError("工作日必须是 1~6 且不可重复")
+        if (self.start_time is None) != (self.end_time is None):
+            raise ValueError("开始时间和结束时间需要成对填写")
+        if self.start_time is not None and self.end_time is not None:
+            if self.end_time <= self.start_time:
+                raise ValueError("结束时间必须晚于开始时间")
+        return self
+
+
+class PeriodSetupGroupIn(BaseModel):
+    """作息分组及其班级分配。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1, max_length=64)
+    table_id: int | None = Field(default=None, gt=0)
+    name: str = Field(min_length=1, max_length=64)
+    num_weekdays: int = Field(default=5, ge=5, le=6)
+    is_default: bool = False
+    class_ids: list[int] = []
+    periods: list[PeriodSetupPatternIn] = []
+
+    @model_validator(mode="after")
+    def _validate_cells(self) -> "PeriodSetupGroupIn":
+        cells: set[tuple[int, int]] = set()
+        for pattern in self.periods:
+            if any(weekday > self.num_weekdays for weekday in pattern.weekdays):
+                raise ValueError("节次工作日不可超过本分组的工作日数量")
+            for weekday in pattern.weekdays:
+                cell = (weekday, pattern.period_no)
+                if cell in cells:
+                    raise ValueError("同一工作日和节次不可重复配置")
+                cells.add(cell)
+        if len(set(self.class_ids)) != len(self.class_ids):
+            raise ValueError("同一班级不可在同一分组中重复")
+        return self
+
+
+class PeriodSetupApply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fingerprint: str = Field(min_length=1, max_length=128)
+    groups: list[PeriodSetupGroupIn] = Field(min_length=1, max_length=32)
+
+
 class PeriodOut(PeriodIn):
     model_config = ConfigDict(from_attributes=True)
     id: int

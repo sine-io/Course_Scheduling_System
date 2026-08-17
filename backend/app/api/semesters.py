@@ -5,6 +5,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api import high_risk_http
@@ -19,6 +20,7 @@ from app.schemas.high_risk import HighRiskConfirmation
 from app.schemas.semester import (
     AvailableSlot,
     PeriodIn,
+    PeriodSetupApply,
     PeriodTableCreate,
     PeriodTableOut,
     PeriodTableUpdate,
@@ -31,7 +33,7 @@ from app.schemas.semester import (
     SemesterUpdate,
 )
 from app.schemas.wizard import SemesterSummary
-from app.services import high_risk, semester_context
+from app.services import high_risk, period_setup, semester_context
 from app.services import period_tables as pt_service
 from app.services.calendar import readiness_issues
 from app.services.school_rules import validate_academic_year
@@ -235,6 +237,49 @@ def semester_summary(
         subjects=_count(Subject), teachers=_count(Teacher),
         classes=_count(ClassUnit), rooms=_count(Room),
     )
+
+
+@router.get("/semesters/{semester_id}/period-setup")
+def get_period_setup(
+    semester_id: int,
+    db: Session = Depends(get_db),
+    _: object = Depends(viewer),
+) -> dict:
+    """读取现有作息分组；尚未配置时仅返回按班级学制生成的建议。"""
+    _get_semester(db, semester_id)
+    return period_setup.build_draft(db, semester_id)
+
+
+@router.put("/semesters/{semester_id}/period-setup")
+def put_period_setup(
+    semester_id: int,
+    body: PeriodSetupApply,
+    db: Session = Depends(get_db),
+    _: object = Depends(editor),
+) -> dict:
+    """以单一事务应用全部作息表、节次与班级分配。"""
+    _require_writable(db, semester_id)
+    try:
+        return period_setup.apply_setup(db, semester_id, body)
+    except period_setup.PeriodSetupStaleError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "period_setup_stale", "message": str(exc)},
+        ) from exc
+    except period_setup.PeriodSetupValidationError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "period_setup_invalid", "message": str(exc)},
+        ) from exc
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "period_setup_write_conflict",
+                "message": "应用作息时发生写入冲突，所有分组均未保存",
+            },
+        ) from exc
 
 
 @router.patch("/semesters/{semester_id}", response_model=SemesterOut)

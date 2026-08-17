@@ -24,6 +24,45 @@ export interface PeriodTable {
   periods: Period[]
 }
 
+export interface PeriodSetupClass {
+  id: number
+  name: string
+  grade: number
+  track: string
+  track_label: string
+  period_table_id: number | null
+}
+
+export interface PeriodSetupPattern {
+  period_no: number
+  weekdays: number[]
+  name: string
+  type: PeriodType
+  start_time: string | null
+  end_time: string | null
+}
+
+export interface PeriodSetupGroup {
+  key: string
+  table_id: number | null
+  name: string
+  num_weekdays: number
+  is_default: boolean
+  class_ids: number[]
+  periods: PeriodSetupPattern[]
+}
+
+export interface PeriodSetupDraft {
+  fingerprint: string
+  source: 'suggested' | 'existing'
+  classes: PeriodSetupClass[]
+  groups: PeriodSetupGroup[]
+  unresolved_class_ids: number[]
+  ready: boolean
+  blockers: string[]
+  warnings: string[]
+}
+
 export interface SemesterListItem {
   id: number
   academic_year: number
@@ -120,3 +159,14 @@ export const deletePeriodTable = (id: number, confirmation: HighRiskConfirmation
   request<void>('DELETE', `/period-tables/${id}`, confirmation)
 export const replacePeriods = (id: number, periods: Period[]) =>
   request<PeriodTable>('PUT', `/period-tables/${id}/periods`, periods)
+
+export const getPeriodSetup = (semesterId: number) =>
+  apiGet<PeriodSetupDraft>(`/semesters/${semesterId}/period-setup`)
+export const applyPeriodSetup = (
+  semesterId: number,
+  fingerprint: string,
+  groups: PeriodSetupGroup[],
+) => apiPut<PeriodSetupDraft>(`/semesters/${semesterId}/period-setup`, {
+  fingerprint,
+  groups,
+})

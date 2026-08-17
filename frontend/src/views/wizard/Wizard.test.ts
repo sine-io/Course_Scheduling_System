@@ -87,6 +87,7 @@ async function mountWizard(state: WizardState = baseState, roles = ['scheduler']
       plugins: [pinia, router],
       stubs: {
         ImportTab: { template: '<div data-testid="import-tab-stub" />' },
+        PeriodSetup: { template: '<div data-testid="period-setup-stub" />' },
       },
     },
   })
@@ -203,5 +204,14 @@ describe('Wizard', () => {
       semester_id: semester.id,
       paused: true,
     })
+  })
+
+  it('第三步直接显示可调整的作息配置，而不是跳转旧编辑器', async () => {
+    const { wrapper } = await mountWizard({ ...baseState, current_step: 2, semester_id: semester.id })
+
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('作息安排')
+    expect(wrapper.get('[data-testid="period-setup-stub"]')).toBeTruthy()
+    expect(wrapper.text()).toContain('根据班级生成可调整的作息建议')
+    expect(wrapper.find('[data-testid="wizard-period-edit"]').exists()).toBe(false)
   })
 })

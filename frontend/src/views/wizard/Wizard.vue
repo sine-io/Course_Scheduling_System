@@ -20,6 +20,7 @@ import { useWizardStore } from '@/stores/wizard'
 import { useAppConfigStore } from '@/stores/appConfig'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import ImportTab from '@/views/basedata/ImportTab.vue'
+import PeriodSetup from '@/views/wizard/PeriodSetup.vue'
 
 const router = useRouter()
 const message = useMessage()
@@ -48,11 +49,6 @@ const termOptions = [
   { label: '第一学期', value: 1 },
   { label: '第二学期', value: 2 },
 ]
-const periodTable = computed(() => (
-  semester.value?.period_tables.find((table) => table.is_default)
-  ?? semester.value?.period_tables[0]
-  ?? null
-))
 const canEditCore = computed(() => (
   // Isolated component tests mount without the router guard; the API remains the final boundary.
   !auth.user || canEditCoreRole(auth.user.roles)
@@ -283,14 +279,6 @@ async function finish() {
   }
 }
 
-function openPeriodEditor() {
-  if (!canEditCore.value || !periodTable.value) {
-    actionError.value = '当前学期还没有作息时间表，请在此步骤创建后再编辑。'
-    return
-  }
-  void router.push({ name: 'period-table-editor', params: { id: periodTable.value.id } })
-}
-
 onMounted(loadWizardData)
 </script>
 
@@ -437,25 +425,13 @@ onMounted(loadWizardData)
 
         <!-- 步骤 2：作息安排 -->
         <div v-else-if="step === 2" class="wizard-step-content">
-          <p class="wizard-step-intro">{{ '按学校实际情况设置每周上课日、节次类型和可选钟点时间。' }}</p>
-          <div v-if="periodTable" class="wizard-period-summary">
-            <strong>{{ periodTable.name }}</strong>
-            <span>
-              {{ '（共' }} {{ periodTable.periods.length }} {{ '格，每周' }}
-              {{ periodTable.num_weekdays }} {{ '天）' }}
-            </span>
-          </div>
-          <n-empty v-else :description="'当前学期还没有作息时间表'" data-testid="wizard-period-empty" />
-          <n-button
-            class="wizard-secondary-action"
-            data-testid="wizard-period-edit"
-            :disabled="!periodTable"
-            @click="openPeriodEditor"
-          >
-            <template #icon><Clock3 :size="16" aria-hidden="true" /></template>
-            {{ '打开作息时间表编辑器' }}
-          </n-button>
-          <p class="wizard-help">{{ '离开编辑器后返回本向导时会自动回到此步骤。' }}</p>
+          <p class="wizard-step-intro">{{ '根据班级生成可调整的作息建议；确认分组、节次和周视图后，一次应用到当前学期。' }}</p>
+          <PeriodSetup
+            v-if="semesterId"
+            :semester-id="semesterId"
+            :can-edit="canEditSemester"
+          />
+          <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-period-empty" />
         </div>
 
         <!-- 步骤 3：完成检查 -->
