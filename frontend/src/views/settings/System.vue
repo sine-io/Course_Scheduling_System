@@ -29,7 +29,7 @@ import type { HighRiskConfirmation } from '@/api/highRisk'
 import PagedListControls from '@/components/PagedListControls.vue'
 import { useServerPagination } from '@/composables/useServerPagination'
 import { getSmtp, saveSmtp } from '@/api/notifications'
-import { resetWizard } from '@/api/wizard'
+import { reopenWizard } from '@/api/wizard'
 import { useAuthStore } from '@/stores/auth'
 import { useWizardStore } from '@/stores/wizard'
 import './settings-workspace.css'
@@ -645,9 +645,9 @@ async function onResetWizard() {
   if (resettingWizard.value) return
   resettingWizard.value = true
   try {
-    await resetWizard()
+    await reopenWizard()
     await wizard.fetch()
-    message.success('设置向导已重新启动')
+    message.success('已打开当前学期的设置检查')
     await router.push({ name: 'wizard' })
   } catch (error) {
     message.error(apiErrorMessage(error, '设置向导重启失败，请重试。'))
@@ -1049,9 +1049,9 @@ async function onResetWizard() {
     <section v-if="settingsSection === 'system'" class="settings-panel settings-danger-panel" data-testid="wizard-reset-card">
       <div class="settings-panel-heading">
         <div>
-          <p class="settings-eyebrow">{{ '重新开始' }}</p>
+          <p class="settings-eyebrow">{{ '当前学期补全' }}</p>
           <h2>{{ '设置向导' }}</h2>
-          <p>{{ '重新执行五步设置向导，不会删除现有数据。' }}</p>
+          <p>{{ '检查并补全当前学期，不会复制、创建或删除任何学期数据。' }}</p>
         </div>
         <RotateCcw :size="20" aria-hidden="true" />
       </div>
@@ -1060,10 +1060,10 @@ async function onResetWizard() {
           <template #trigger>
             <n-button type="warning" data-testid="reset-wizard" :loading="resettingWizard" :disabled="resettingWizard">
               <template #icon><RotateCcw :size="15" aria-hidden="true" /></template>
-              {{ '重新启动设置向导' }}
+              {{ '检查并补全当前学期' }}
             </n-button>
           </template>
-          {{ '确定重新启动设置向导吗？当前数据不会被删除。' }}
+          {{ '打开当前学期的设置检查吗？不会复制、创建或删除任何学期数据。' }}
         </n-popconfirm>
       </div>
     </section>

@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { NDatePicker, NMessageProvider } from 'naive-ui'
+import { NCheckbox, NDatePicker, NMessageProvider } from 'naive-ui'
 import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   switchSemesterContext: vi.fn(),
   getWizardState: vi.fn(),
   updateWizardState: vi.fn(),
+  getSetupCheck: vi.fn(),
+  completeWizard: vi.fn(),
   saveSchoolSettings: vi.fn(),
 }))
 
@@ -29,6 +31,8 @@ vi.mock('@/api/semesters', () => ({
 vi.mock('@/api/wizard', () => ({
   getWizardState: mocks.getWizardState,
   updateWizardState: mocks.updateWizardState,
+  getSetupCheck: mocks.getSetupCheck,
+  completeWizard: mocks.completeWizard,
 }))
 vi.mock('@/api/assignments', () => ({
   saveSchoolSettings: mocks.saveSchoolSettings,
@@ -36,11 +40,36 @@ vi.mock('@/api/assignments', () => ({
 
 const baseState: WizardState = {
   current_step: 0,
+  resume_step: 0,
   completed: false,
   paused: false,
   semester_id: null,
   total_steps: 4,
   has_semesters: false,
+}
+const blockedCheck = {
+  semester_id: 8,
+  can_complete: false,
+  first_incomplete_step: 1,
+  blockers: [
+    { code: 'subjects_missing', message: '至少需要录入 1 个科目', step: 1 },
+    { code: 'regular_period_missing', message: '至少需要配置 1 节常规课', step: 2 },
+  ],
+  warnings: [
+    { code: 'rooms_missing', message: '尚未录入教室或场地，可稍后补充', step: 1 },
+  ],
+  summary: { subjects: 0, teachers: 1, classes: 1, rooms: 0 },
+}
+const readyCheck = {
+  semester_id: 8,
+  can_complete: true,
+  first_incomplete_step: 3,
+  blockers: [],
+  warnings: [
+    { code: 'rooms_missing', message: '尚未录入教室或场地，可稍后补充', step: 1 },
+    { code: 'special_dates_missing', message: '尚未登记停课或补课等特殊日期', step: 0 },
+  ],
+  summary: { subjects: 3, teachers: 4, classes: 2, rooms: 0 },
 }
 const semester = {
   id: 8,
@@ -62,6 +91,8 @@ function makeRouter() {
       { path: '/', name: 'dashboard', component: { template: '<main>仪表盘</main>' } },
       { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main />' } },
       { path: '/settings/period-tables/:id', name: 'period-table-editor', component: { template: '<main />' } },
+      { path: '/settings/calendar', name: 'calendar', component: { template: '<main />' } },
+      { path: '/settings/accounts', name: 'account-permissions', component: { template: '<main />' } },
     ],
   })
 }
@@ -109,8 +140,11 @@ describe('Wizard', () => {
     mocks.updateWizardState.mockImplementation((body: Record<string, unknown>) => Promise.resolve({
       ...baseState,
       ...body,
+      resume_step: typeof body.current_step === 'number' ? body.current_step : baseState.resume_step,
       semester_id: body.semester_id ?? baseState.semester_id,
     }))
+    mocks.getSetupCheck.mockResolvedValue({ ...blockedCheck })
+    mocks.completeWizard.mockResolvedValue({ ...baseState, current_step: 3, resume_step: 3, completed: true, semester_id: semester.id })
     mocks.getSemester.mockResolvedValue(semester)
     mocks.createSemester.mockResolvedValue(semester)
     mocks.getSemesterContext.mockResolvedValue({ current_semester: null, revision: 0, can_switch: true })
@@ -188,10 +222,23 @@ describe('Wizard', () => {
   it('教务主任只读查看向导', async () => {
     const { wrapper } = await mountWizard(baseState, ['director'])
     expect(wrapper.get('[data-testid="wizard-readonly"]').text()).toContain('只能查看')
-    expect(wrapper.get('[data-testid="wizard-next"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="wizard-next"]').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('[data-testid="wizard-school-name"] input').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('基础数据')
     expect(mocks.updateWizardState).not.toHaveBeenCalled()
+  })
+
+  it('教务主任可以查看完成检查但不能提交', async () => {
+    const { wrapper } = await mountWizard(
+      { ...baseState, current_step: 3, semester_id: semester.id },
+      ['director'],
+    )
+
+    expect(wrapper.get('[data-testid="wizard-blockers"]').text()).toContain('至少需要录入 1 个科目')
+    expect(wrapper.get('[data-testid="wizard-finish"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="wizard-finish"]').trigger('click')
+    expect(mocks.completeWizard).not.toHaveBeenCalled()
   })
 
   it('保存并退出后回到工作台，重新打开恢复最近步骤', async () => {
@@ -206,6 +253,16 @@ describe('Wizard', () => {
     })
   })
 
+  it('退出后再次进入定位到首个未完成步骤，而不是最近点过的步骤', async () => {
+    mocks.getSetupCheck.mockResolvedValue({ ...blockedCheck, first_incomplete_step: 1 })
+    const { wrapper } = await mountWizard({
+      ...baseState, current_step: 2, resume_step: 1, paused: true, semester_id: semester.id,
+    })
+
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('基础数据')
+    expect(mocks.updateWizardState).toHaveBeenCalledWith({ current_step: 1, paused: false })
+  })
+
   it('第三步直接显示可调整的作息配置，而不是跳转旧编辑器', async () => {
     const { wrapper } = await mountWizard({ ...baseState, current_step: 2, semester_id: semester.id })
 
@@ -213,5 +270,31 @@ describe('Wizard', () => {
     expect(wrapper.get('[data-testid="period-setup-stub"]')).toBeTruthy()
     expect(wrapper.text()).toContain('根据班级生成可调整的作息建议')
     expect(wrapper.find('[data-testid="wizard-period-edit"]').exists()).toBe(false)
+  })
+
+  it('完成检查列出阻断项并提供返回步骤入口', async () => {
+    const { wrapper } = await mountWizard({ ...baseState, current_step: 3, semester_id: semester.id })
+
+    expect(wrapper.get('[data-testid="wizard-blockers"]').text()).toContain('至少需要录入 1 个科目')
+    expect(wrapper.get('[data-testid="wizard-finish"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="wizard-blockers"] .n-button').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('基础数据')
+  })
+
+  it('只有提醒项时要求明确确认，确认后走专用完成接口', async () => {
+    mocks.getSetupCheck.mockResolvedValue({ ...readyCheck })
+    const { router, wrapper } = await mountWizard({ ...baseState, current_step: 3, semester_id: semester.id })
+
+    expect(wrapper.get('[data-testid="wizard-warnings"]').text()).toContain('尚未录入教室')
+    expect(wrapper.get('[data-testid="wizard-finish"]').attributes('disabled')).toBeDefined()
+    await wrapper.findComponent(NCheckbox).vm.$emit('update:checked', true)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="wizard-finish"]').attributes('disabled')).toBeUndefined()
+    await wrapper.get('[data-testid="wizard-finish"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.completeWizard).toHaveBeenCalledWith(semester.id, true)
+    expect(router.currentRoute.value.name).toBe('assignments')
   })
 })

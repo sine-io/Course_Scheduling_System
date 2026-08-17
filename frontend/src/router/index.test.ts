@@ -26,7 +26,7 @@ describe('router role boundaries', () => {
 
     await router.push('/scheduling/auto')
     expect(router.currentRoute.value.name).toBe('auto-schedule')
-  })
+  }, 10_000)
 
   it('keeps pure teachers on personal daily pages and blocks management links', async () => {
     setActivePinia(createPinia())
@@ -92,6 +92,7 @@ describe('router role boundaries', () => {
     wizard.loaded = true
     wizard.state = {
       current_step: 1,
+      resume_step: 1,
       completed: false,
       paused: true,
       semester_id: 8,

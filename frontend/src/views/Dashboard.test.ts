@@ -87,6 +87,42 @@ describe('Dashboard', () => {
     expect(wrapper.get('[data-testid="dash-shortcut-daily-board"]')).toBeTruthy()
   })
 
+  it('当前学期设置未完成时显示首个未完成步骤与继续入口', async () => {
+    const semester = {
+      id: 8, academic_year: 2042, term: 1, label: '2042-2043学年第一学期',
+      status: 'preparing', readiness: 'draft', start_date: '2042-09-01', end_date: '2043-01-20',
+    }
+    vi.mocked(fetch).mockImplementation((url) => {
+      const path = String(url)
+      if (path.includes('/semester-context')) {
+        return Promise.resolve(jsonResponse({
+          current_semester: semester, revision: 1, can_switch: false,
+        })) as never
+      }
+      if (path.includes('/wizard/state')) {
+        return Promise.resolve(jsonResponse({
+          current_step: 2, resume_step: 1, completed: false, paused: true,
+          semester_id: semester.id, total_steps: 4, has_semesters: true,
+        })) as never
+      }
+      if (path.includes('/summary')) {
+        return Promise.resolve(jsonResponse({ subjects: 0, teachers: 1, classes: 1, rooms: 0 })) as never
+      }
+      return Promise.resolve(jsonResponse({
+        date: '2042-09-02', weekday: 2, school_name: '测试学校',
+        semester_label: semester.label, entries: [],
+      })) as never
+    })
+
+    const wrapper = mount(Dashboard, {
+      global: { plugins: [makePinia(), makeRouter()] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="dash-setup-resume"]').text()).toContain('下一步：基础数据')
+    expect(wrapper.get('[data-testid="dash-setup-resume"] a[href="/wizard"]').text()).toContain('继续设置')
+  })
+
   it('教务主任首页不请求已移除的首次成功状态', async () => {
     const wrapper = mount(Dashboard, {
       global: { plugins: [makePinia(['director']), makeRouter()] },

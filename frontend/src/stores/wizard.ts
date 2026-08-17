@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { getWizardState, updateWizardState } from '@/api/wizard'
+import { completeWizard, getWizardState, updateWizardState } from '@/api/wizard'
 import type { WizardState } from '@/api/wizard'
 
 export const useWizardStore = defineStore('wizard', () => {
@@ -30,5 +30,15 @@ export const useWizardStore = defineStore('wizard', () => {
     }
   }
 
-  return { state, loaded, error, fetch, patch }
+  async function complete(semesterId: number, acknowledgeWarnings: boolean): Promise<void> {
+    error.value = null
+    try {
+      state.value = await completeWizard(semesterId, acknowledgeWarnings)
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : '无法完成基础设置'
+      throw e
+    }
+  }
+
+  return { state, loaded, error, fetch, patch, complete }
 })

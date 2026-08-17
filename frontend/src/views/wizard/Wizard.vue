@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  NAlert, NButton, NDatePicker, NEmpty, NInput, NInputNumber, NResult, NSelect,
+  NAlert, NButton, NCheckbox, NDatePicker, NEmpty, NInput, NInputNumber, NSelect,
   NSpin, NStatistic, NStep, NSteps, useMessage,
 } from 'naive-ui'
 import {
@@ -12,8 +12,8 @@ import { apiErrorMessage } from '@/api/client'
 import { saveSchoolSettings } from '@/api/assignments'
 import { createSemester, getSemester, updateSemester } from '@/api/semesters'
 import type { Semester } from '@/api/semesters'
-import { getSemesterSummary } from '@/api/wizard'
-import type { SemesterSummary } from '@/api/wizard'
+import { getSetupCheck } from '@/api/wizard'
+import type { SetupCheck, SetupCheckItem } from '@/api/wizard'
 import { canEditCore as canEditCoreRole } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useWizardStore } from '@/stores/wizard'
@@ -37,18 +37,20 @@ const startDate = ref<string | null>(null)
 const endDate = ref<string | null>(null)
 const semesterId = ref<number | null>(null)
 const semester = ref<Semester | null>(null)
-const summary = ref<SemesterSummary | null>(null)
+const setupCheck = ref<SetupCheck | null>(null)
 const busy = ref(false)
 const initialLoading = ref(true)
 const initialError = ref<string | null>(null)
 const actionError = ref<string | null>(null)
-const summaryError = ref<string | null>(null)
-const summaryLoading = ref(false)
+const checkError = ref<string | null>(null)
+const checkLoading = ref(false)
+const warningsAcknowledged = ref(false)
 
 const termOptions = [
   { label: '第一学期', value: 1 },
   { label: '第二学期', value: 2 },
 ]
+const stepNames = ['学校与学期', '基础数据', '作息安排', '完成检查']
 const canEditCore = computed(() => (
   // Isolated component tests mount without the router guard; the API remains the final boundary.
   !auth.user || canEditCoreRole(auth.user.roles)
@@ -58,6 +60,27 @@ const canEditSemester = computed(() => (
   canEditCore.value
   && (!semesterContext.authoritative || semesterContext.isCurrent(semesterId.value))
 ))
+const finishDisabled = computed(() => (
+  busy.value
+  || !canEditCore.value
+  || !setupCheck.value
+  || setupCheck.value.blockers.length > 0
+  || (setupCheck.value.warnings.length > 0 && !warningsAcknowledged.value)
+))
+
+function stepStatus(index: number): 'wait' | 'process' | 'finish' | 'error' {
+  if (index === 3) {
+    if (wizard.state?.completed) return 'finish'
+    return step.value === index ? 'process' : 'wait'
+  }
+  if (!semesterId.value || !setupCheck.value) {
+    return step.value === index ? 'process' : 'wait'
+  }
+  if (setupCheck.value.blockers.some((item) => item.step === index)) {
+    return step.value === index ? 'process' : 'error'
+  }
+  return 'finish'
+}
 
 function syncFormFromSemester(value: Semester) {
   year.value = value.academic_year
@@ -66,27 +89,36 @@ function syncFormFromSemester(value: Semester) {
   endDate.value = value.end_date
 }
 
-async function loadSummary(id: number) {
-  summaryLoading.value = true
-  summaryError.value = null
-  summary.value = null
+async function loadCheck(id: number) {
+  checkLoading.value = true
+  checkError.value = null
+  warningsAcknowledged.value = false
   try {
-    summary.value = await getSemesterSummary(id)
+    setupCheck.value = await getSetupCheck(id)
   } catch (error) {
-    summary.value = null
-    summaryError.value = apiErrorMessage(error, '无法读取当前学期的数据摘要')
+    setupCheck.value = null
+    checkError.value = apiErrorMessage(error, '无法读取当前学期的完成检查')
     throw error
   } finally {
-    summaryLoading.value = false
+    checkLoading.value = false
   }
 }
 
-async function retrySummary() {
+async function retryCheck() {
   if (!semesterId.value) return
   try {
-    await loadSummary(semesterId.value)
+    await loadCheck(semesterId.value)
   } catch {
-    // loadSummary exposes the API error inline for the next attempt.
+    // loadCheck exposes the API error inline for the next attempt.
+  }
+}
+
+async function refreshCheck() {
+  if (!semesterId.value) return
+  try {
+    await loadCheck(semesterId.value)
+  } catch {
+    // The completion step exposes the retry action.
   }
 }
 
@@ -99,16 +131,14 @@ async function syncWizardState() {
   step.value = Math.max(0, Math.min(wizard.state?.current_step ?? 0, 3))
   semesterId.value = wizard.state?.semester_id ?? null
   semester.value = null
-  summary.value = null
-  summaryError.value = null
+  setupCheck.value = null
+  checkError.value = null
   if (semesterId.value) {
     await loadSemester(semesterId.value)
-    if (step.value === 3) {
-      try {
-        await loadSummary(semesterId.value)
-      } catch {
-        // The completion step owns the inline retry state.
-      }
+    try {
+      await loadCheck(semesterId.value)
+    } catch {
+      // The completion step owns the inline retry state.
     }
   }
 }
@@ -122,7 +152,12 @@ async function loadWizardData() {
     schoolName.value = appConfig.config.school_name
     if (!wizard.loaded || wizard.error) await wizard.fetch()
     if (wizard.error && !wizard.state) throw new Error(wizard.error)
-    if (canEditCore.value && wizard.state?.paused) await wizard.patch({ paused: false })
+    if (canEditCore.value && wizard.state?.paused) {
+      await wizard.patch({
+        current_step: wizard.state.resume_step,
+        paused: false,
+      })
+    }
     await semesterContext.load()
     await syncWizardState()
   } catch (error) {
@@ -179,7 +214,11 @@ async function persistSchoolName(): Promise<void> {
 }
 
 async function goNext() {
-  if (!canEditCore.value || busy.value) return
+  if (busy.value) return
+  if (!canEditCore.value) {
+    step.value = Math.min(step.value + 1, 3)
+    return
+  }
   actionError.value = null
   if (step.value === 0 && !validateFirstStep()) return
 
@@ -222,13 +261,7 @@ async function goNext() {
       step.value = previousStep
       return
     }
-    if (nextStep === 3 && semesterId.value) {
-      try {
-        await loadSummary(semesterId.value)
-      } catch {
-        // The completion step owns the inline retry state.
-      }
-    }
+    await refreshCheck()
   } catch (error) {
     step.value = previousStep
     if (!actionError.value) {
@@ -240,7 +273,11 @@ async function goNext() {
 }
 
 async function goPrev() {
-  if (!canEditCore.value || busy.value || step.value === 0) return
+  if (busy.value || step.value === 0) return
+  if (!canEditCore.value) {
+    step.value = Math.max(step.value - 1, 0)
+    return
+  }
   actionError.value = null
   const previousStep = step.value
   const nextStep = Math.max(step.value - 1, 0)
@@ -248,6 +285,39 @@ async function goPrev() {
   busy.value = true
   if (!await persistStep(nextStep)) step.value = previousStep
   busy.value = false
+}
+
+async function goToStep(targetStep: number) {
+  const nextStep = Math.max(0, Math.min(targetStep, 2))
+  actionError.value = null
+  if (!canEditCore.value) {
+    step.value = nextStep
+    return
+  }
+  if (busy.value) return
+  const previousStep = step.value
+  step.value = nextStep
+  busy.value = true
+  if (!await persistStep(nextStep)) step.value = previousStep
+  busy.value = false
+}
+
+function checkActionLabel(item: SetupCheckItem): string {
+  if (item.code === 'special_dates_missing') return '前往校历设置'
+  if (item.code === 'teacher_accounts_missing' && auth.hasRole('admin')) return '前往账号管理'
+  return `返回${stepNames[item.step]}`
+}
+
+async function openCheckItem(item: SetupCheckItem) {
+  if (item.code === 'special_dates_missing') {
+    await router.push({ name: 'calendar' })
+    return
+  }
+  if (item.code === 'teacher_accounts_missing' && auth.hasRole('admin')) {
+    await router.push({ name: 'account-permissions' })
+    return
+  }
+  await goToStep(item.step)
 }
 
 async function saveAndExit() {
@@ -265,15 +335,16 @@ async function saveAndExit() {
 }
 
 async function finish() {
-  if (!canEditCore.value || busy.value) return
+  if (!semesterId.value || finishDisabled.value) return
   busy.value = true
   actionError.value = null
   try {
-    await wizard.patch({ completed: true })
-    message.success('基础设置已完成')
+    await wizard.complete(semesterId.value, warningsAcknowledged.value)
+    message.success('基础设置已完成，可以开始创建教学任务')
     await router.push({ name: 'assignments' })
   } catch (error) {
     actionError.value = apiErrorMessage(error, '无法完成设置，请稍后重试。')
+    await refreshCheck()
   } finally {
     busy.value = false
   }
@@ -325,10 +396,12 @@ onMounted(loadWizardData)
 
       <nav class="wizard-progress" aria-label="设置步骤">
         <n-steps :current="step + 1" size="small">
-          <n-step :title="'学校与学期'" />
-          <n-step :title="'基础数据'" />
-          <n-step :title="'作息安排'" />
-          <n-step :title="'完成检查'" />
+          <n-step
+            v-for="(name, index) in stepNames"
+            :key="name"
+            :title="name"
+            :status="stepStatus(index)"
+          />
         </n-steps>
       </nav>
 
@@ -343,7 +416,7 @@ onMounted(loadWizardData)
           <div>
             <p class="wizard-step-count">{{ `第 ${step + 1} 步 / 4` }}</p>
             <h2 id="wizard-step-title" data-testid="wizard-step-title">
-              {{ ['学校与学期', '基础数据', '作息安排', '完成检查'][step] }}
+              {{ stepNames[step] }}
             </h2>
           </div>
         </div>
@@ -362,7 +435,7 @@ onMounted(loadWizardData)
               <n-input
                 v-model:value="schoolName"
                 data-testid="wizard-school-name"
-                :disabled="!canEditSchool || !!semesterId"
+                :disabled="!canEditSchool"
                 maxlength="64"
               />
               <small v-if="!canEditSchool">{{ '仅系统管理员可以修改学校名称。' }}</small>
@@ -414,11 +487,12 @@ onMounted(loadWizardData)
 
         <!-- 步骤 1：基础数据 -->
         <div v-else-if="step === 1" class="wizard-step-content">
-          <p class="wizard-step-intro">{{ '录入排课需要的科目、教师、班级和教室；下一阶段将提供组合导入与向导内手工模式。' }}</p>
+          <p class="wizard-step-intro">{{ '使用组合工作簿或按顺序手工录入科目、教师、班级和教室。' }}</p>
           <ImportTab
             v-if="semesterId"
             :semester-id="semesterId"
             :can-edit="canEditSemester"
+            @imported="refreshCheck"
           />
           <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-import-empty" />
         </div>
@@ -430,36 +504,98 @@ onMounted(loadWizardData)
             v-if="semesterId"
             :semester-id="semesterId"
             :can-edit="canEditSemester"
+            @applied="refreshCheck"
           />
           <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-period-empty" />
         </div>
 
         <!-- 步骤 3：完成检查 -->
         <div v-else class="wizard-step-content wizard-finish-content">
-          <section v-if="summaryLoading" class="wizard-state" data-testid="wizard-summary-loading" role="status" aria-live="polite">
+          <section v-if="checkLoading" class="wizard-state" data-testid="wizard-check-loading" role="status" aria-live="polite">
             <n-spin size="small" />
-            <strong>{{ '正在读取当前学期的数据摘要' }}</strong>
+            <strong>{{ '正在检查当前学期的基础设置' }}</strong>
           </section>
-          <section v-else-if="summaryError" class="wizard-state wizard-error" data-testid="wizard-summary-error" role="alert">
+          <section v-else-if="checkError" class="wizard-state wizard-error" data-testid="wizard-check-error" role="alert">
             <CircleAlert :size="21" aria-hidden="true" />
-            <strong>{{ summaryError }}</strong>
-            <n-button type="primary" @click="retrySummary">{{ '重新读取摘要' }}</n-button>
+            <strong>{{ checkError }}</strong>
+            <n-button type="primary" @click="retryCheck">{{ '重新检查' }}</n-button>
           </section>
-          <n-result v-else status="success" :title="'基础设置即将完成'" :description="'以下是目前已创建的数据摘要'">
-            <template #footer>
-              <div class="wizard-summary-grid">
-                <n-statistic :label="'科目'" :value="summary?.subjects ?? 0" />
-                <n-statistic :label="'教师'" :value="summary?.teachers ?? 0" />
-                <n-statistic :label="'班级'" :value="summary?.classes ?? 0" />
-                <n-statistic :label="'教室/场地'" :value="summary?.rooms ?? 0" />
+          <div v-else-if="setupCheck" class="wizard-check" data-testid="wizard-check">
+            <div
+              class="wizard-check-lead"
+              :data-status="setupCheck.blockers.length ? 'blocked' : 'ready'"
+            >
+              <span class="wizard-check-lead-icon" aria-hidden="true">
+                <CircleAlert v-if="setupCheck.blockers.length" :size="20" />
+                <CheckCircle2 v-else :size="20" />
+              </span>
+              <div>
+                <strong>
+                  {{ setupCheck.blockers.length
+                    ? `还有 ${setupCheck.blockers.length} 项必须完成`
+                    : '已满足基础设置的必要条件' }}
+                </strong>
+                <p>{{ '完成只表示可以开始创建教学任务，不代表已经通过排课就绪检查。' }}</p>
               </div>
-            </template>
-          </n-result>
+            </div>
+
+            <div class="wizard-summary-grid" aria-label="当前学期数据摘要">
+              <n-statistic :label="'科目'" :value="setupCheck.summary.subjects" />
+              <n-statistic :label="'教师'" :value="setupCheck.summary.teachers" />
+              <n-statistic :label="'班级'" :value="setupCheck.summary.classes" />
+              <n-statistic :label="'教室/场地'" :value="setupCheck.summary.rooms" />
+            </div>
+
+            <section v-if="setupCheck.blockers.length" class="wizard-check-section" data-testid="wizard-blockers">
+              <div class="wizard-check-section-heading">
+                <h3>{{ '必须完成' }}</h3>
+                <span>{{ '处理后才能完成基础设置' }}</span>
+              </div>
+              <ul class="wizard-check-list">
+                <li v-for="item in setupCheck.blockers" :key="item.code">
+                  <span class="wizard-check-marker wizard-check-marker-blocker" aria-hidden="true" />
+                  <span>{{ item.message }}</span>
+                  <n-button text type="primary" @click="openCheckItem(item)">
+                    {{ checkActionLabel(item) }}
+                  </n-button>
+                </li>
+              </ul>
+            </section>
+
+            <section v-if="setupCheck.warnings.length" class="wizard-check-section" data-testid="wizard-warnings">
+              <div class="wizard-check-section-heading">
+                <h3>{{ '建议补充' }}</h3>
+                <span>{{ '不阻止创建教学任务' }}</span>
+              </div>
+              <ul class="wizard-check-list">
+                <li v-for="item in setupCheck.warnings" :key="item.code">
+                  <span class="wizard-check-marker wizard-check-marker-warning" aria-hidden="true" />
+                  <span>{{ item.message }}</span>
+                  <n-button text type="primary" @click="openCheckItem(item)">
+                    {{ checkActionLabel(item) }}
+                  </n-button>
+                </li>
+              </ul>
+              <n-checkbox
+                v-if="!setupCheck.blockers.length"
+                v-model:checked="warningsAcknowledged"
+                data-testid="wizard-warning-ack"
+                class="wizard-warning-ack"
+                :disabled="!canEditCore"
+              >
+                {{ '我已了解这些建议项，并选择稍后补充' }}
+              </n-checkbox>
+            </section>
+
+            <n-alert v-if="!setupCheck.blockers.length && !setupCheck.warnings.length" type="success">
+              {{ '基础设置已完整，可以进入教学任务管理。' }}
+            </n-alert>
+          </div>
         </div>
       </section>
 
       <footer class="wizard-actions">
-        <n-button data-testid="wizard-prev" :disabled="step === 0 || busy || !canEditCore" @click="goPrev">
+        <n-button data-testid="wizard-prev" :disabled="step === 0 || busy" @click="goPrev">
           <template #icon><ChevronLeft :size="16" aria-hidden="true" /></template>
           {{ '上一步' }}
         </n-button>
@@ -468,7 +604,7 @@ onMounted(loadWizardData)
           data-testid="wizard-next"
           type="primary"
           :loading="busy"
-          :disabled="busy || !canEditCore"
+          :disabled="busy"
           @click="goNext"
         >
           {{ '下一步' }}
@@ -476,7 +612,7 @@ onMounted(loadWizardData)
         </n-button>
         <n-button
           v-else data-testid="wizard-finish" type="primary" :loading="busy"
-          :disabled="busy || !!summaryError || !summary || !canEditCore" @click="finish"
+          :disabled="finishDisabled" @click="finish"
         >
           {{ '完成，前往教学任务管理' }}
           <template #icon><ChevronRight :size="16" aria-hidden="true" /></template>
@@ -577,8 +713,30 @@ onMounted(loadWizardData)
 .wizard-period-summary span { color: var(--app-text-muted); font-size: 13px; }
 .wizard-secondary-action { min-height: 40px; }
 .wizard-help { margin: 14px 0 0; color: var(--app-text-faint); font-size: 12px; line-height: 1.55; }
-.wizard-finish-content :deep(.n-result) { padding: 8px 0 0; }
-.wizard-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
+.wizard-check { display: grid; gap: 22px; }
+.wizard-check-lead { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); }
+.wizard-check-lead[data-status='blocked'] { border-color: var(--app-danger); background: var(--app-danger-soft); }
+.wizard-check-lead[data-status='ready'] { border-color: var(--app-success); background: var(--app-success-soft); }
+.wizard-check-lead-icon { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; }
+.wizard-check-lead[data-status='blocked'] .wizard-check-lead-icon { color: var(--app-danger); }
+.wizard-check-lead[data-status='ready'] .wizard-check-lead-icon { color: var(--app-success); }
+.wizard-check-lead strong { font-size: 15px; }
+.wizard-check-lead p { margin: 4px 0 0; color: var(--app-text-muted); font-size: 12px; line-height: 1.55; }
+.wizard-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.wizard-summary-grid :deep(.n-statistic) { min-width: 0; padding: 12px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface-muted); }
+.wizard-summary-grid :deep(.n-statistic-value__content) { font-size: 22px; font-weight: 700; }
+.wizard-check-section { display: grid; gap: 10px; }
+.wizard-check-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wizard-check-section-heading h3 { margin: 0; font-size: 15px; }
+.wizard-check-section-heading span { color: var(--app-text-faint); font-size: 12px; }
+.wizard-check-list { display: grid; margin: 0; padding: 0; border-top: 1px solid var(--app-border); list-style: none; }
+.wizard-check-list li { display: grid; min-width: 0; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--app-border); }
+.wizard-check-list li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.wizard-check-marker { width: 8px; height: 8px; border-radius: 50%; }
+.wizard-check-marker-blocker { background: var(--app-danger); }
+.wizard-check-marker-warning { background: var(--app-warning); }
+.wizard-warning-ack { align-items: flex-start; padding: 12px; border: 1px solid var(--app-warning); border-radius: var(--app-radius-sm); background: var(--app-warning-soft); }
+.wizard-warning-ack :deep(.n-checkbox__label) { white-space: normal; line-height: 1.5; }
 .wizard-actions { justify-content: space-between; gap: 14px; margin-top: 18px; }
 .wizard-actions :deep(.n-button) { min-height: 40px; font-weight: 650; }
 
@@ -618,6 +776,9 @@ onMounted(loadWizardData)
   .wizard-semester-fields,
   .wizard-semester-fields-wide { grid-template-columns: 1fr; }
   .wizard-field-wide { grid-column: auto; }
+  .wizard-check-section-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .wizard-check-list li { grid-template-columns: 10px minmax(0, 1fr); }
+  .wizard-check-list li :deep(.n-button) { grid-column: 2; justify-self: start; }
   .wizard-actions { align-items: stretch; }
   .wizard-actions :deep(.n-button) { flex: 1; }
 }

@@ -26,7 +26,7 @@ const notificationMocks = vi.hoisted(() => ({
   saveSmtp: vi.fn(),
 }))
 const wizardMocks = vi.hoisted(() => ({
-  resetWizard: vi.fn(),
+  reopenWizard: vi.fn(),
   getWizardState: vi.fn(),
 }))
 const accountMocks = vi.hoisted(() => ({
@@ -119,10 +119,10 @@ describe('System', () => {
     assignmentMocks.getSchedulingSettings.mockResolvedValue(adminSettings.scheduling)
     assignmentMocks.getSchoolSettings.mockResolvedValue(adminSettings.school)
     notificationMocks.getSmtp.mockResolvedValue(adminSettings.smtp)
-    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, completed: true, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
+    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, resume_step: 0, completed: true, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
     backupMocks.createBackup.mockResolvedValue(backup)
     backupMocks.deleteBackup.mockResolvedValue({ deleted: backup.name })
-    wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
+    wizardMocks.reopenWizard.mockResolvedValue({ current_step: 0, resume_step: 0, completed: false, paused: false, semester_id: 8, total_steps: 4, has_semesters: true })
   })
 
   it('非管理员保持原有可见性，只显示设置向导且不读取管理员接口', async () => {
@@ -132,6 +132,8 @@ describe('System', () => {
     expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="backup-card"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="wizard-reset-card"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="wizard-reset-card"]').text()).toContain('检查并补全当前学期')
+    expect(wrapper.get('[data-testid="wizard-reset-card"]').text()).not.toContain('重新启动设置向导')
     expect(notificationMocks.getSmtp).not.toHaveBeenCalled()
     expect(backupMocks.listBackups).not.toHaveBeenCalled()
   })
@@ -279,13 +281,13 @@ describe('System', () => {
     expect(auditMocks.listAuditLogs).toHaveBeenCalledTimes(2)
   })
 
-  it('重启向导进行中时重复确认只发送一次请求', async () => {
+  it('检查当前学期进行中时重复确认只发送一次请求', async () => {
     const reset = (() => {
       let resolve!: (value: unknown) => void
       const promise = new Promise((done) => { resolve = done })
       return { promise, resolve }
     })()
-    wizardMocks.resetWizard.mockReturnValue(reset.promise)
+    wizardMocks.reopenWizard.mockReturnValue(reset.promise)
     const wrapper = await mountSystem('scheduler')
     await flushPromises()
 
@@ -293,9 +295,9 @@ describe('System', () => {
     await confirm.trigger('click')
     await confirm.trigger('click')
 
-    expect(wizardMocks.resetWizard).toHaveBeenCalledTimes(1)
+    expect(wizardMocks.reopenWizard).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="reset-wizard"]').attributes('disabled')).toBeDefined()
-    reset.resolve({ current_step: 0, completed: false, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
+    reset.resolve({ current_step: 0, resume_step: 0, completed: false, paused: false, semester_id: 8, total_steps: 4, has_semesters: true })
     await flushPromises()
   })
 
