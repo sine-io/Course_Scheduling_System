@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import {
-  browserApiRequest,
   createTestSemester,
   deleteSemesterByYearTerm,
   E2E_DIRECTOR_PASS,
@@ -49,15 +48,7 @@ test('发布入口统一经过检查确认，取消不发布且尝试均可审�
     course_assignment_id: assignment.id, weekday: 1, period_no: 2, span: 1,
   })
 
-  expect(await browserApiRequest(page, 'PUT', '/api/navigation-preference', {
-    fixed: ['versions'], recent: [],
-  })).toBe(200)
-  await page.evaluate(() => window.localStorage.clear())
-  await page.reload()
-
-  const commonEntry = page.locator('.app-nav-common [data-nav-key="versions"]')
-  await expect(commonEntry).toBeVisible()
-  await commonEntry.click()
+  await page.goto('/scheduling/versions')
   await expect(page).toHaveURL(/\/scheduling\/versions$/)
 
   const row = page.locator('[data-testid="v-row-可核验发布"]')
@@ -104,9 +95,10 @@ test('发布入口统一经过检查确认，取消不发布且尝试均可审�
 
   await page.request.post('/api/auth/logout')
   await login(page, ADMIN_USER, ADMIN_PASS)
-  const logs = await (await page.request.get(
-    '/api/audit-logs?action=publish_timetable&limit=100',
-  )).json() as Array<Record<string, unknown>>
+  const auditPage = await (await page.request.get(
+    '/api/audit-logs?action=publish_timetable&page_size=100',
+  )).json() as { items: Array<Record<string, unknown>> }
+  const logs = auditPage.items
   const attempts = logs.filter((log) => log.target_id === timetable.id)
   expect(attempts).toHaveLength(3)
   expect(attempts.map((log) => [log.username, log.result, log.reason])).toEqual([

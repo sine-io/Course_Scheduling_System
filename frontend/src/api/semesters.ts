@@ -31,7 +31,6 @@ export interface SemesterListItem {
   label: string
   status: 'preparing' | 'active' | 'archived'
   readiness: 'draft' | 'ready'
-  is_demo: boolean
   start_date: string | null
   end_date: string | null
   is_current?: boolean

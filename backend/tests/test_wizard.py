@@ -3,7 +3,6 @@
 import pytest
 
 from app.models.user import Role
-from app.models.wizard import SINGLETON_ID, WizardState
 from tests.conftest import make_user
 
 PW = "password123"
@@ -26,123 +25,29 @@ def test_initial_state_is_step0_incomplete(scheduler):
     assert body["completed"] is False
     assert body["has_semesters"] is False
     assert body["total_steps"] == 5
-    assert body["route"] is None
+    assert "route" not in body
 
 
-def test_management_user_can_select_and_resume_formal_route(scheduler):
-    """路线选择属于单校引导状态，刷新/重新登录后仍能回到原步骤。"""
-    route = scheduler.put("/api/onboarding/route", json={"route": "formal"})
-    assert route.status_code == 200, route.text
-    assert route.json()["route"] == "formal"
-
-    scheduler.patch("/api/wizard/state", json={"current_step": 2})
-    scheduler.post("/api/auth/logout")
-    scheduler.post("/api/auth/login", json={"username": "s", "password": PW})
-
-    state = scheduler.get("/api/wizard/state").json()
-    route = scheduler.get("/api/onboarding/route").json()
-    assert state["current_step"] == 2
-    assert state["route"] == "formal"
-    assert route["resume_step"] == 2
-    assert route["can_reselect"] is True
-
-
-def test_demo_route_requires_an_explicit_choice_and_stays_isolated(scheduler):
-    """示例路线只能在明确选择后加载，且正式路线切换不会覆盖示例上下文。"""
-    denied = scheduler.post("/api/demo-data")
-    assert denied.status_code == 403
-
-    selected = scheduler.put("/api/onboarding/route", json={"route": "demo"})
-    assert selected.status_code == 200, selected.text
-    loaded = scheduler.post("/api/demo-data")
-    assert loaded.status_code == 201, loaded.text
-    demo_id = loaded.json()["semester_id"]
-
-    status = scheduler.get("/api/onboarding/route").json()
-    assert status["route"] == "demo"
-    assert status["has_demo_semester"] is True
-    assert status["has_formal_semester"] is False
-
-    switched = scheduler.put("/api/onboarding/route", json={"route": "formal"})
-    assert switched.status_code == 200, switched.text
-    state = scheduler.get("/api/wizard/state").json()
-    assert state["route"] == "formal"
-    assert state["completed"] is False
-    assert state["current_step"] == 0
-
-    formal = scheduler.post(
-        "/api/semesters",
-        json={
-            "academic_year": 2098,
-            "term": 1,
-            "start_date": "2098-09-01",
-            "end_date": "2099-01-31",
-        },
-    )
-    assert formal.status_code == 201, formal.text
-    context = scheduler.get("/api/semester-context").json()
-    assert context["current_semester"]["id"] == formal.json()["id"]
-    assert context["current_semester"]["is_demo"] is False
-    assert scheduler.get(f"/api/semesters/{demo_id}").json()["is_demo"] is True
-
-
-def test_route_cannot_switch_from_formal_data_to_demo(scheduler):
-    formal = scheduler.post(
-        "/api/semesters",
-        json={"academic_year": 2097, "term": 1},
-    )
-    assert formal.status_code == 201, formal.text
-    selected = scheduler.put("/api/onboarding/route", json={"route": "formal"})
-    assert selected.status_code == 200, selected.text
-
-    blocked = scheduler.put("/api/onboarding/route", json={"route": "demo"})
-    assert blocked.status_code == 409
-    assert "正式" in blocked.json()["detail"]
-
-
-def test_formal_semester_takes_precedence_over_stale_demo_route(env):
-    client, db = env
-    make_user(db, "stale-route", PW, roles=[Role.scheduler])
-    assert client.post(
-        "/api/auth/login", json={"username": "stale-route", "password": PW}
-    ).status_code == 200
-    formal = client.post(
-        "/api/semesters", json={"academic_year": 2096, "term": 1}
-    )
-    assert formal.status_code == 201, formal.text
-    state = db.get(WizardState, SINGLETON_ID)
-    assert state is not None
-    state.route = "demo"
-    state.current_step = 4
-    state.completed = True
-    db.commit()
-
-    wizard = client.get("/api/wizard/state")
-    snapshot = client.get("/api/onboarding/route")
-    assert wizard.json()["route"] == "formal"
-    assert wizard.json()["current_step"] == 0
-    assert wizard.json()["completed"] is False
-    assert snapshot.json()["route"] == "formal"
-    assert snapshot.json()["resume_step"] == 0
-
-
-def test_wizard_state_rejects_demo_semester_for_formal_route(scheduler):
-    assert scheduler.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
-    demo = scheduler.post("/api/demo-data")
-    assert demo.status_code == 201, demo.text
-
-    blocked = scheduler.patch(
-        "/api/wizard/state",
-        json={"route": "formal", "semester_id": demo.json()["semester_id"]},
-    )
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"]["code"] == "wizard_route_semester_mismatch"
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("get", "/api/demo-data"),
+        ("post", "/api/demo-data"),
+        ("get", "/api/onboarding/status"),
+        ("get", "/api/onboarding/route"),
+        ("put", "/api/onboarding/route"),
+    ],
+)
+def test_removed_onboarding_endpoints_are_not_exposed(scheduler, method, path):
+    assert getattr(scheduler, method)(path).status_code == 404
 
 
 def test_progress_persists(scheduler):
     """验收②:更新步骤后再读,状态保留(模拟关浏览器后续作)。"""
     sem = scheduler.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
     scheduler.patch("/api/wizard/state", json={"current_step": 3, "semester_id": sem["id"]})
+    scheduler.post("/api/auth/logout")
+    scheduler.post("/api/auth/login", json={"username": "s", "password": PW})
     body = scheduler.get("/api/wizard/state").json()
     assert body["current_step"] == 3
     assert body["semester_id"] == sem["id"]

@@ -62,41 +62,6 @@ def test_copy_all_and_counts(populated):
     assert len(new["period_tables"]) == 1
 
 
-def test_copying_demo_switches_current_context_to_new_formal_semester(env):
-    client, db = env
-    make_user(db, "demo-copy", PW, roles=[Role.scheduler])
-    assert client.post(
-        "/api/auth/login", json={"username": "demo-copy", "password": PW}
-    ).status_code == 200
-    assert client.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
-    demo = client.post("/api/demo-data")
-    assert demo.status_code == 201, demo.text
-
-    copied = client.post(
-        f"/api/semesters/{demo.json()['semester_id']}/copy",
-        json={
-            # Copying a demo into the wizard's default current year must not
-            # collide with the isolated demo row.
-            "academic_year": 2026,
-            "term": 1,
-            "period_tables": False,
-            "subjects": False,
-            "teachers": False,
-            "rooms": False,
-            "classes": False,
-            "constraint_config": False,
-        },
-    )
-    assert copied.status_code == 201, copied.text
-    context = client.get("/api/semester-context").json()
-    assert context["current_semester"]["id"] == copied.json()["id"]
-    assert context["current_semester"]["is_demo"] is False
-    wizard = client.get("/api/wizard/state").json()
-    assert wizard["route"] == "formal"
-    assert wizard["semester_id"] == copied.json()["id"]
-    assert wizard["current_step"] == 0
-
-
 def test_copy_is_independent(populated):
     """验收:改来源学期教师不影响新学期。"""
     client, sid = populated

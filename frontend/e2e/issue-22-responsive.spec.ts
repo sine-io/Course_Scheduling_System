@@ -364,7 +364,7 @@ test('通知看板筛选确认状态并再次提醒', async ({ page }) => {
   await page.goto('/notification-board')
 
   await expect(page.getByTestId('notification-board-page')).toBeVisible()
-  await expect(page.getByRole('heading', { name: '通知确认看板', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '通知确认看板', level: 2 })).toBeVisible()
   await expect(page.getByLabel('选择工作学期')).toBeVisible()
   await expect(page.getByTestId('board-row')).toHaveCount(1)
   await expect(page.getByTestId('board-row')).toContainText('陈老师')

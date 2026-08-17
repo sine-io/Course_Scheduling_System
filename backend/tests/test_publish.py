@@ -170,7 +170,7 @@ def test_rejected_publish_attempts_have_structured_audit_records(env3):
     make_user(db, "admin1", PW, roles=[Role.admin])
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "admin1", "password": PW})
-    logs = client.get("/api/audit-logs?action=publish_timetable").json()
+    logs = client.get("/api/audit-logs?action=publish_timetable").json()["items"]
 
     assert len(logs) == 3
     by_user = {log["username"]: log for log in logs}
@@ -222,7 +222,7 @@ def test_stale_and_repeated_confirmations_are_atomic_and_audited(env3):
     make_user(db, "audit-admin", PW, roles=[Role.admin])
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "audit-admin", "password": PW})
-    logs = client.get("/api/audit-logs?action=publish_timetable").json()
+    logs = client.get("/api/audit-logs?action=publish_timetable").json()["items"]
     assert [(log["result"], log["reason"]) for log in reversed(logs)] == [
         ("rejected", "publication_check_stale"),
         ("success", ""),
@@ -456,7 +456,7 @@ def test_publish_writes_audit_log(env3):
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "admin1", "password": PW})
 
-    logs = client.get("/api/audit-logs?action=publish_timetable").json()
+    logs = client.get("/api/audit-logs?action=publish_timetable").json()["items"]
     assert len(logs) == 1
     assert logs[0]["username"] == "s"
     assert logs[0]["actor_roles"] == ["scheduler"]
@@ -479,7 +479,7 @@ def test_forced_publish_marked_in_audit(env3):
     make_user(db, "admin1", PW, roles=[Role.admin])
     client.post("/api/auth/logout")
     client.post("/api/auth/login", json={"username": "admin1", "password": PW})
-    logs = client.get("/api/audit-logs").json()
+    logs = client.get("/api/audit-logs").json()["items"]
     assert "强制发布" in logs[0]["detail"]
 
 

@@ -285,7 +285,11 @@
       <hr />
       <h2 id="v12明确延后不是忘记">v1.2+(明确延后,不是忘记)</h2>
       <ul>
-      <li><strong>完整列表分页</strong>(UI + offset):单校一学期的量还撑得住,先靠上限保护;整年数据变慢时再做。</li>
+      <li><strong>完整列表分页</strong>(服务器端 UI + offset):</li>
+      <li><span class="tick done">☑</span> 系统管理 / 操作审计(2026-08-17):精确总数、20/50/100 条、URL 深链、全字段搜索与百万级索引。</li>
+      <li><span class="tick todo">☐</span> 请假记录(<code>/leaves</code>):目前仍以 1000 条服务器上限保护。</li>
+      <li><span class="tick todo">☐</span> 代课日志(<code>/substitution-log</code>):目前仍以 1000 条服务器上限保护。</li>
+      <li>其他列表按真实数据量与使用反馈评估,不因已有共享分页代码而自动纳入范围。</li>
       <li><strong>restore-upload 流式写入</strong>:<code>await file.read()</code> 会把整个文件读入内存;现有 Caddy 200MB 上限 +
         「超大 DB 走 volume 复制法」文件已缓解。</li>
       <li><strong>恢复溯源 <code>restore.log</code> + stale 警告持久徽章</strong>(M5 复审 G):presafe 文件名时戳暂可佐证。</li>

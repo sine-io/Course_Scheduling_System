@@ -104,27 +104,6 @@ export const getSchedulingSettings = () =>
 export const saveSchedulingSettings = (body: SchedulingSettings) =>
   apiPut<SchedulingSettings>('/settings/scheduling', body)
 
-// ── 示例数据（首次设置路线选择后可用，仅限全新系统）──
-export interface DemoDataStatus {
-  available: boolean
-  reason: string
-  school_name: string
-}
-export interface DemoDataResult {
-  semester_id: number
-  school_name: string
-  classes: number
-  teachers: number
-  subjects: number
-  rooms: number
-  assignments: number
-  total_periods: number
-  max_overtime_used: number
-  under_target: number
-}
-export const demoDataStatus = () => apiGet<DemoDataStatus>('/demo-data')
-export const loadDemoData = () => apiPost<DemoDataResult>('/demo-data')
-
 // ── 学校信息（管理员）──
 export interface SchoolSettings {
   /** 学校名称，显示在系统界面、导出课表、通知邮件和打印公告中。 */

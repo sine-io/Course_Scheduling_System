@@ -285,14 +285,8 @@ for (const viewport of VIEWPORTS) {
     }
 
     await page.goto('/scheduling/timetable-demo')
-    await expect(page.getByTestId('timetable-demo-page')).toBeVisible()
-    await expect(page.getByRole('radiogroup', { name: '演示学段' })).toBeVisible()
-    await expect(page.getByTestId('timetable-scroll')).toBeVisible()
-    await expectNoRootOverflow(page)
-    await page.screenshot({
-      path: testInfo.outputPath(`demo-${viewport.width}x${viewport.height}.png`),
-      fullPage: true,
-    })
+    await expect(page).toHaveURL(/\/scheduling\/workbench$/)
+    await expect(page.getByTestId('timetable-demo-page')).toHaveCount(0)
   })
 }
 

@@ -23,15 +23,15 @@ const SCHEDULER_ROUTES = [
   ['/scheduling/auto', '自动排课'],
   ['/leaves', '请假登记'],
   ['/substitutions', '调课与代课处理'],
-  ['/notification-board', '通知确认看板'],
+  ['/notifications?view=board', '通知'],
   ['/daily-board', '今日调课与代课'],
   ['/substitution-log', '调课与代课记录'],
   ['/substitution-stats', '代课课时统计'],
   ['/scheduling/versions', '版本与发布'],
-  ['/scheduling/timetable-demo', '课表组件演示（TimetableGrid）'],
 ] as const
 
 const TEACHER_ROUTES = [
+  ['/', '仪表盘'],
   ['/timetable-query', '课表查询'],
   ['/leaves', '请假登记'],
   ['/notifications', '通知'],
@@ -39,7 +39,6 @@ const TEACHER_ROUTES = [
 ] as const
 
 const RESTRICTED_TEACHER_ROUTES = [
-  '/',
   '/wizard',
   '/change-password',
   '/settings/semesters',
@@ -51,18 +50,17 @@ const RESTRICTED_TEACHER_ROUTES = [
   '/scheduling/workbench',
   '/scheduling/auto',
   '/scheduling/versions',
-  '/scheduling/timetable-demo',
   '/substitutions',
   '/daily-board',
   '/daily-board/print',
-  '/notification-board',
   '/substitution-log',
+  '/settings/backup',
+  '/settings/accounts',
 ] as const
 
 const ALLOWED_TEACHER_API_PATHS = new Set([
   '/api/app-config',
   '/api/auth/me',
-  '/api/navigation-preference',
   '/api/semester-context',
   '/api/published/semesters',
   '/api/published/timetable',
@@ -165,6 +163,7 @@ test('A4 通知单保留独立打印版式且打印时隐藏操作按钮', async
   await page.request.patch('/api/wizard/state', { data: { completed: true } })
   await deleteSemesterByYearTerm(page, year, 1)
   const semester = await createTestSemester(page, year)
+  await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
   try {
     await page.goto(`/daily-board/print?semester_id=${semester.id}&date=${WED}`)
@@ -200,29 +199,39 @@ test('教师导航只显示允许页面且受限直达 URL 在加载业务数据
 
   await page.getByTestId('shell-menu').click()
   const navigation = page.getByTestId('shell-nav')
-  const common = navigation.locator('.app-nav-common')
-  await expect(common.getByRole('link')).toHaveCount(4)
-  await expect(common.getByRole('link', { name: '课表查询' })).toBeVisible()
-  await expect(common.getByRole('link', { name: '请假登记' })).toBeVisible()
-  await expect(common.getByRole('link', { name: '通知' })).toBeVisible()
-  await expect(common.getByRole('link', { name: '我的代课课时' })).toBeVisible()
-  await expect(navigation.locator('.app-nav-catalog').getByRole('link', { name: '排课工作台' })).toHaveCount(0)
-  await expect(navigation.locator('.app-nav-catalog').getByRole('link', { name: '系统管理' })).toHaveCount(0)
+  await expect(navigation.getByRole('link', { name: '课表查询' })).toBeVisible()
+  await expect(navigation.getByRole('link', { name: '请假登记' })).toBeVisible()
+  await expect(navigation.getByRole('link', { name: '通知' })).toBeVisible()
+  await expect(navigation.getByRole('link', { name: '我的代课课时' })).toBeVisible()
+  await expect(navigation.getByRole('link', { name: '排课工作台' })).toHaveCount(0)
+  await expect(navigation.getByRole('link', { name: '系统管理' })).toHaveCount(0)
   await page.keyboard.press('Escape')
 
   page.on('request', (request) => {
     const url = new URL(request.url())
     const path = url.pathname
-    if (path.startsWith('/api/') && !ALLOWED_TEACHER_API_PATHS.has(path)) {
+    const allowed = ALLOWED_TEACHER_API_PATHS.has(path)
+      || /^\/api\/semesters\/\d+\/summary$/.test(path)
+    if (path.startsWith('/api/') && !allowed) {
       unexpectedApiRequests.push(`${request.method()} ${path}`)
     }
   })
 
   for (const path of RESTRICTED_TEACHER_ROUTES) {
     await page.goto(path)
-    await expect(page).toHaveURL(/\/timetable-query$/)
-    await expect(page.getByRole('heading', { name: '课表查询', level: 1, exact: true })).toBeVisible()
+    const fallback = path === '/change-password' ? /\/$/ : /\/timetable-query$/
+    const heading = path === '/change-password' ? '仪表盘' : '课表查询'
+    await expect(page).toHaveURL(fallback)
+    await expect(page.getByRole('heading', { name: heading, level: 1, exact: true })).toBeVisible()
   }
 
   expect(unexpectedApiRequests).toEqual([])
+})
+
+test('教师访问旧通知看板链接时只进入个人通知视图', async ({ page }) => {
+  await login(page, 'e2e_teacher', 'e2eteacher1234')
+  await page.goto('/notification-board')
+  await expect(page).toHaveURL(/\/notifications\?view=board$/)
+  await expect(page.getByRole('heading', { name: '通知', level: 1 })).toBeVisible()
+  await expect(page.getByTestId('notifications-tab-board')).toHaveCount(0)
 })

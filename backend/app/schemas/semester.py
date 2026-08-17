@@ -112,7 +112,6 @@ class SemesterListItem(BaseModel):
     label: str
     status: SemesterStatus
     readiness: SemesterReadiness
-    is_demo: bool = False
     start_date: date | None = None
     end_date: date | None = None
     is_current: bool = False

@@ -14,16 +14,8 @@ test('设置向导:使用初中空白模板创建学期并在仪表盘显示摘�
   await page.goto('/wizard')
   await expect(page.getByRole('heading', { name: '设置向导' })).toBeVisible()
 
-  // 重置后的新系统先选择正式建校路线，再进入原有五步向导。
-  await page.locator('[data-testid="route-choice"], .wizard-progress').first().waitFor({ state: 'visible' })
-  if (await page.getByTestId('route-choice').isVisible()) {
-    const formalRoute = page.getByTestId('route-formal')
-    await expect(formalRoute).toBeEnabled()
-    await formalRoute.click()
-    await expect(formalRoute).toHaveAttribute('aria-pressed', 'true')
-    await page.getByTestId('route-confirm').click()
-    await expect(page.locator('.wizard-progress')).toBeVisible()
-  }
+  await expect(page.locator('.wizard-progress')).toBeVisible()
+  await expect(page.getByTestId('route-choice')).toHaveCount(0)
 
   // 步骤 0：选择初中模板。
   await page.getByTestId('tpl-junior_high_draft').click()

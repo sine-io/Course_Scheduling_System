@@ -32,7 +32,7 @@ from app.schemas.semester import (
     TemplateOut,
 )
 from app.schemas.wizard import SemesterSummary
-from app.services import high_risk, onboarding_route, semester_context
+from app.services import high_risk, semester_context
 from app.services import period_tables as pt_service
 from app.services import templates as tpl
 from app.services.calendar import readiness_issues
@@ -170,7 +170,6 @@ def create_semester(
         select(Semester).where(
             Semester.academic_year == body.academic_year,
             Semester.term == body.term,
-            Semester.is_demo.is_(False),
         )
     )
     if exists:
@@ -196,11 +195,7 @@ def create_semester(
         )
         db.add(semester)
     db.flush()
-    # 创建正式学期即确认正式建校路线；示例学期本身保持独立，向导状态从第 0 步恢复。
-    onboarding_route.choose_route(db, "formal")
     semester_context.set_initial_current(db, semester)
-    if semester_context.read_context(db)[0].current_semester_id == semester.id:
-        onboarding_route.get_or_create_state(db).semester_id = semester.id
     db.commit()
     db.refresh(semester)
     return _semester_out(db, semester)
@@ -224,7 +219,6 @@ def copy_to_new_semester(
         select(Semester).where(
             Semester.academic_year == body.academic_year,
             Semester.term == body.term,
-            Semester.is_demo.is_(False),
         )
     )
     if exists:
@@ -242,14 +236,7 @@ def copy_to_new_semester(
         db, source, body.academic_year, body.term, opts,
         start_date=body.start_date, end_date=body.end_date,
     )
-    # 复制学期创建的是正式学期；从示例体验进入这里也应锁定正式路线。
-    onboarding_route.choose_route(db, "formal")
     semester_context.set_initial_current(db, new)
-    if semester_context.read_context(db)[0].current_semester_id == new.id:
-        state = onboarding_route.get_or_create_state(db)
-        state.current_step = 0
-        state.completed = False
-        state.semester_id = new.id
     db.commit()
     db.refresh(new)
     return _semester_out(db, new)

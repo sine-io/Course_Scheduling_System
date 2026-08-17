@@ -161,16 +161,6 @@ async function mockSession(
   }))
   await page.route('**/api/notifications/mine**', (route) => fulfillJson(route, { items: [], unread: 0 }))
   await page.route('**/api/notifications/mine/unread-count**', (route) => fulfillJson(route, { unread: 0 }))
-  await page.route('**/api/navigation-preference', (route) => fulfillJson(route, {
-    fixed: [],
-    recent: [],
-  }))
-  await page.route('**/api/onboarding/status', (route) => fulfillJson(route, {
-    first_success: true,
-    p0_todos: [],
-    stages: [],
-    next_action: null,
-  }))
   await page.route('**/api/semester-context', (route) => fulfillJson(route, {
     current_semester: currentSemester ? { ...currentSemester, is_current: true } : null,
     revision: 1,

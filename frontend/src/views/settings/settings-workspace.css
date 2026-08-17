@@ -63,6 +63,24 @@
   justify-content: flex-start;
 }
 
+.audit-actions {
+  align-items: stretch;
+}
+
+.audit-search {
+  flex: 1 1 320px;
+  max-width: 560px;
+}
+
+.audit-state {
+  align-content: center;
+  gap: 10px;
+}
+
+.settings-table-scroll[aria-busy='true'] {
+  opacity: 0.68;
+}
+
 .settings-list {
   display: grid;
   min-width: 0;

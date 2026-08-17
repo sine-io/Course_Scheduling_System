@@ -47,6 +47,7 @@ const routes = [
         path: '',
         name: 'dashboard',
         component: () => import('@/views/Dashboard.vue'),
+        meta: { allowedRoles: ALL_DAILY_ROLES },
       },
       {
         path: 'settings/semesters',
@@ -110,8 +111,8 @@ const routes = [
       },
       {
         path: 'notification-board',
-        name: 'notification-board',
-        component: () => import('@/views/substitution/NotificationBoard.vue'),
+        name: 'notification-board-legacy',
+        redirect: { name: 'notifications', query: { view: 'board' } },
         meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
@@ -140,8 +141,8 @@ const routes = [
       },
       {
         path: 'scheduling/timetable-demo',
-        name: 'timetable-demo',
-        component: () => import('@/views/scheduling/TimetableGridDemo.vue'),
+        name: 'timetable-demo-legacy',
+        redirect: { name: 'workbench' },
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
@@ -155,6 +156,18 @@ const routes = [
         name: 'system',
         component: () => import('@/views/settings/System.vue'),
         meta: { allowedRoles: ['admin'] },
+      },
+      {
+        path: 'settings/backup',
+        name: 'backup',
+        component: () => import('@/views/settings/System.vue'),
+        meta: { allowedRoles: ['admin'], settingsSection: 'backup' },
+      },
+      {
+        path: 'settings/accounts',
+        name: 'account-permissions',
+        component: () => import('@/views/settings/System.vue'),
+        meta: { allowedRoles: ['admin'], settingsSection: 'accounts' },
       },
     ],
   },
@@ -188,6 +201,12 @@ router.beforeEach(async (to) => {
   }
   if (!auth.mustChangePassword && to.name === 'change-password') {
     return { name: 'dashboard' }
+  }
+
+  if (to.name === 'system' && (to.query.section === 'backup' || to.query.section === 'accounts')) {
+    return {
+      name: to.query.section === 'backup' ? 'backup' : 'account-permissions',
+    }
   }
 
   const allowedRoles = to.meta.allowedRoles as string[] | undefined

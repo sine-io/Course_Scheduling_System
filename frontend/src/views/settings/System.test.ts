@@ -16,15 +16,10 @@ const backupMocks = vi.hoisted(() => ({
   restoreUpload: vi.fn(),
 }))
 const assignmentMocks = vi.hoisted(() => ({
-  demoDataStatus: vi.fn(),
   getSchedulingSettings: vi.fn(),
   getSchoolSettings: vi.fn(),
-  loadDemoData: vi.fn(),
   saveSchedulingSettings: vi.fn(),
   saveSchoolSettings: vi.fn(),
-}))
-const onboardingMocks = vi.hoisted(() => ({
-  chooseOnboardingRoute: vi.fn(),
 }))
 const notificationMocks = vi.hoisted(() => ({
   getSmtp: vi.fn(),
@@ -45,7 +40,6 @@ const auditMocks = vi.hoisted(() => ({
 
 vi.mock('@/api/backups', () => ({ ...backupMocks }))
 vi.mock('@/api/assignments', () => ({ ...assignmentMocks }))
-vi.mock('@/api/onboarding', () => ({ ...onboardingMocks }))
 vi.mock('@/api/notifications', () => ({ ...notificationMocks }))
 vi.mock('@/api/wizard', () => ({ ...wizardMocks }))
 vi.mock('@/api/accounts', async (importOriginal) => ({
@@ -65,7 +59,6 @@ const adminSettings = {
   smtp: { host: '', port: 25, user: '', sender: '', use_tls: false, configured: false, has_password: false },
   scheduling: { max_overtime: 8 },
   school: { school_name: '测试学校' },
-  demo: { available: false, reason: '', school_name: '' },
 }
 
 function makeRouter() {
@@ -73,13 +66,15 @@ function makeRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/settings/system', name: 'system', component: System },
+      { path: '/settings/backup', name: 'backup', component: System },
+      { path: '/settings/accounts', name: 'account-permissions', component: System },
       { path: '/wizard', name: 'wizard', component: { template: '<main />' } },
       { path: '/login', name: 'login', component: { template: '<main />' } },
     ],
   })
 }
 
-async function mountSystem(role: string, stubs: Record<string, unknown> = {}) {
+async function mountSystem(role: string, stubs: Record<string, unknown> = {}, path = '/settings/system') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore(pinia)
@@ -91,7 +86,7 @@ async function mountSystem(role: string, stubs: Record<string, unknown> = {}) {
     must_change_password: false,
   }
   const router = makeRouter()
-  await router.push('/settings/system')
+  await router.push(path)
   await router.isReady()
   const Host = {
     render: () => h(NMessageProvider, null, {
@@ -118,20 +113,16 @@ describe('System', () => {
     vi.resetAllMocks()
     backupMocks.listBackups.mockResolvedValue([])
     accountMocks.listAccounts.mockResolvedValue([])
-    auditMocks.listAuditLogs.mockResolvedValue([])
-    assignmentMocks.demoDataStatus.mockResolvedValue(adminSettings.demo)
+    auditMocks.listAuditLogs.mockResolvedValue({
+      items: [], total: 0, page: 1, page_size: 20,
+    })
     assignmentMocks.getSchedulingSettings.mockResolvedValue(adminSettings.scheduling)
     assignmentMocks.getSchoolSettings.mockResolvedValue(adminSettings.school)
     notificationMocks.getSmtp.mockResolvedValue(adminSettings.smtp)
-    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, completed: true, semester_id: null, total_steps: 4, has_semesters: false })
+    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, completed: true, semester_id: null, total_steps: 5, has_semesters: false })
     backupMocks.createBackup.mockResolvedValue(backup)
     backupMocks.deleteBackup.mockResolvedValue({ deleted: backup.name })
-    wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, semester_id: null, total_steps: 4, has_semesters: false })
-    onboardingMocks.chooseOnboardingRoute.mockResolvedValue({
-      route: 'demo', demo_available: false, demo_school_name: '示例初中',
-      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
-      resume_step: 0, resume_semester_id: null,
-    })
+    wizardMocks.resetWizard.mockResolvedValue({ current_step: 0, completed: false, semester_id: null, total_steps: 5, has_semesters: false })
   })
 
   it('非管理员保持原有可见性，只显示设置向导且不读取管理员接口', async () => {
@@ -160,10 +151,45 @@ describe('System', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="system-error"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="demo-card"]').exists()).toBe(false)
+  })
+
+  it('备份恢复页面只读取备份数据', async () => {
+    backupMocks.listBackups.mockResolvedValue([backup])
+    const wrapper = await mountSystem('admin', {}, '/settings/backup')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="backup-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(false)
+    expect(backupMocks.listBackups).toHaveBeenCalledTimes(1)
+    expect(accountMocks.listAccounts).not.toHaveBeenCalled()
+    expect(notificationMocks.getSmtp).not.toHaveBeenCalled()
+    expect(auditMocks.listAuditLogs).not.toHaveBeenCalled()
+  })
+
+  it('账号权限页面只读取账号数据', async () => {
+    accountMocks.listAccounts.mockResolvedValue([{
+      id: 7,
+      username: 'operator',
+      display_name: '操作员',
+      roles: ['scheduler'],
+      is_active: true,
+      must_change_password: false,
+      last_login_at: null,
+    }])
+    const wrapper = await mountSystem('admin', {}, '/settings/accounts')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="accounts-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="backup-card"]').exists()).toBe(false)
+    expect(accountMocks.listAccounts).toHaveBeenCalledTimes(1)
+    expect(backupMocks.listBackups).not.toHaveBeenCalled()
+    expect(notificationMocks.getSmtp).not.toHaveBeenCalled()
+    expect(auditMocks.listAuditLogs).not.toHaveBeenCalled()
   })
 
   it('审计表以简体中文展示和搜索内部代码', async () => {
-    auditMocks.listAuditLogs.mockResolvedValue([{
+    const auditLog = {
       id: 1,
       operation_id: 'operation-1',
       username: 'scheduler',
@@ -177,7 +203,15 @@ describe('System', () => {
       reason: '权限不足',
       detail: '',
       created_at: '2042-08-01T00:00:00Z',
-    }])
+    }
+    auditMocks.listAuditLogs.mockImplementation(({ q = '', page = 1, pageSize = 20 } = {}) => (
+      Promise.resolve({
+        items: !q || q === '删除科目' ? [auditLog] : [],
+        total: !q || q === '删除科目' ? 1 : 0,
+        page,
+        page_size: pageSize,
+      })
+    ))
 
     const wrapper = await mountSystem('admin')
     await flushPromises()
@@ -188,28 +222,61 @@ describe('System', () => {
     expect(row.text()).toContain('科目 #23')
     expect(row.text()).toContain('已拒绝')
     expect(row.text()).not.toContain('delete_subject')
+    expect(wrapper.get('[data-testid="audit-pagination-total"]').text()).toContain('共 1 条')
 
     await wrapper.get('[data-testid="audit-search"] input').setValue('删除科目')
+    await wrapper.get('[data-testid="audit-search"] input').trigger('keyup.enter')
+    await flushPromises()
+    expect(auditMocks.listAuditLogs).toHaveBeenLastCalledWith({
+      page: 1,
+      pageSize: 20,
+      q: '删除科目',
+    })
     expect(wrapper.find('[data-testid="audit-row"]').exists()).toBe(true)
   })
 
-  it('管理员加载示例数据前先持久化示例路线', async () => {
-    assignmentMocks.demoDataStatus.mockResolvedValue({
-      available: true, reason: '', school_name: '示例初中',
-    })
-    assignmentMocks.loadDemoData.mockResolvedValue({
-      semester_id: 12, school_name: '示例初中', classes: 18, teachers: 49,
-      subjects: 16, rooms: 26, assignments: 252, total_periods: 594,
-      max_overtime_used: 0, under_target: 0,
-    })
+  it('审计关键词停顿 400ms 后自动查询并回到第一页', async () => {
+    auditMocks.listAuditLogs.mockImplementation(({ page = 1, pageSize = 20 } = {}) => (
+      Promise.resolve({ items: [], total: 100, page, page_size: pageSize })
+    ))
+    const wrapper = await mountSystem('admin', {}, '/settings/system?audit_page=3')
+    await flushPromises()
+    expect(auditMocks.listAuditLogs).toHaveBeenCalledTimes(1)
+
+    vi.useFakeTimers()
+    try {
+      await wrapper.get('[data-testid="audit-search"] input').setValue('alice')
+      await vi.advanceTimersByTimeAsync(399)
+      expect(auditMocks.listAuditLogs).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      await flushPromises()
+      expect(auditMocks.listAuditLogs).toHaveBeenLastCalledWith({
+        page: 1,
+        pageSize: 20,
+        q: 'alice',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('审计读取失败不影响其他系统设置，并可在审计区域重试', async () => {
+    auditMocks.listAuditLogs
+      .mockRejectedValueOnce({ detail: '审计查询暂时不可用' })
+      .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20 })
+
     const wrapper = await mountSystem('admin')
     await flushPromises()
 
-    await wrapper.get('[data-testid="demo-load"]').trigger('click')
-    await flushPromises()
+    expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="system-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="audit-error"]').text()).toContain('审计查询暂时不可用')
 
-    expect(onboardingMocks.chooseOnboardingRoute).toHaveBeenCalledWith('demo')
-    expect(assignmentMocks.loadDemoData).toHaveBeenCalledTimes(1)
+    await wrapper.get('[data-testid="audit-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="audit-error"]').exists()).toBe(false)
+    expect(auditMocks.listAuditLogs).toHaveBeenCalledTimes(2)
   })
 
   it('重启向导进行中时重复确认只发送一次请求', async () => {
@@ -228,7 +295,7 @@ describe('System', () => {
 
     expect(wizardMocks.resetWizard).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="reset-wizard"]').attributes('disabled')).toBeDefined()
-    reset.resolve({ current_step: 0, completed: false, semester_id: null, total_steps: 4, has_semesters: false })
+    reset.resolve({ current_step: 0, completed: false, semester_id: null, total_steps: 5, has_semesters: false })
     await flushPromises()
   })
 
@@ -245,7 +312,7 @@ describe('System', () => {
         emits: ['positive-click'],
         template: '<span><slot name="trigger" /><button data-testid="confirm-backup-action" @click="$emit(\'positive-click\')">确认</button></span>',
       },
-    })
+    }, '/settings/backup')
     await flushPromises()
 
     const confirmations = wrapper.findAll('[data-testid="confirm-backup-action"]')
@@ -268,7 +335,7 @@ describe('System', () => {
         emits: ['positive-click'],
         template: '<span><slot name="trigger" /><button data-testid="confirm-backup-action" @click="$emit(\'positive-click\')">确认</button></span>',
       },
-    })
+    }, '/settings/backup')
     await flushPromises()
 
     const confirmations = wrapper.findAll('[data-testid="confirm-backup-action"]')
@@ -289,7 +356,7 @@ describe('System', () => {
     backupMocks.restoreUpload
       .mockReturnValueOnce(firstRestore.promise)
       .mockRejectedValueOnce({ detail: '上传恢复失败' })
-    const wrapper = await mountSystem('admin')
+    const wrapper = await mountSystem('admin', {}, '/settings/backup')
     await flushPromises()
 
     async function chooseBackup(name: string) {

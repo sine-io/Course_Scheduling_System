@@ -41,10 +41,13 @@ describe('router role boundaries', () => {
     auth.loaded = true
     useWizardStore().loaded = true
 
+    await router.push('/')
+    expect(router.currentRoute.value.name).toBe('dashboard')
     await router.push('/daily-board')
     expect(router.currentRoute.value.name).toBe('timetable-query')
     await router.push('/notification-board')
-    expect(router.currentRoute.value.name).toBe('timetable-query')
+    expect(router.currentRoute.value.name).toBe('notifications')
+    expect(router.currentRoute.value.query.view).toBe('board')
     await router.push('/leaves')
     expect(router.currentRoute.value.name).toBe('leaves')
     await router.push('/notifications')
@@ -72,5 +75,31 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('substitutions')
     await router.push('/leaves')
     expect(router.currentRoute.value.name).toBe('leaves')
+  })
+
+  it('redirects legacy notification, demo, and system section links to their replacements', async () => {
+    setActivePinia(createPinia())
+    const auth = useAuthStore()
+    auth.user = {
+      id: 4,
+      username: 'admin',
+      display_name: '系统管理员',
+      roles: ['admin'],
+      must_change_password: false,
+    }
+    auth.loaded = true
+    useWizardStore().loaded = true
+
+    await router.push('/notification-board')
+    expect(router.currentRoute.value.name).toBe('notifications')
+    expect(router.currentRoute.value.query.view).toBe('board')
+
+    await router.push('/scheduling/timetable-demo')
+    expect(router.currentRoute.value.name).toBe('workbench')
+
+    await router.push('/settings/system?section=backup')
+    expect(router.currentRoute.value.name).toBe('backup')
+    await router.push('/settings/system?section=accounts')
+    expect(router.currentRoute.value.name).toBe('account-permissions')
   })
 })

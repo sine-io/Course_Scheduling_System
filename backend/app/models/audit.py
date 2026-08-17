@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -14,6 +14,10 @@ from app.core.db import Base
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_created_at_id", "created_at", "id"),
+        Index("ix_audit_logs_action_created_at_id", "action", "created_at", "id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     operation_id: Mapped[str | None] = mapped_column(

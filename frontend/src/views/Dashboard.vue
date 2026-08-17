@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  ArrowUpRight, BookOpen, CalendarDays, ClipboardList, DoorOpen, GraduationCap,
-  RefreshCw, Users,
+  ArrowUpRight, Bell, BookOpen, CalendarDays, ClipboardClock, ClipboardList, DoorOpen,
+  GraduationCap, History, RefreshCw, Table2, Users,
 } from '@lucide/vue'
 import { NButton, NEmpty, NSpin, NStatistic, NTag } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
@@ -10,28 +10,57 @@ import { STATUS_LABELS } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard } from '@/api/substitutionLog'
-import { getOnboardingStatus } from '@/api/onboarding'
-import type { OnboardingStatus } from '@/api/onboarding'
 import { getSemesterSummary } from '@/api/wizard'
 import type { SemesterSummary } from '@/api/wizard'
-import { canEditCore } from '@/permissions'
+import { canEditCore, canOperateDaily, canViewCore } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
-import OnboardingChecklist from '@/components/OnboardingChecklist.vue'
 
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 const semester = ref<SemesterListItem | null>(null)
 const summary = ref<SemesterSummary | null>(null)
 const board = ref<DailyBoard | null>(null)
-const onboarding = ref<OnboardingStatus | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const summaryError = ref<string | null>(null)
 const summaryLoading = ref(false)
 const boardError = ref<string | null>(null)
 const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-const canManageOnboarding = computed(() => canEditCore(auth.user?.roles))
+const canManageCore = computed(() => canEditCore(auth.user?.roles))
+const canViewSummary = computed(() => canViewCore(auth.user?.roles))
+const dashboardIntro = computed(() => (
+  canViewSummary.value
+    ? '从当前学期摘要开始，快速回到正在处理的教务工作。'
+    : '查看当前学期，并从快捷入口进入个人教务工作。'
+))
+const dashboardHeaderRoute = computed(() => (
+  canManageCore.value ? { name: 'workbench' } : { name: 'timetable-query' }
+))
+const dashboardHeaderLabel = computed(() => (
+  canManageCore.value ? '进入排课工作台' : '进入课表查询'
+))
+const dashboardShortcuts = computed(() => {
+  if (auth.hasRole('teacher') && !canViewSummary.value) {
+    return [
+      { key: 'timetable-query', label: '课表查询', description: '查询已发布的班级、教师和教室课表。', route: { name: 'timetable-query' }, icon: Table2 },
+      { key: 'leaves', label: '请假登记', description: '登记本人请假并查看受影响节次。', route: { name: 'leaves' }, icon: ClipboardClock },
+      { key: 'notifications', label: '通知', description: '阅读通知并确认本人收到的消息。', route: { name: 'notifications' }, icon: Bell },
+    ]
+  }
+  if (auth.hasRole('director') && !auth.hasRole('scheduler') && !auth.hasRole('admin')) {
+    return [
+      { key: 'timetable-query', label: '课表查询', description: '查询已发布的班级、教师和教室课表。', route: { name: 'timetable-query' }, icon: Table2 },
+      { key: 'daily-board', label: '今日看板', description: '查看调课与代课安排。', route: { name: 'daily-board' }, icon: CalendarDays },
+      { key: 'versions', label: '版本与发布', description: '检查课表版本、完整性和发布记录。', route: { name: 'versions' }, icon: History },
+    ]
+  }
+  return [
+    { key: 'workbench', label: '排课工作台', description: '继续处理排课草稿。', route: { name: 'workbench' }, icon: BookOpen },
+    { key: 'assignments', label: '教学任务', description: '维护课程与课时。', route: { name: 'assignments' }, icon: ClipboardList },
+    { key: 'daily-board', label: '今日看板', description: '查看调课与代课安排。', route: { name: 'daily-board' }, icon: CalendarDays },
+  ]
+})
 
 const boardDateLabel = computed(() => (
   board.value ? `${board.value.date}（${weekdays[board.value.weekday % 7]}）` : ''
@@ -60,26 +89,21 @@ async function loadDashboard() {
   semester.value = null
   summary.value = null
   board.value = null
-  onboarding.value = null
 
   try {
     await semesterContext.load()
     semester.value = semesterContext.currentSemester
-    if (canManageOnboarding.value) {
-      const onboardingResult = await getOnboardingStatus().catch(() => null)
-      if (onboardingResult && Array.isArray(onboardingResult.stages)) {
-        onboarding.value = onboardingResult
-      }
-    }
     if (!semester.value) return
     const [summaryResult, boardResult] = await Promise.allSettled([
-      getSemesterSummary(semester.value.id),
-      getDailyBoard(semester.value.id),
+      canViewSummary.value ? getSemesterSummary(semester.value.id) : Promise.resolve(null),
+      canOperateDaily(auth.user?.roles)
+        ? getDailyBoard(semester.value.id)
+        : Promise.resolve(null),
     ])
 
-    if (summaryResult.status === 'fulfilled') {
+    if (summaryResult.status === 'fulfilled' && summaryResult.value) {
       summary.value = summaryResult.value
-    } else {
+    } else if (canViewSummary.value) {
       summaryError.value = '无法读取学期摘要，请稍后重试。'
     }
 
@@ -96,7 +120,7 @@ async function loadDashboard() {
 }
 
 async function retrySummary() {
-  if (!semester.value || summaryLoading.value) return
+  if (!canViewSummary.value || !semester.value || summaryLoading.value) return
 
   summaryLoading.value = true
   summaryError.value = null
@@ -119,11 +143,11 @@ onMounted(loadDashboard)
       <div>
         <p class="dashboard-eyebrow">{{ '教学运行概览' }}</p>
         <h1>{{ '仪表盘' }}</h1>
-        <p>{{ '从当前学期摘要开始，快速回到正在处理的教务工作。' }}</p>
+        <p>{{ dashboardIntro }}</p>
       </div>
-      <RouterLink v-if="semester" class="dashboard-header-link" :to="{ name: 'workbench' }">
-        <BookOpen :size="16" aria-hidden="true" />
-        {{ '进入排课工作台' }}
+      <RouterLink v-if="semester" class="dashboard-header-link" :to="dashboardHeaderRoute">
+        <component :is="canManageCore ? BookOpen : Table2" :size="16" aria-hidden="true" />
+        {{ dashboardHeaderLabel }}
         <ArrowUpRight :size="15" aria-hidden="true" />
       </RouterLink>
     </header>
@@ -144,9 +168,7 @@ onMounted(loadDashboard)
     </section>
 
     <template v-else>
-      <OnboardingChecklist v-if="onboarding" :status="onboarding" />
-
-      <section v-if="semester" class="dashboard-panel dashboard-summary-panel" data-testid="dash-summary">
+      <section v-if="semester && canViewSummary" class="dashboard-panel dashboard-summary-panel" data-testid="dash-summary">
         <div class="dashboard-panel-heading">
           <div>
             <p class="dashboard-eyebrow">{{ '当前学期' }}</p>
@@ -197,9 +219,20 @@ onMounted(loadDashboard)
         </div>
       </section>
 
+      <section v-else-if="semester" class="dashboard-panel dashboard-context-panel" data-testid="dash-context">
+        <div class="dashboard-panel-heading">
+          <div>
+            <p class="dashboard-eyebrow">{{ '当前学期' }}</p>
+            <h2>{{ semester.label }}</h2>
+          </div>
+          <span class="dashboard-status-badge">{{ semesterStatusLabel }}</span>
+        </div>
+        <p class="dashboard-context-copy">{{ '当前账号可从下方快捷入口进入个人教务工作。' }}</p>
+      </section>
+
       <section v-else class="dashboard-panel dashboard-empty-panel">
         <n-empty :description="'尚未创建任何学期数据'">
-          <template v-if="canManageOnboarding" #extra>
+          <template v-if="canManageCore" #extra>
             <RouterLink class="dashboard-primary-link" :to="{ name: 'wizard' }">
               {{ '前往设置向导' }}
             </RouterLink>
@@ -269,7 +302,7 @@ onMounted(loadDashboard)
         <n-button type="primary" @click="loadDashboard">{{ '重新加载' }}</n-button>
       </section>
 
-      <section v-if="semester" class="dashboard-shortcuts" aria-labelledby="dashboard-shortcuts-title">
+      <section class="dashboard-shortcuts" aria-labelledby="dashboard-shortcuts-title">
         <div class="dashboard-section-heading">
           <div>
             <p class="dashboard-eyebrow">{{ '常用工作' }}</p>
@@ -277,17 +310,15 @@ onMounted(loadDashboard)
           </div>
         </div>
         <div class="dashboard-shortcut-grid">
-          <RouterLink data-testid="dash-shortcut-workbench" class="dashboard-shortcut" :to="{ name: 'workbench' }">
-            <span class="dashboard-shortcut-icon" aria-hidden="true"><BookOpen :size="17" /></span>
-            <strong>{{ '排课工作台' }}</strong><span>{{ '继续处理排课草稿' }}</span><ArrowUpRight :size="15" aria-hidden="true" />
-          </RouterLink>
-          <RouterLink data-testid="dash-shortcut-assignments" class="dashboard-shortcut" :to="{ name: 'assignments' }">
-            <span class="dashboard-shortcut-icon" aria-hidden="true"><ClipboardList :size="17" /></span>
-            <strong>{{ '教学任务' }}</strong><span>{{ '维护课程与课时' }}</span><ArrowUpRight :size="15" aria-hidden="true" />
-          </RouterLink>
-          <RouterLink data-testid="dash-shortcut-daily-board" class="dashboard-shortcut" :to="{ name: 'daily-board' }">
-            <span class="dashboard-shortcut-icon" aria-hidden="true"><CalendarDays :size="17" /></span>
-            <strong>{{ '今日看板' }}</strong><span>{{ '查看调课与代课安排' }}</span><ArrowUpRight :size="15" aria-hidden="true" />
+          <RouterLink
+            v-for="shortcut in dashboardShortcuts"
+            :key="shortcut.key"
+            :data-testid="`dash-shortcut-${shortcut.key}`"
+            class="dashboard-shortcut"
+            :to="shortcut.route"
+          >
+            <span class="dashboard-shortcut-icon" aria-hidden="true"><component :is="shortcut.icon" :size="17" /></span>
+            <strong>{{ shortcut.label }}</strong><span>{{ shortcut.description }}</span><ArrowUpRight :size="15" aria-hidden="true" />
           </RouterLink>
         </div>
       </section>
@@ -320,6 +351,8 @@ onMounted(loadDashboard)
 .dashboard-metric :deep(.n-statistic__label) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-metric :deep(.n-statistic-value__content) { font-size: 22px; font-weight: 700; }
 .dashboard-empty-panel { min-height: 250px; display: grid; place-items: center; }
+.dashboard-context-panel { min-height: 148px; }
+.dashboard-context-copy { margin: 0; color: var(--app-text-muted); font-size: 13px; line-height: 1.7; }
 .dashboard-primary-link { padding: 0 14px; border: 1px solid var(--app-primary); background: var(--app-primary); color: var(--app-on-primary); }
 .dashboard-today-content { display: grid; gap: 16px; }
 .dashboard-today-summary { display: flex; align-items: center; gap: 14px; }

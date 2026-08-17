@@ -50,12 +50,3 @@ def test_non_admin_cannot_change_it(env):
     make_user(db, "s", PW, roles=[Role.scheduler])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     assert client.put("/api/settings/school", json={"school_name": "X"}).status_code == 403
-
-
-def test_demo_data_sets_the_school_name(env):
-    """加载示例数据时同步设置学校名称。"""
-    client, db = env
-    _admin(client, db)
-    assert client.put("/api/onboarding/route", json={"route": "demo"}).status_code == 200
-    client.post("/api/demo-data")
-    assert app_settings.school_name(db) == "海州市启明实验初级中学"

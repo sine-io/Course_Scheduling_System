@@ -73,16 +73,12 @@ def require_writable(
 
 
 def set_initial_current(db: Session, semester: Semester) -> None:
-    """选择首次工作学期；正式学期取代示例学期成为当前上下文。"""
+    """在尚无有效当前学期时选择首次工作学期。"""
     row = _context_row(db, lock="update")
     current = (
         db.get(Semester, row.current_semester_id) if row.current_semester_id else None
     )
-    if (
-        row.current_semester_id is None
-        or current is None
-        or (current.is_demo and not semester.is_demo)
-    ):
+    if row.current_semester_id is None or current is None:
         row.current_semester_id = semester.id
         row.revision += 1
 
@@ -101,13 +97,6 @@ def switch_current(db: Session, semester_id: int, expected_revision: int) -> Sem
     if semester.status == SemesterStatus.archived.value:
         raise SemesterContextError(
             "semester_read_only", "已归档学期为只读，不能设为当前学期"
-        )
-    if semester.is_demo and db.scalar(
-        select(Semester.id).where(Semester.is_demo.is_(False)).limit(1)
-    ) is not None:
-        raise SemesterContextError(
-            "demo_context_locked",
-            "已有正式学期，不能切换回示例学期；示例数据不会覆盖正式首次成功",
         )
     if row.current_semester_id != semester.id:
         row.current_semester_id = semester.id

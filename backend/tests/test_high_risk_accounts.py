@@ -65,7 +65,7 @@ def test_non_admin_account_creation_is_rejected_and_audited(env):
     assert db.query(User).filter(User.username == "new-teacher").one_or_none() is None
     client.post("/api/auth/logout")
     _login(client, "audit-admin")
-    logs = client.get("/api/audit-logs?action=create_account").json()
+    logs = client.get("/api/audit-logs?action=create_account").json()["items"]
     assert len(logs) == 1
     assert logs[0]["username"] == "scheduler"
     assert logs[0]["actor_roles"] == ["scheduler"]
@@ -123,7 +123,7 @@ def test_admin_can_change_roles_and_deactivate_an_account_with_exact_target(env)
     assert changed.json()["display_name"] == "兼任教师"
     assert changed.json()["roles"] == ["scheduler", "teacher"]
     assert changed.json()["is_active"] is False
-    logs = client.get("/api/audit-logs?action=update_account").json()
+    logs = client.get("/api/audit-logs?action=update_account").json()["items"]
     assert len(logs) == 1
     assert logs[0]["target_id"] == target.id
     assert logs[0]["target_version"] == "operator"
@@ -165,7 +165,7 @@ def test_account_change_rejects_wrong_target_and_protects_current_admin(env):
     db.refresh(admin)
     assert admin.role_names == {Role.admin.value}
 
-    logs = client.get("/api/audit-logs?action=update_account").json()
+    logs = client.get("/api/audit-logs?action=update_account").json()["items"]
     assert [(log["result"], log["reason"]) for log in reversed(logs)] == [
         ("rejected", "high_risk_target_mismatch"),
         ("rejected", "current_admin_protected"),
@@ -189,7 +189,7 @@ def test_duplicate_username_is_zero_write_and_audited(env):
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"]["code"] == "account_username_exists"
     assert db.query(User).filter(User.username == "existing").count() == 1
-    log = client.get("/api/audit-logs?action=create_account").json()[0]
+    log = client.get("/api/audit-logs?action=create_account").json()["items"][0]
     assert log["result"] == "rejected"
     assert log["reason"] == "account_username_exists"
 
@@ -231,7 +231,7 @@ def test_non_admin_cannot_bind_a_login_account_to_teacher(env, username, role):
     assert db.query(Teacher).filter(Teacher.semester_id == semester["id"]).count() == 0
     client.post("/api/auth/logout")
     _login(client, "audit-admin")
-    log = client.get("/api/audit-logs?action=bind_teacher_account").json()[0]
+    log = client.get("/api/audit-logs?action=bind_teacher_account").json()["items"][0]
     assert log["username"] == username
     assert log["result"] == "rejected"
     assert log["reason"] == "high_risk_permission_denied"
@@ -263,7 +263,7 @@ def test_scheduler_cannot_create_accounts_through_teacher_import(env):
     assert db.query(Teacher).filter(Teacher.semester_id == semester["id"]).count() == 0
     client.post("/api/auth/logout")
     _login(client, "audit-admin")
-    log = client.get("/api/audit-logs?action=bulk_create_accounts").json()[0]
+    log = client.get("/api/audit-logs?action=bulk_create_accounts").json()["items"][0]
     assert log["username"] == "scheduler"
     assert log["semester_id"] == semester["id"]
     assert log["result"] == "rejected"

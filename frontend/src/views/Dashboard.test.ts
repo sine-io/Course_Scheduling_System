@@ -3,7 +3,6 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import type { OnboardingStatus } from '@/api/onboarding'
 import { useAuthStore } from '@/stores/auth'
 import Dashboard from './Dashboard.vue'
 
@@ -34,6 +33,9 @@ function makeRouter() {
         { path: '/basedata', name: 'basedata', component: { template: '<div />' } },
         { path: '/scheduling/versions', name: 'versions', component: { template: '<div />' } },
         { path: '/daily-board', name: 'daily-board', component: { template: '<div />' } },
+        { path: '/timetable-query', name: 'timetable-query', component: { template: '<div />' } },
+        { path: '/leaves', name: 'leaves', component: { template: '<div />' } },
+        { path: '/notifications', name: 'notifications', component: { template: '<div />' } },
       ],
   })
 }
@@ -80,31 +82,49 @@ describe('Dashboard', () => {
     expect(wrapper.text()).toContain('仪表盘')
     expect(wrapper.text()).toContain('尚未创建任何学期数据')
     expect(wrapper.get('a[href="/wizard"]').text()).toContain('前往设置向导')
+    expect(wrapper.get('[data-testid="dash-shortcut-workbench"]')).toBeTruthy()
+    expect(wrapper.get('[data-testid="dash-shortcut-assignments"]')).toBeTruthy()
+    expect(wrapper.get('[data-testid="dash-shortcut-daily-board"]')).toBeTruthy()
   })
 
-  it('教务主任首页不显示首次成功配置引导', async () => {
-    const onboarding: OnboardingStatus = {
-      first_success: false,
-      wizard_completed: false,
-      current_semester: null,
-      stages: [],
-      p0_todos: [],
-      next_action: null,
-    }
-    vi.mocked(fetch).mockImplementation((url) => {
-      if (String(url).includes('/onboarding/status')) {
-        return Promise.resolve(jsonResponse(onboarding)) as never
-      }
-      return Promise.resolve(jsonResponse([])) as never
-    })
-
+  it('教务主任首页不请求已移除的首次成功状态', async () => {
     const wrapper = mount(Dashboard, {
       global: { plugins: [makePinia(['director']), makeRouter()] },
     })
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="onboarding-status"]').exists()).toBe(false)
+    const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
+    expect(requests.some((url) => url.includes('/onboarding/'))).toBe(false)
     expect(wrapper.find('a[href="/wizard"]').exists()).toBe(false)
+  })
+
+  it('教师仪表盘不请求受限摘要和全校今日看板', async () => {
+    const semester = {
+      id: 8, academic_year: 2042, term: 1, label: '2042-2043学年第一学期',
+      status: 'active', readiness: 'ready', start_date: null, end_date: null,
+    }
+    vi.mocked(fetch).mockImplementation((url) => {
+      if (String(url).includes('/semester-context')) {
+        return Promise.resolve(jsonResponse({
+          current_semester: semester, revision: 1, can_switch: false,
+        })) as never
+      }
+      return Promise.resolve(jsonResponse([])) as never
+    })
+
+    const wrapper = mount(Dashboard, {
+      global: { plugins: [makePinia(['teacher']), makeRouter()] },
+    })
+    await flushPromises()
+
+    const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
+    expect(requests.some((url) => url.includes('/summary'))).toBe(false)
+    expect(requests.some((url) => url.includes('/daily-board'))).toBe(false)
+    expect(wrapper.find('[data-testid="dash-summary"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="dash-context"]').text()).toContain(semester.label)
+    expect(wrapper.get('[data-testid="dash-shortcut-timetable-query"]')).toBeTruthy()
+    expect(wrapper.get('[data-testid="dash-shortcut-leaves"]')).toBeTruthy()
+    expect(wrapper.get('[data-testid="dash-shortcut-notifications"]')).toBeTruthy()
   })
 
   it('显示当前学期的真实摘要、今日变动和可用快捷入口', async () => {
@@ -168,61 +188,6 @@ describe('Dashboard', () => {
     expect(wrapper.get('a[href="/scheduling/workbench"]')).toBeTruthy()
     expect(wrapper.get('a[href="/scheduling/assignments"]')).toBeTruthy()
     expect(wrapper.get('a[href="/daily-board"]')).toBeTruthy()
-  })
-
-  it('显示首次成功状态、阻塞原因和下一步直达入口', async () => {
-    const semesters = [{
-      id: 8, academic_year: 2042, term: 1, label: '2042-2043学年第一学期',
-      status: 'active', readiness: 'draft', start_date: null, end_date: null,
-      is_demo: false, is_current: true,
-    }]
-    const blockedStage = {
-      key: 'periods', label: '作息', complete: false as const, status: 'blocked' as const,
-      blocking_reason: '请先创建作息时间表。',
-      next_action: {
-        stage: 'periods', label: '管理学期与作息时间表', href: '/settings/semesters',
-        blocking_reason: '请先创建作息时间表。',
-      }, details: {},
-    }
-    const onboarding: OnboardingStatus = {
-      first_success: false,
-      wizard_completed: true,
-      current_semester: { id: 8, label: semesters[0].label, is_demo: false },
-      stages: [
-        {
-          key: 'semester', label: '学期', complete: true, status: 'complete',
-          blocking_reason: '', next_action: null, details: {},
-        },
-        blockedStage,
-      ],
-      p0_todos: [blockedStage],
-      next_action: {
-        stage: 'periods', label: '管理学期与作息时间表', href: '/settings/semesters',
-        blocking_reason: '请先创建作息时间表。',
-      },
-    }
-    const board = {
-      date: '2042-09-02', weekday: 2, school_name: '测试学校',
-      semester_label: semesters[0].label, entries: [],
-    }
-    vi.mocked(fetch).mockImplementation((url) => {
-      const address = String(url)
-      if (address.endsWith('/semesters')) return Promise.resolve(jsonResponse(semesters)) as never
-      if (address.includes('/onboarding/status')) return Promise.resolve(jsonResponse(onboarding)) as never
-      if (address.includes('/summary')) {
-        return Promise.resolve(jsonResponse({ subjects: 1, teachers: 2, classes: 3, rooms: 4 })) as never
-      }
-      return Promise.resolve(jsonResponse(board)) as never
-    })
-
-    const wrapper = mount(Dashboard, {
-      global: { plugins: [makePinia(), makeRouter()] },
-    })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="onboarding-status"]').text()).toContain('首次成功路径')
-    expect(wrapper.get('[data-testid="onboarding-stage-periods"]').text()).toContain('请先创建作息时间表')
-    expect(wrapper.get('[data-testid="onboarding-next-action"]').attributes('href')).toBe('/settings/semesters')
   })
 
   it('并发读取学期摘要与今日看板', async () => {

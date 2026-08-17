@@ -27,48 +27,8 @@ const DASHBOARD_SEMESTER = {
   label: '2042-2043学年第一学期',
   status: 'active',
   readiness: 'ready',
-  is_demo: false,
   start_date: null,
   end_date: null,
-}
-
-const ONBOARDING_LABELS: Record<string, string> = {
-  semester: '学期',
-  periods: '作息',
-  calendar: '校历',
-  basedata: '基础数据',
-  assignments: '教学任务',
-  integrity: '完整性检查',
-  draft: '课表草稿',
-  published: '课表发布',
-}
-
-function onboardingStatus(firstSuccess: boolean) {
-  const stages = Object.entries(ONBOARDING_LABELS).map(([key, label]) => {
-    const complete = firstSuccess || key !== 'periods'
-    return {
-      key,
-      label,
-      complete,
-      status: complete ? 'complete' : 'blocked',
-      blocking_reason: complete ? '' : '请先创建正式当前学期的作息时间表。',
-      next_action: complete ? null : {
-        stage: key,
-        label: '管理学期与作息时间表',
-        href: '/settings/semesters',
-        blocking_reason: '请先创建正式当前学期的作息时间表。',
-      },
-      details: {},
-    }
-  })
-  return {
-    first_success: firstSuccess,
-    wizard_completed: true,
-    current_semester: { ...DASHBOARD_SEMESTER },
-    stages,
-    p0_todos: firstSuccess ? [] : stages.filter((stage) => !stage.complete),
-    next_action: firstSuccess ? null : stages.find((stage) => !stage.complete)?.next_action,
-  }
 }
 
 async function fulfillJson(route: Route, body: unknown, status = 200) {
@@ -82,7 +42,6 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 async function mockSurfaceData(
   page: Page,
   surface: 'change-password' | 'wizard' | 'dashboard',
-  onboarding: () => ReturnType<typeof onboardingStatus> = () => onboardingStatus(false),
 ) {
   if (surface === 'change-password') {
     await page.route('**/api/auth/login', (route) => fulfillJson(route, FORCED_PASSWORD_USER))
@@ -96,9 +55,6 @@ async function mockSurfaceData(
     }]))
     await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
       current_step: 0, completed: false, semester_id: null, total_steps: 5, has_semesters: false,
-    }))
-    await page.route('**/api/demo-data', (route) => fulfillJson(route, {
-      available: false, reason: 'visual test', school_name: '',
     }))
     return
   }
@@ -114,10 +70,6 @@ async function mockSurfaceData(
         ? fulfillJson(route, DASHBOARD_USER)
         : fulfillJson(route, { detail: 'Not authenticated' }, 401)
     ))
-    await page.route('**/api/navigation-preference', (route) => fulfillJson(route, {
-      fixed: [],
-      recent: [],
-    }))
     await page.route('**/api/app-config', (route) => fulfillJson(route, {
       school_name: '响应式验收学校',
       timezone: 'Asia/Shanghai',
@@ -142,7 +94,6 @@ async function mockSurfaceData(
     await page.route('**/api/semesters/12/summary', (route) => fulfillJson(route, {
       subjects: 13, teachers: 42, classes: 18, rooms: 9,
     }))
-    await page.route('**/api/onboarding/status', (route) => fulfillJson(route, onboarding()))
     await page.route('**/api/daily-board**', (route) => fulfillJson(route, {
       date: '2042-09-02', weekday: 2, school_name: '响应式验收学校',
       semester_label: '2042-2043学年第一学期', entries: [],
@@ -248,22 +199,13 @@ for (const viewport of VIEWPORTS) {
   test(`仪表盘 ${viewport.width}x${viewport.height} 保持摘要与快捷入口可见`, async ({ page }) => {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    let firstSuccess = false
-    await mockSurfaceData(page, 'dashboard', () => onboardingStatus(firstSuccess))
+    await mockSurfaceData(page, 'dashboard')
     await login(page)
 
     await expect(page).toHaveURL(/\/$/)
     await expect(page.getByTestId('dash-summary')).toBeVisible()
     await expect(page.getByTestId('dash-today')).toBeVisible()
     await expect(page.getByTestId('dash-shortcut-workbench')).toBeVisible()
-    await expect(page.getByTestId('onboarding-status')).toBeVisible()
-    await expect(page.getByTestId('onboarding-stage-periods')).toContainText('作息时间表')
-    await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/settings/semesters')
-
-    firstSuccess = true
-    await page.goto('/')
-    await expect(page.getByTestId('onboarding-success')).toBeVisible()
-    await expect(page.getByTestId('onboarding-status')).toContainText('正式当前学期已发布可用课表')
     await expectNoRootOverflow(page)
     await expectVisibleFlow(page, [
       { name: '仪表盘标题', locator: page.getByRole('heading', { name: '仪表盘' }) },

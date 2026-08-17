@@ -79,13 +79,16 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
 
     await page.request.post('/api/auth/logout')
     await login(page, E2E_ADMIN_USER, E2E_ADMIN_PASS)
-    const logs = await (await page.request.get('/api/audit-logs?action=delete_subject')).json() as Array<{
-      operation_id: string | null
-      username: string
-      actor_roles: string[]
-      target_id: number | null
-      result: string
-    }>
+    const auditPage = await (await page.request.get('/api/audit-logs?action=delete_subject')).json() as {
+      items: Array<{
+        operation_id: string | null
+        username: string
+        actor_roles: string[]
+        target_id: number | null
+        result: string
+      }>
+    }
+    const logs = auditPage.items
     const rejected = logs.find((log) => log.operation_id === confirmation.operation_id)
     expect(rejected).toMatchObject({
       username: 'e2e_scheduler',
@@ -128,9 +131,8 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
       })
     })
 
-    await page.goto('/settings/system')
+    await page.goto('/settings/accounts')
     await expect(page.getByTestId('accounts-card')).toBeVisible()
-    await expect(page.getByTestId('audit-card')).toBeVisible()
 
     await page.getByTestId('account-add').click()
     await page.getByTestId('account-username').locator('input').fill('issue33-cancelled')
@@ -145,6 +147,7 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     await page.locator('.n-modal').filter({ hasText: '新增账号' })
       .getByRole('button', { name: '取消' }).click()
 
+    await page.goto('/settings/backup')
     const restore = page.getByTestId('backup-restore')
     await restore.click()
     const restorePopover = page.locator('.n-popover')
@@ -188,9 +191,10 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     await deleteButton.click()
     await deletePopover.getByRole('button', { name: '确认' }).click()
     await expect(page.getByRole('cell', { name: '管理员确认删除科目' })).toHaveCount(0)
-    const successLogs = await (await page.request.get(
+    const successPage = await (await page.request.get(
       '/api/audit-logs?action=delete_subject',
-    )).json() as Array<{ target_id: number | null; result: string }>
+    )).json() as { items: Array<{ target_id: number | null; result: string }> }
+    const successLogs = successPage.items
     expect(successLogs).toContainEqual(expect.objectContaining({
       target_id: first.id,
       result: 'success',

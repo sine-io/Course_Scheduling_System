@@ -77,16 +77,6 @@ async function mockSession(page: Page, currentSemester: () => typeof SEMESTER | 
   }))
   await page.route('**/api/notifications/mine**', (route) => fulfillJson(route, { items: [], unread: 0 }))
   await page.route('**/api/notifications/mine/unread-count**', (route) => fulfillJson(route, { unread: 0 }))
-  await page.route('**/api/navigation-preference', (route) => fulfillJson(route, {
-    fixed: [],
-    recent: [],
-  }))
-  await page.route('**/api/onboarding/status', (route) => fulfillJson(route, {
-    first_success: true,
-    p0_todos: [],
-    stages: [],
-    next_action: null,
-  }))
   await page.route('**/api/semesters/44/summary', (route) => fulfillJson(route, {
     subjects: 8,
     teachers: 12,
@@ -125,7 +115,6 @@ for (const viewport of VIEWPORTS) {
         '/api/settings/smtp',
         '/api/settings/scheduling',
         '/api/settings/school',
-        '/api/demo-data',
         '/api/backups',
       ].includes(path)) requestedAdminPaths.push(path)
     })

@@ -7,29 +7,13 @@ import {
   login,
   semesterLabel,
 } from './helpers'
-import { expectCommonNavigation } from './navigation-assertions'
 
 // M5-4 验收①(UI 连续场景):一个学期从创建 → 自动排课 → 发布 → 请假 → 代课 → 月结,
 // 一路走完,证明各关卡的页面能对接成真实的教务生命周期。个别旅程的细节由各自 spec
 // 深入覆盖;此处只验「整条链接得起来、末端数字对得上」。
 
 const SHOTS = 'e2e/screenshots'
-const DEMO_YEAR = 2026
 const YEAR = 2059
-const SCHEDULER_BEFORE_FIRST_SUCCESS = [
-  { label: '当前待办', href: '/basedata' },
-  { label: '教学任务', href: '/scheduling/assignments' },
-  { label: '自动排课', href: '/scheduling/auto' },
-  { label: '排课工作台', href: '/scheduling/workbench' },
-  { label: '版本与发布', href: '/scheduling/versions' },
-]
-const SCHEDULER_AFTER_FIRST_SUCCESS = [
-  { label: '仪表盘', href: '/' },
-  { label: '课表查询', href: '/timetable-query' },
-  { label: '今日看板', href: '/daily-board' },
-  { label: '调课与代课', href: '/substitutions' },
-  { label: '版本与发布', href: '/scheduling/versions' },
-]
 const post = async (page: Page, url: string, data: object) =>
   (await page.request.post(url, { data })).json()
 const get = async (page: Page, url: string) => (await page.request.get(url)).json()
@@ -73,83 +57,16 @@ async function seedSchool(page: Page, sid: number) {
   }
 }
 
-test('示例排课发布后仍需完成正式首次成功', async ({ page }) => {
-  test.setTimeout(240_000)
-  await login(page)
-  await deleteSemesterByYearTerm(page, DEMO_YEAR, 1)
-
-  try {
-    await page.goto('/wizard')
-    const routeChoice = page.getByTestId('route-choice')
-    const routeReselect = page.getByTestId('route-reselect')
-    await expect(routeChoice.or(routeReselect)).toBeVisible()
-    if (await routeReselect.isVisible()) await routeReselect.click()
-    await expect(routeChoice).toBeVisible()
-    await page.getByTestId('route-demo').click()
-    await page.getByTestId('route-confirm').click()
-    await expect(page).toHaveURL(/\/scheduling\/auto$/)
-    await expect(page.getByTestId('as-preflight')).toContainText('0 项错误')
-    await expect(page.getByTestId('as-start')).toBeEnabled()
-
-    await page.getByTestId('as-start').click()
-    await expect(page.getByTestId('as-stop')).toBeEnabled({ timeout: 120_000 })
-    await page.getByTestId('as-stop').click()
-    await expect(page.getByTestId('as-status')).toHaveText('已完成', { timeout: 120_000 })
-    await expect(page.getByTestId('as-done')).toContainText('示例课表草稿 自排结果')
-
-    await page.goto('/scheduling/versions')
-    const result = page.locator('[data-testid="v-row-示例课表草稿 自排结果"]')
-    await result.getByTestId('v-publish').click()
-    await page.getByTestId('v-confirm-publish').click()
-    await expect(page.getByTestId('v-status-示例课表草稿 自排结果')).toHaveText('已发布')
-
-    const status = await get(page, '/api/onboarding/status')
-    expect(status.first_success).toBe(false)
-    expect(status.next_action.stage).toBe('semester')
-    await page.goto('/')
-    await expect(page.getByTestId('onboarding-status')).toContainText('示例数据不会计入正式首次成功')
-    await expect(page.getByTestId('onboarding-success')).toHaveCount(0)
-    await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/wizard')
-  } finally {
-    await deleteSemesterByYearTerm(page, DEMO_YEAR, 1)
-  }
-})
-
 test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 月结,一路串到底', async ({ page }) => {
   test.setTimeout(240_000)
   await login(page)
   await page.request.patch('/api/wizard/state', { data: { completed: true } })
-  const preference = await page.request.put('/api/navigation-preference', {
-    data: { fixed: [], recent: [] },
-  })
-  expect(preference.ok()).toBeTruthy()
   await deleteSemesterByYearTerm(page, YEAR, 1)
 
   // ── 1) 建学期 + 基础数据(API 准备)──
   const sem = await createTestSemester(page, YEAR)
-  // 从示例路线进入正式建校时，后端会按业务规则重置向导进度；API 夹具完成后再跳过向导。
-  await page.request.patch('/api/wizard/state', { data: { completed: true } })
-  // 真实状态读模型：有学期和作息但还没有班级/教师/教学任务时，下一步应指向基础数据。
-  const missing = await get(page, '/api/onboarding/status')
-  expect(missing.first_success).toBe(false)
-  expect(missing.next_action.stage).toBe('basedata')
-  expect(missing.stages.find((stage: { key: string }) => stage.key === 'basedata').complete).toBe(false)
-  await page.goto('/')
-  await expect(page.getByTestId('onboarding-status')).toBeVisible()
-  await expect(page.getByTestId('onboarding-stage-basedata')).toContainText('基础数据')
-  await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/basedata')
-  await expectCommonNavigation(page, SCHEDULER_BEFORE_FIRST_SUCCESS)
-
   await seedSchool(page, sem.id)
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
-
-  const prePublish = await get(page, '/api/onboarding/status')
-  expect(prePublish.first_success).toBe(false)
-  expect(prePublish.next_action.stage).toBe('integrity')
-  await page.goto('/')
-  await expect(page.getByTestId('onboarding-stage-integrity')).toContainText('完整性检查')
-  await expect(page.getByTestId('onboarding-stage-integrity')).toContainText('未排完')
-  await expect(page.getByTestId('onboarding-next-action')).toHaveAttribute('href', '/scheduling/versions')
 
   // ── 2) 自动排课(真实走 solver worker,UI 显示进度)──
   await page.goto('/scheduling/auto')
@@ -170,13 +87,6 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   await page.getByTestId('v-confirm-publish').click()
   await expect(page.getByTestId('v-status-草稿A 自排结果')).toHaveText('已发布')
   await page.screenshot({ path: `${SHOTS}/journey-2-published.png` })
-
-  const success = await get(page, '/api/onboarding/status')
-  expect(success.first_success).toBe(true)
-  expect(success.p0_todos).toHaveLength(0)
-  await page.goto('/')
-  await expect(page.getByTestId('onboarding-success')).toBeVisible()
-  await expectCommonNavigation(page, SCHEDULER_AFTER_FIRST_SUCCESS)
 
   // ── 4) 课表查询:已发布课表在只读查询页可见(UI)──
   await page.goto(`/timetable-query?semester_id=${sem.id}`)

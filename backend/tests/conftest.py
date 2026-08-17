@@ -22,13 +22,10 @@ from app.api import (
     backups,
     basedata,
     calendar,
-    demo,
     exports,
     imports,
     leaves,
-    navigation,
     notifications,
-    onboarding,
     semesters,
     solver,
     substitution_log,
@@ -101,11 +98,8 @@ def env():
     application.include_router(substitution_log.router, prefix="/api")
     application.include_router(substitution_stats.router, prefix="/api")
     application.include_router(notifications.router, prefix="/api")
-    application.include_router(navigation.router, prefix="/api")
-    application.include_router(onboarding.router, prefix="/api")
     application.include_router(settings_api.router, prefix="/api")
     application.include_router(backups.router, prefix="/api")
-    application.include_router(demo.router, prefix="/api")
 
     @application.get("/api/_protected")
     def _protected(user: User = Depends(get_active_user)) -> dict:

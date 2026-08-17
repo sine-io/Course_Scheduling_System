@@ -182,8 +182,10 @@ test.describe('教师端(手机)', () => {
 
     // ── 以教师身份登录(手机尺寸)──
     await login(page, TEACHER_USER, TEACHER_PASS)
-    // 纯教师账号统一导向课表查询
-    await expect(page).toHaveURL(/\/timetable-query/)
+    // 教师先进入仪表盘，再从快捷入口进入课表查询
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('heading', { name: '仪表盘' })).toBeVisible()
+    await page.goto('/timetable-query')
     await expect(page.getByRole('heading', { name: '课表查询' })).toBeVisible()
 
     // 默认显示本人课表,且看得到自己的课
@@ -194,7 +196,7 @@ test.describe('教师端(手机)', () => {
     // 教师看不到排课作业/基础数据等管理菜单
     await page.getByTestId('shell-menu').click()
     await expect(page.getByTestId('mobile-drawer')).toBeVisible()
-    await expect(page.getByRole('region', { name: '常用' })
+    await expect(page.getByRole('region', { name: '排课主流程' })
       .getByRole('link', { name: '课表查询' })).toBeVisible()
     await expect(page.getByText('排课作业')).toHaveCount(0)
     await expect(page.getByText('基础数据')).toHaveCount(0)

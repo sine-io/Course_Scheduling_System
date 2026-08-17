@@ -71,7 +71,7 @@ async function selectSemester(page: Page) {
 }
 
 /** 示范学校:初中 3 班、8 位教师、24 项教学任务(幂等:已存在就直接沿用)。 */
-async function ensureDemoData(page: Page): Promise<number> {
+async function ensureManualData(page: Page): Promise<number> {
   const found = (await get(page, '/api/semesters'))
     .find((s: { academic_year: number; term: number }) => s.academic_year === YEAR && s.term === TERM)
   if (found) return found.id
@@ -204,7 +204,7 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
   test.setTimeout(300_000)
 
   await loginAsAdmin(page)
-  const sid = await ensureDemoData(page)
+  const sid = await ensureManualData(page)
   // 向导标记完成,否则路由守卫会把每一页导回向导
   await page.request.patch('/api/wizard/state', { data: { completed: true } })
 
@@ -286,7 +286,7 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
   await page.screenshot({ path: `${SHOTS}/09-timetable-query.png` })
 
   // ── 10 系统管理:备份与恢复(先真的备一份,空列表的截图讲不清楚这一章)──
-  await page.goto('/settings/system')
+  await page.goto('/settings/backup')
   await expect(page.getByTestId('backup-card')).toBeVisible({ timeout: 20_000 })
   const rows = page.getByTestId('backup-row')
   if (!(await rows.count())) {

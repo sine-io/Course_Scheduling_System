@@ -34,7 +34,6 @@ const semester = {
   readiness: 'ready',
   start_date: '2042-09-01',
   end_date: '2043-01-31',
-  is_demo: false,
   is_current: true,
 }
 const draft = {

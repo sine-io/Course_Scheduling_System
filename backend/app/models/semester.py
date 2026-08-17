@@ -8,17 +8,14 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
-    Index,
     Integer,
     String,
     UniqueConstraint,
     func,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,16 +40,7 @@ class SemesterReadiness(enum.StrEnum):
 class Semester(Base):
     __tablename__ = "semesters"
     __table_args__ = (
-        # 示例学期是隔离的体验上下文，可以与正式学期使用同一学年/学期。
-        # 正式学期之间仍保持业务上的唯一性。
-        Index(
-            "uq_semesters_formal_academic_year",
-            "academic_year",
-            "term",
-            unique=True,
-            postgresql_where=text("is_demo = false"),
-            sqlite_where=text("is_demo = 0"),
-        ),
+        UniqueConstraint("academic_year", "term", name="uq_semesters_academic_year"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -66,9 +54,6 @@ class Semester(Base):
         String(20), default=SemesterReadiness.draft.value,
         server_default=SemesterReadiness.draft.value,
     )
-    # 示例数据是独立的体验路径，不能满足正式学期的首次成功条件。
-    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
-
     # 当前学期不是 Semester 的生命周期状态，而是单校工作上下文。
     # 通过反向关系投影，避免在每张学期记录上复制一份可竞争的上下文状态。
     current_context: Mapped["SemesterContext | None"] = relationship(

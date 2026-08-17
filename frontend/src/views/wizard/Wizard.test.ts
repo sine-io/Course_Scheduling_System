@@ -4,7 +4,6 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import type { OnboardingStatus } from '@/api/onboarding'
 import type { WizardState } from '@/api/wizard'
 import { useAuthStore } from '@/stores/auth'
 import Wizard from './Wizard.vue'
@@ -13,34 +12,26 @@ const mocks = vi.hoisted(() => ({
   listTemplates: vi.fn(),
   createSemester: vi.fn(),
   getSemester: vi.fn(),
+  getSemesterContext: vi.fn(),
+  listSemesters: vi.fn(),
+  switchSemesterContext: vi.fn(),
   getWizardState: vi.fn(),
   updateWizardState: vi.fn(),
   getSemesterSummary: vi.fn(),
-  getOnboardingStatus: vi.fn(),
-  getOnboardingRoute: vi.fn(),
-  chooseOnboardingRoute: vi.fn(),
-  demoDataStatus: vi.fn(),
-  loadDemoData: vi.fn(),
 }))
 
 vi.mock('@/api/semesters', () => ({
   listTemplates: mocks.listTemplates,
   createSemester: mocks.createSemester,
   getSemester: mocks.getSemester,
+  getSemesterContext: mocks.getSemesterContext,
+  listSemesters: mocks.listSemesters,
+  switchSemesterContext: mocks.switchSemesterContext,
 }))
 vi.mock('@/api/wizard', () => ({
   getWizardState: mocks.getWizardState,
   updateWizardState: mocks.updateWizardState,
   getSemesterSummary: mocks.getSemesterSummary,
-}))
-vi.mock('@/api/onboarding', () => ({
-  getOnboardingStatus: mocks.getOnboardingStatus,
-  getOnboardingRoute: mocks.getOnboardingRoute,
-  chooseOnboardingRoute: mocks.chooseOnboardingRoute,
-}))
-vi.mock('@/api/assignments', () => ({
-  demoDataStatus: mocks.demoDataStatus,
-  loadDemoData: mocks.loadDemoData,
 }))
 
 const template = {
@@ -73,42 +64,6 @@ const semester = {
     is_default: true,
     periods: [],
   }],
-}
-
-const onboardingStages = [
-  ['semester', '学期'], ['periods', '作息'], ['calendar', '校历'],
-  ['basedata', '基础数据'], ['assignments', '教学任务'], ['integrity', '完整性检查'],
-  ['draft', '课表草稿'], ['published', '课表发布'],
-] as const
-
-function makeOnboardingStatus(nextStage: string, currentSemester: OnboardingStatus['current_semester'] = null): OnboardingStatus {
-  const nextIndex = onboardingStages.findIndex(([key]) => key === nextStage)
-  const stages = onboardingStages.map(([key, label], index) => {
-    const complete = nextIndex >= 0 && index < nextIndex
-    const action = {
-      stage: key,
-      label: `前往${label}`,
-      href: key === 'semester' ? '/wizard' : '/settings/semesters',
-    }
-    return {
-      key,
-      label,
-      complete,
-      status: complete ? 'complete' as const : 'blocked' as const,
-      blocking_reason: complete ? '' : `请完成${label}`,
-      next_action: complete ? null : action,
-      details: {},
-    }
-  })
-  const todos = stages.filter((stage) => !stage.complete)
-  return {
-    first_success: todos.length === 0,
-    wizard_completed: false,
-    current_semester: currentSemester,
-    stages,
-    p0_todos: todos,
-    next_action: todos[0]?.next_action ?? null,
-  }
 }
 
 function makeRouter() {
@@ -171,126 +126,28 @@ describe('Wizard', () => {
     }))
     mocks.getSemester.mockResolvedValue(semester)
     mocks.createSemester.mockResolvedValue(semester)
+    mocks.getSemesterContext.mockResolvedValue({
+      current_semester: null,
+      revision: 0,
+      can_switch: true,
+    })
+    mocks.listSemesters.mockResolvedValue([])
+    mocks.switchSemesterContext.mockResolvedValue({
+      current_semester: { ...semester, is_current: true },
+      revision: 1,
+      can_switch: true,
+    })
     mocks.getSemesterSummary.mockResolvedValue({ subjects: 12, teachers: 8, classes: 4, rooms: 3 })
-    mocks.getOnboardingStatus.mockResolvedValue(makeOnboardingStatus('semester'))
-    mocks.getOnboardingRoute.mockResolvedValue({
-      route: 'formal', demo_available: false, demo_school_name: '示例初中',
-      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
-      resume_step: 0, resume_semester_id: null,
-    })
-    mocks.chooseOnboardingRoute.mockImplementation(async (route: 'demo' | 'formal') => ({
-      route, demo_available: route === 'demo', demo_school_name: '示例初中',
-      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
-      resume_step: 0, resume_semester_id: null,
-    }))
-    mocks.demoDataStatus.mockRejectedValue(new Error('not available'))
   })
 
-  it('全新管理用户先选择示例或正式路线', async () => {
-    mocks.getWizardState.mockResolvedValue({ ...baseState, route: null })
-    mocks.getOnboardingRoute.mockResolvedValue({
-      route: null, demo_available: true, demo_school_name: '海州市启明实验初级中学',
-      has_demo_semester: false, has_formal_semester: false, can_reselect: true,
-      resume_step: 0, resume_semester_id: null,
-    })
-    const { wrapper } = await mountWizard({ ...baseState, route: null })
+  it('全新管理用户直接进入五步设置向导', async () => {
+    const { wrapper } = await mountWizard()
 
-    expect(wrapper.get('[data-testid="route-choice"]').text()).toContain('体验示例数据')
-    expect(wrapper.find('[data-testid="wizard-next"]').exists()).toBe(false)
-    await wrapper.get('[data-testid="route-formal"]').trigger('click')
-    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('formal')
     expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学制模板')
-  })
-
-  it('示例路线加载后进入自动排课并保持示例上下文', async () => {
-    mocks.getWizardState.mockResolvedValue({ ...baseState, route: null })
-    mocks.getOnboardingRoute
-      .mockResolvedValueOnce({
-        route: null, demo_available: true, demo_school_name: '示例初中',
-        has_demo_semester: false, has_formal_semester: false, can_reselect: true,
-        resume_step: 0, resume_semester_id: null,
-      })
-      .mockResolvedValue({
-        route: 'demo', demo_available: false, demo_school_name: '示例初中',
-        has_demo_semester: true, has_formal_semester: false, can_reselect: true,
-        resume_step: 0, resume_semester_id: null,
-      })
-    mocks.loadDemoData.mockResolvedValue({
-      semester_id: 9, school_name: '示例初中', classes: 18, teachers: 49,
-      subjects: 16, rooms: 26, assignments: 252, total_periods: 594,
-      max_overtime_used: 0, under_target: 0,
-    })
-    const { router, wrapper } = await mountWizard({ ...baseState, route: null })
-
-    await wrapper.get('[data-testid="route-demo"]').trigger('click')
-    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('demo')
-    expect(mocks.loadDemoData).toHaveBeenCalledTimes(1)
-    expect(router.currentRoute.value.name).toBe('auto-schedule')
-  })
-
-  it('重选已有示例路线时恢复上下文且不重复生成数据', async () => {
-    const demoState: WizardState = {
-      ...baseState, route: 'demo', current_step: 4, completed: true, semester_id: 9,
-    }
-    mocks.getWizardState.mockResolvedValue(demoState)
-    mocks.getOnboardingRoute.mockResolvedValue({
-      route: 'demo', demo_available: false, demo_school_name: '示例初中',
-      has_demo_semester: true, has_formal_semester: false, can_reselect: true,
-      resume_step: 4, resume_semester_id: 9,
-    })
-    mocks.chooseOnboardingRoute.mockResolvedValue({
-      route: 'demo', demo_available: false, demo_school_name: '示例初中',
-      has_demo_semester: true, has_formal_semester: false, can_reselect: true,
-      resume_step: 4, resume_semester_id: 9,
-    })
-    const { router, wrapper } = await mountWizard(demoState)
-
-    await wrapper.get('[data-testid="route-reselect"]').trigger('click')
-    await wrapper.get('[data-testid="route-demo"]').trigger('click')
-    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('demo')
-    expect(mocks.loadDemoData).not.toHaveBeenCalled()
-    expect(router.currentRoute.value.name).toBe('auto-schedule')
-  })
-
-  it('从示例路线重选正式路线后回到正式向导起点', async () => {
-    const demoState: WizardState = {
-      ...baseState, route: 'demo', current_step: 4, completed: true, semester_id: 9,
-    }
-    const formalState: WizardState = {
-      ...baseState, route: 'formal', current_step: 0, completed: false, semester_id: null,
-    }
-    mocks.getOnboardingRoute
-      .mockResolvedValueOnce({
-        route: 'demo', demo_available: false, demo_school_name: '示例初中',
-        has_demo_semester: true, has_formal_semester: false, can_reselect: true,
-        resume_step: 4, resume_semester_id: 9,
-      })
-      .mockResolvedValue({
-        route: 'formal', demo_available: false, demo_school_name: '示例初中',
-        has_demo_semester: true, has_formal_semester: false, can_reselect: true,
-        resume_step: 0, resume_semester_id: null,
-      })
-    const { wrapper } = await mountWizard(demoState)
-    mocks.getWizardState.mockResolvedValue(formalState)
-
-    await wrapper.get('[data-testid="route-reselect"]').trigger('click')
-    await wrapper.get('[data-testid="route-formal"]').trigger('click')
-    await wrapper.get('[data-testid="route-confirm"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.chooseOnboardingRoute).toHaveBeenCalledWith('formal')
-    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学制模板')
-    expect(wrapper.find('[data-testid="demo-context-banner"]').exists()).toBe(false)
-    expect(mocks.loadDemoData).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="route-choice"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="route-reselect"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('首次设置')
+    expect(wrapper.get('[data-testid="wizard-next"]')).toBeTruthy()
   })
 
   it('读取中显示明确状态', async () => {
@@ -354,52 +211,6 @@ describe('Wizard', () => {
     expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('学年学期')
   })
 
-  it('创建正式学期后刷新首次成功状态', async () => {
-    mocks.getOnboardingStatus
-      .mockResolvedValueOnce(makeOnboardingStatus('semester'))
-      .mockResolvedValueOnce(makeOnboardingStatus('periods', {
-        id: semester.id,
-        label: semester.label,
-        is_demo: false,
-      }))
-    const { wrapper } = await mountWizard()
-
-    expect(wrapper.get('[data-testid="onboarding-next-action"]').attributes('href')).toBe('/wizard')
-    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
-    await flushPromises()
-    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.getOnboardingStatus).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('[data-testid="onboarding-stage-periods"]').text()).toContain('请完成作息')
-    expect(wrapper.get('[data-testid="onboarding-next-action"]').attributes('href')).toBe('/settings/semesters')
-  })
-
-  it('导入基础数据后刷新首次成功状态', async () => {
-    mocks.getOnboardingStatus
-      .mockResolvedValueOnce(makeOnboardingStatus('basedata', {
-        id: semester.id,
-        label: semester.label,
-        is_demo: false,
-      }))
-      .mockResolvedValueOnce(makeOnboardingStatus('assignments', {
-        id: semester.id,
-        label: semester.label,
-        is_demo: false,
-      }))
-    const { wrapper } = await mountWizard({
-      ...baseState,
-      current_step: 3,
-      semester_id: semester.id,
-    })
-
-    await wrapper.get('[data-testid="import-complete"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.getOnboardingStatus).toHaveBeenCalledTimes(2)
-    expect(wrapper.get('[data-testid="onboarding-stage-assignments"]').text()).toContain('请完成教学任务')
-  })
-
   it('学期创建成功但进度保存失败时可从断点重试', async () => {
     let semesterPatchAttempts = 0
     mocks.updateWizardState.mockImplementation((body: Record<string, unknown>) => {
@@ -429,6 +240,32 @@ describe('Wizard', () => {
     expect(mocks.createSemester).toHaveBeenCalledTimes(1)
     expect(semesterPatchAttempts).toBe(2)
     expect(mocks.getSemester).toHaveBeenCalledWith(semester.id)
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('作息时间表')
+  })
+
+  it('重新执行向导创建学期后先切换当前工作学期', async () => {
+    const existingSemester = {
+      ...semester,
+      id: 7,
+      academic_year: 2041,
+      label: '2041-2042学年第一学期',
+      is_current: true,
+    }
+    mocks.getSemesterContext.mockResolvedValue({
+      current_semester: existingSemester,
+      revision: 4,
+      can_switch: true,
+    })
+    mocks.listSemesters.mockResolvedValue([existingSemester])
+    const { wrapper } = await mountWizard({ ...baseState, has_semesters: true })
+
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="wizard-next"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.switchSemesterContext).toHaveBeenCalledWith(semester.id, 4)
+    expect(mocks.updateWizardState).toHaveBeenCalledWith({ semester_id: semester.id })
     expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('作息时间表')
   })
 

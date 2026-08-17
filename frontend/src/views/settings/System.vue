@@ -5,12 +5,12 @@ import {
 } from '@lucide/vue'
 import {
   NAlert, NButton, NCheckbox, NInput, NInputNumber, NModal, NPopconfirm, NSwitch, NTag,
-  NUpload,
+  NSpin, NUpload,
   useDialog, useMessage,
 } from 'naive-ui'
 import type { UploadCustomRequestOptions, UploadSettledFileInfo } from 'naive-ui'
-import { computed, h, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ACCOUNT_ROLES, createAccount, listAccounts, updateAccount } from '@/api/accounts'
 import type { Account, AccountRole } from '@/api/accounts'
 import { listAuditLogs } from '@/api/audit'
@@ -20,13 +20,14 @@ import {
 } from '@/api/backups'
 import type { Backup, RestoreResult } from '@/api/backups'
 import {
-  demoDataStatus, getSchedulingSettings, getSchoolSettings, loadDemoData,
+  getSchedulingSettings, getSchoolSettings,
   saveSchedulingSettings, saveSchoolSettings,
 } from '@/api/assignments'
 import { apiErrorMessage } from '@/api/client'
 import { highRiskConfirmation } from '@/api/highRisk'
 import type { HighRiskConfirmation } from '@/api/highRisk'
-import { chooseOnboardingRoute } from '@/api/onboarding'
+import PagedListControls from '@/components/PagedListControls.vue'
+import { useServerPagination } from '@/composables/useServerPagination'
 import { getSmtp, saveSmtp } from '@/api/notifications'
 import { resetWizard } from '@/api/wizard'
 import { useAuthStore } from '@/stores/auth'
@@ -34,35 +35,61 @@ import { useWizardStore } from '@/stores/wizard'
 import './settings-workspace.css'
 
 const router = useRouter()
+const route = useRoute()
 const message = useMessage()
 const dialog = useDialog()
 const wizard = useWizardStore()
 const auth = useAuthStore()
 
 const isAdmin = computed(() => auth.hasRole('admin'))
+const settingsSection = computed<'system' | 'backup' | 'accounts'>(() => {
+  if (route.name === 'backup') return 'backup'
+  if (route.name === 'account-permissions') return 'accounts'
+  return 'system'
+})
+const pageTitle = computed(() => ({
+  system: '系统管理',
+  backup: '备份恢复',
+  accounts: '账号权限',
+}[settingsSection.value]))
+const pageDescription = computed(() => ({
+  system: '维护学校信息、通知渠道、排课参数、审计记录和设置向导。',
+  backup: '创建、下载和恢复系统数据备份。恢复操作会先保留当前状态。',
+  accounts: '维护系统账号、角色、状态和临时登录凭据。',
+}[settingsSection.value]))
 const adminLoading = ref(isAdmin.value)
 const adminError = ref<string | null>(null)
 
 const backups = ref<Backup[]>([])
 const accounts = ref<Account[]>([])
-const auditLogs = ref<AuditLog[]>([])
-const auditQuery = ref('')
-const filteredAuditLogs = computed(() => {
-  const query = auditQuery.value.trim().toLowerCase()
-  if (!query) return auditLogs.value
-  return auditLogs.value.filter((log) => [
-    log.username,
-    ...log.actor_roles.map((role) => auth.roleLabel(role)),
-    log.action,
-    auditActionLabel(log.action),
-    auditTargetLabel(log.target_type),
-    log.target_version,
-    log.result,
-    auditResultLabel(log.result),
-    log.reason,
-    log.detail,
-  ].some((value) => value.toLowerCase().includes(query)))
+const AUDIT_QUERY_KEY = 'audit_q'
+const AUDIT_ROUTE_KEYS = ['audit_page', 'audit_page_size', AUDIT_QUERY_KEY] as const
+const auditCard = ref<HTMLElement | null>(null)
+
+function normalizedAuditQuery(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 100) : ''
+}
+
+const auditQuery = ref(normalizedAuditQuery(route.query[AUDIT_QUERY_KEY]))
+const auditAppliedQuery = computed(() => normalizedAuditQuery(route.query[AUDIT_QUERY_KEY]))
+const auditPager = useServerPagination<AuditLog>({
+  queryPrefix: 'audit',
+  additionalRouteKeys: [AUDIT_QUERY_KEY],
+  enabled: () => isAdmin.value && settingsSection.value === 'system',
+  fetchPage: ({ page, pageSize }) => listAuditLogs({
+    page,
+    pageSize,
+    q: normalizedAuditQuery(route.query[AUDIT_QUERY_KEY]),
+  }),
+  errorMessage: (error) => apiErrorMessage(error, '审计记录读取失败，请重试。'),
 })
+const auditLogs = auditPager.items
+const auditTotal = auditPager.total
+const auditPage = auditPager.page
+const auditPageSize = auditPager.pageSize
+const auditLoading = auditPager.loading
+const auditError = auditPager.error
+let auditSearchTimer: number | null = null
 const creatingBackup = ref(false)
 const restoringBackup = ref<string | null>(null)
 const confirmingUploadRestore = ref(false)
@@ -88,9 +115,6 @@ const maxOvertime = ref(8)
 const savingScheduling = ref(false)
 const schoolName = ref('')
 const savingSchool = ref(false)
-const demoAvailable = ref(false)
-const demoSchool = ref('')
-const loadingDemo = ref(false)
 const resettingWizard = ref(false)
 let redirectingAfterRestore = false
 
@@ -138,7 +162,6 @@ const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   create_account: '创建账号',
   create_backup: '创建备份',
   create_calendar_exception: '新增特殊日期',
-  create_demo_data: '创建示例数据',
   create_leave: '登记请假',
   delete_assignment: '删除教学任务',
   delete_backup: '删除备份',
@@ -200,6 +223,50 @@ function auditResultType(result: string): 'success' | 'warning' | 'error' | 'inf
   }[result] as 'success' | 'warning' | 'error' | 'info' | undefined ?? 'default'
 }
 
+async function normalizeAuditRouteQuery() {
+  const raw = route.query[AUDIT_QUERY_KEY]
+  const normalized = normalizedAuditQuery(raw)
+  if (raw === normalized || (raw === undefined && !normalized)) return
+  const query = { ...route.query }
+  if (normalized) query[AUDIT_QUERY_KEY] = normalized
+  else delete query[AUDIT_QUERY_KEY]
+  await router.replace({ query })
+}
+
+async function initializeAudit() {
+  if (!isAdmin.value || settingsSection.value !== 'system') return
+  await normalizeAuditRouteQuery()
+  await auditPager.initialize()
+}
+
+async function applyAuditQuery() {
+  if (auditSearchTimer !== null) window.clearTimeout(auditSearchTimer)
+  auditSearchTimer = null
+  const normalized = normalizedAuditQuery(auditQuery.value)
+  if (auditQuery.value !== normalized) auditQuery.value = normalized
+  await auditPager.replaceQuery({ [AUDIT_QUERY_KEY]: normalized || null })
+}
+
+watch(auditQuery, (value) => {
+  if (auditSearchTimer !== null) window.clearTimeout(auditSearchTimer)
+  if (normalizedAuditQuery(value) === auditAppliedQuery.value) {
+    auditSearchTimer = null
+    return
+  }
+  auditSearchTimer = window.setTimeout(() => {
+    void applyAuditQuery()
+  }, 400)
+})
+
+watch(() => route.query[AUDIT_QUERY_KEY], (value) => {
+  const normalized = normalizedAuditQuery(value)
+  if (auditQuery.value !== normalized) auditQuery.value = normalized
+})
+
+onBeforeUnmount(() => {
+  if (auditSearchTimer !== null) window.clearTimeout(auditSearchTimer)
+})
+
 async function loadAdminSettings() {
   if (!isAdmin.value) {
     adminLoading.value = false
@@ -208,14 +275,18 @@ async function loadAdminSettings() {
   adminLoading.value = true
   adminError.value = null
   try {
-    const [smtpSettings, scheduling, school, demo, backupRows, accountRows, auditRows] = await Promise.all([
+    if (settingsSection.value === 'backup') {
+      backups.value = await listBackups()
+      return
+    }
+    if (settingsSection.value === 'accounts') {
+      accounts.value = await listAccounts()
+      return
+    }
+    const [smtpSettings, scheduling, school] = await Promise.all([
       getSmtp(),
       getSchedulingSettings(),
       getSchoolSettings(),
-      demoDataStatus(),
-      listBackups(),
-      listAccounts(),
-      listAuditLogs(),
     ])
     smtp.value = {
       host: smtpSettings.host,
@@ -229,11 +300,6 @@ async function loadAdminSettings() {
     hasPassword.value = smtpSettings.has_password
     maxOvertime.value = scheduling.max_overtime
     schoolName.value = school.school_name
-    demoAvailable.value = demo.available
-    demoSchool.value = demo.school_name
-    backups.value = backupRows
-    accounts.value = accountRows
-    auditLogs.value = auditRows
   } catch (error) {
     adminError.value = apiErrorMessage(error, '暂时无法读取系统设置，请重试。')
   } finally {
@@ -241,7 +307,30 @@ async function loadAdminSettings() {
   }
 }
 
-onMounted(loadAdminSettings)
+async function loadSettingsSection() {
+  const shouldScrollToAudit = settingsSection.value === 'system'
+    && AUDIT_ROUTE_KEYS.some((key) => route.query[key] !== undefined)
+  if (settingsSection.value === 'system') {
+    await Promise.all([loadAdminSettings(), initializeAudit()])
+    if (shouldScrollToAudit) {
+      await nextTick()
+      if (typeof auditCard.value?.scrollIntoView === 'function') {
+        auditCard.value.scrollIntoView({ block: 'start' })
+      }
+    }
+    return
+  }
+  await loadAdminSettings()
+}
+
+onMounted(() => {
+  void loadSettingsSection()
+})
+
+watch(settingsSection, (section, previous) => {
+  if (section === previous) return
+  void loadSettingsSection()
+})
 
 async function reloadBackups() {
   if (!isAdmin.value) return
@@ -263,11 +352,8 @@ async function reloadAccounts() {
 
 async function reloadAudit() {
   if (!isAdmin.value) return
-  try {
-    auditLogs.value = await listAuditLogs()
-  } catch (error) {
-    message.error(apiErrorMessage(error, '审计记录读取失败，请重试。'))
-  }
+  if (!auditPager.initialized.value) await initializeAudit()
+  else await auditPager.reload()
 }
 
 async function onCreateBackup() {
@@ -525,26 +611,6 @@ async function onSaveSchool() {
   }
 }
 
-async function onLoadDemo() {
-  if (loadingDemo.value) return
-  loadingDemo.value = true
-  try {
-    await chooseOnboardingRoute('demo')
-    const result = await loadDemoData()
-    schoolName.value = result.school_name
-    demoAvailable.value = false
-    message.success(
-      `已创建 ${result.classes} 个班级、${result.teachers} 名教师和 ${result.assignments} 条教学任务`
-      + `（共 ${result.total_periods} 课时），现在可以试用自动排课。`,
-      { duration: 8000 },
-    )
-  } catch (error) {
-    message.error(apiErrorMessage(error, '示例数据加载失败，请重试。'))
-  } finally {
-    loadingDemo.value = false
-  }
-}
-
 async function onSaveScheduling() {
   if (savingScheduling.value) return
   savingScheduling.value = true
@@ -596,8 +662,8 @@ async function onResetWizard() {
     <header class="settings-page-header">
       <div>
         <p class="settings-eyebrow">{{ '系统配置' }}</p>
-        <h1>{{ '系统管理' }}</h1>
-        <p>{{ '维护学校信息、通知、排课参数和可恢复的数据快照。' }}</p>
+        <h1>{{ pageTitle }}</h1>
+        <p>{{ pageDescription }}</p>
       </div>
       <DatabaseBackup :size="22" class="settings-heading-icon" aria-hidden="true" />
     </header>
@@ -619,7 +685,7 @@ async function onResetWizard() {
     </section>
 
     <template v-else-if="isAdmin">
-      <section class="settings-panel" data-testid="school-card">
+      <section v-if="settingsSection === 'system'" class="settings-panel" data-testid="school-card">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '基础身份' }}</p>
@@ -641,23 +707,7 @@ async function onResetWizard() {
         </div>
       </section>
 
-      <section v-if="demoAvailable" class="settings-panel" data-testid="demo-card">
-        <div class="settings-panel-heading">
-          <div>
-            <p class="settings-eyebrow">{{ '试用数据' }}</p>
-            <h2>{{ '示例数据' }}</h2>
-            <p>{{ `加载虚构学校“${demoSchool || '示例初中'}”，用于体验自动排课和后续流程。` }}</p>
-          </div>
-        </div>
-        <n-alert type="warning" :show-icon="false">{{ '仅可在尚未创建任何学期的全新系统中加载，请勿在正式系统中使用。' }}</n-alert>
-        <div class="settings-actions">
-          <n-button type="primary" :loading="loadingDemo" :disabled="loadingDemo" data-testid="demo-load" @click="onLoadDemo">
-            {{ '加载示例数据' }}
-          </n-button>
-        </div>
-      </section>
-
-      <section class="settings-panel" data-testid="smtp-card">
+      <section v-if="settingsSection === 'system'" class="settings-panel" data-testid="smtp-card">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '通知渠道' }}</p>
@@ -699,7 +749,7 @@ async function onResetWizard() {
         </div>
       </section>
 
-      <section class="settings-panel" data-testid="accounts-card">
+      <section v-if="settingsSection === 'accounts'" class="settings-panel" data-testid="accounts-card">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '访问控制' }}</p>
@@ -760,7 +810,7 @@ async function onResetWizard() {
         </div>
       </section>
 
-      <section class="settings-panel" data-testid="backup-card">
+      <section v-if="settingsSection === 'backup'" class="settings-panel" data-testid="backup-card">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '数据安全' }}</p>
@@ -835,7 +885,7 @@ async function onResetWizard() {
         </div>
       </section>
 
-      <section class="settings-panel" data-testid="scheduling-card">
+      <section v-if="settingsSection === 'system'" class="settings-panel" data-testid="scheduling-card">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '排课规则' }}</p>
@@ -857,7 +907,7 @@ async function onResetWizard() {
         </div>
       </section>
 
-      <section class="settings-panel" data-testid="audit-card">
+      <section v-if="settingsSection === 'system'" ref="auditCard" class="settings-panel" data-testid="audit-card">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '安全追溯' }}</p>
@@ -866,23 +916,39 @@ async function onResetWizard() {
           </div>
           <ClipboardList :size="20" class="settings-heading-icon" aria-hidden="true" />
         </div>
-        <div class="settings-actions">
+        <div class="settings-actions audit-actions">
           <n-input
             v-model:value="auditQuery"
+            class="audit-search"
             clearable
+            maxlength="100"
             placeholder="搜索操作者、动作、目标或结果"
             aria-label="搜索审计记录"
             data-testid="audit-search"
+            @keyup.enter="applyAuditQuery"
           />
-          <n-button quaternary data-testid="audit-refresh" @click="reloadAudit">
+          <n-button quaternary :loading="auditLoading" data-testid="audit-refresh" @click="reloadAudit">
             <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
             {{ '刷新' }}
           </n-button>
         </div>
-        <div v-if="!filteredAuditLogs.length" class="settings-empty" data-testid="audit-empty">
-          <span class="settings-field-hint">{{ auditQuery ? '没有符合条件的记录。' : '暂无审计记录。' }}</span>
+        <n-alert v-if="auditError" type="error" :bordered="false" data-testid="audit-error">
+          <div class="settings-actions">
+            <span>{{ auditError }}</span>
+            <n-button size="small" data-testid="audit-retry" @click="reloadAudit">
+              <template #icon><RefreshCw :size="14" aria-hidden="true" /></template>
+              {{ '重新读取' }}
+            </n-button>
+          </div>
+        </n-alert>
+        <div v-if="auditLoading && !auditLogs.length" class="settings-empty audit-state" data-testid="audit-loading" role="status">
+          <n-spin size="small" />
+          <span class="settings-field-hint">{{ '正在读取审计记录' }}</span>
         </div>
-        <div v-else class="settings-table-scroll">
+        <div v-else-if="!auditLogs.length && !auditError" class="settings-empty" data-testid="audit-empty">
+          <span class="settings-field-hint">{{ auditAppliedQuery ? '没有符合条件的记录。' : '暂无审计记录。' }}</span>
+        </div>
+        <div v-else-if="auditLogs.length" class="settings-table-scroll" :aria-busy="auditLoading">
           <table class="settings-data-table" data-testid="audit-table">
             <thead>
               <tr>
@@ -894,7 +960,7 @@ async function onResetWizard() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="log in filteredAuditLogs" :key="log.id" data-testid="audit-row">
+              <tr v-for="log in auditLogs" :key="log.id" data-testid="audit-row">
                 <td>{{ new Date(log.created_at).toLocaleString('zh-CN', { hour12: false }) }}</td>
                 <td>
                   <strong>{{ log.username }}</strong>
@@ -910,10 +976,21 @@ async function onResetWizard() {
             </tbody>
           </table>
         </div>
+        <PagedListControls
+          v-if="auditTotal > 0"
+          :page="auditPage"
+          :page-size="auditPageSize"
+          :page-sizes="auditPager.pageSizes"
+          :total="auditTotal"
+          :loading="auditLoading"
+          test-id="audit-pagination"
+          @update:page="auditPager.setPage"
+          @update:page-size="auditPager.setPageSize"
+        />
       </section>
     </template>
 
-    <n-modal v-if="isAdmin" v-model:show="accountShow" preset="card" :title="accountTarget ? '编辑账号' : '新增账号'" style="max-width: 520px">
+    <n-modal v-if="isAdmin && settingsSection === 'accounts'" v-model:show="accountShow" preset="card" :title="accountTarget ? '编辑账号' : '新增账号'" style="max-width: 520px">
       <div class="settings-modal-form">
         <div class="settings-form-grid settings-form-grid-two">
           <div class="settings-field">
@@ -969,12 +1046,12 @@ async function onResetWizard() {
       </div>
     </n-modal>
 
-    <section class="settings-panel settings-danger-panel" data-testid="wizard-reset-card">
+    <section v-if="settingsSection === 'system'" class="settings-panel settings-danger-panel" data-testid="wizard-reset-card">
       <div class="settings-panel-heading">
         <div>
           <p class="settings-eyebrow">{{ '重新开始' }}</p>
           <h2>{{ '设置向导' }}</h2>
-          <p>{{ '重新执行首次设置向导，不会删除现有数据。' }}</p>
+          <p>{{ '重新执行五步设置向导，不会删除现有数据。' }}</p>
         </div>
         <RotateCcw :size="20" aria-hidden="true" />
       </div>

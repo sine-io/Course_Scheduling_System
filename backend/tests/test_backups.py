@@ -155,7 +155,7 @@ def test_scheduler_cannot_restore(env, backup_dir):
 
     client.post("/api/auth/logout")
     _login(client, db, "adm-audit", [Role.admin])
-    attempts = client.get("/api/audit-logs?action=restore_backup").json()
+    attempts = client.get("/api/audit-logs?action=restore_backup").json()["items"]
     assert len(attempts) == 1
     assert attempts[0]["username"] == "sch"
     assert attempts[0]["actor_roles"] == ["scheduler"]
@@ -188,7 +188,7 @@ def test_scheduler_cannot_create_backup(env, backup_dir, monkeypatch):
     assert called is False
     client.post("/api/auth/logout")
     _login(client, db, "adm-audit", [Role.admin])
-    log = client.get("/api/audit-logs?action=create_backup").json()[0]
+    log = client.get("/api/audit-logs?action=create_backup").json()["items"][0]
     assert log["username"] == "sch"
     assert log["result"] == "rejected"
     assert log["reason"] == "high_risk_permission_denied"
@@ -232,7 +232,7 @@ def test_create_backup_requires_confirmation_and_deduplicates_operation(
     assert repeated.json()["detail"]["code"] == "high_risk_duplicate_operation"
     assert calls == ["manual"]
 
-    attempts = client.get("/api/audit-logs?action=create_backup").json()
+    attempts = client.get("/api/audit-logs?action=create_backup").json()["items"]
     assert [(item["result"], item["reason"]) for item in reversed(attempts)] == [
         ("rejected", "high_risk_confirmation_required"),
         ("success", ""),
@@ -261,7 +261,7 @@ def test_delete_backup_requires_confirmation_and_records_success(env, backup_dir
     )
     assert deleted.status_code == 200
     assert not (backup_dir / name).exists()
-    log = client.get("/api/audit-logs?action=delete_backup").json()[0]
+    log = client.get("/api/audit-logs?action=delete_backup").json()["items"][0]
     assert log["username"] == "adm"
     assert log["target_version"] == name
     assert log["result"] == "success"
@@ -292,7 +292,7 @@ def test_delete_backup_file_failure_is_not_reported_as_success(
 
     assert failed.status_code == 500
     assert (backup_dir / name).exists()
-    log = client.get("/api/audit-logs?action=delete_backup").json()[0]
+    log = client.get("/api/audit-logs?action=delete_backup").json()["items"][0]
     assert log["result"] == "failed"
     assert log["reason"] == "backup_delete_failed"
 
@@ -342,7 +342,7 @@ def test_restore_requires_exact_target_and_records_worker_failure(
     assert failed.status_code == 502
     assert restore_calls == [name]
 
-    attempts = client.get("/api/audit-logs?action=restore_backup").json()
+    attempts = client.get("/api/audit-logs?action=restore_backup").json()["items"]
     assert [(item["result"], item["reason"]) for item in reversed(attempts)] == [
         ("rejected", "high_risk_target_mismatch"),
         ("failed", "backup_job_failed"),
