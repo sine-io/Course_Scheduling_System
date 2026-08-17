@@ -11,15 +11,16 @@ from fastapi import (
     UploadFile,
     status,
 )
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api import high_risk_http
 from app.core.auth import get_active_user
 from app.core.db import get_db
-from app.core.permissions import can_edit_core, core_viewer
+from app.core.permissions import can_edit_core, core_editor, core_viewer
 from app.models.user import User
 from app.schemas.high_risk import HighRiskConfirmation
-from app.services import high_risk, importer, semester_context
+from app.services import combined_import, high_risk, importer, semester_context
 
 router = APIRouter(tags=["import"])
 
@@ -48,6 +49,104 @@ def download_template(entity: str, _: object = Depends(viewer)) -> Response:
         media_type=XLSX_MIME,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/import/setup/template")
+def download_setup_template(_: object = Depends(viewer)) -> Response:
+    """下载科目、教师、班级、教室四表合一的初始数据模板。"""
+    return Response(
+        content=combined_import.build_template(),
+        media_type=XLSX_MIME,
+        headers={
+            "Content-Disposition": 'attachment; filename="school_setup_template.xlsx"'
+        },
+    )
+
+
+def _require_setup_semester(db: Session, semester_id: int) -> None:
+    try:
+        semester_context.require_writable(db, semester_id)
+    except semester_context.SemesterContextError as exc:
+        raise HTTPException(
+            exc.status_code, {"code": exc.code, "message": exc.message}
+        ) from exc
+
+
+async def _read_setup_workbook(file: UploadFile) -> bytes:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "上传文件不能为空")
+    return content
+
+
+@router.post("/import/setup/preview")
+async def preview_setup_import(
+    semester_id: int = Query(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: object = Depends(viewer),
+) -> dict:
+    """解析组合工作簿并返回零写入的逐行预览。"""
+    _require_setup_semester(db, semester_id)
+    content = await _read_setup_workbook(file)
+    try:
+        return combined_import.build_plan(db, semester_id, content).as_dict()
+    except combined_import.InvalidWorkbookError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@router.post("/import/setup/commit")
+async def commit_setup_import(
+    semester_id: int = Query(...),
+    file: UploadFile = File(...),
+    fingerprint: str = Form(...),
+    confirm_changes: bool = Form(False),
+    db: Session = Depends(get_db),
+    _: object = Depends(core_editor),
+) -> dict:
+    """重新校验工作簿，并在预览仍有效时以一个事务写入。"""
+    _require_setup_semester(db, semester_id)
+    content = await _read_setup_workbook(file)
+    try:
+        plan = combined_import.build_plan(db, semester_id, content)
+    except combined_import.InvalidWorkbookError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    if plan.fingerprint != fingerprint:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "combined_import_preview_stale",
+                "message": "基础数据已发生变化，请重新预览后再提交",
+            },
+        )
+    if plan.errors:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "combined_import_conflicts",
+                "message": "工作簿仍有冲突，请修正后重新预览",
+            },
+        )
+    if any(row.status == "changed" for rows in plan.rows.values() for row in rows):
+        if not confirm_changes:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {
+                    "code": "combined_import_changes_unconfirmed",
+                    "message": "工作簿包含对现有数据的修改，请确认变更后再提交",
+                },
+            )
+    try:
+        return combined_import.apply_plan(db, plan)
+    except SQLAlchemyError as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "combined_import_write_conflict",
+                "message": "提交时数据发生冲突，请重新预览后再试",
+            },
+        ) from exc
 
 
 @router.post("/import/{entity}")
