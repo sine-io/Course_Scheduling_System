@@ -107,7 +107,7 @@ def build_check(db: Session, semester: Semester) -> SetupCheckOut:
         )
 
     if summary.rooms == 0:
-        warn("rooms_missing", "尚未录入教室或场地，可稍后补充", 1)
+        warn("rooms_missing", "尚未录入教室/场地，可稍后补充", 1)
     account_count = int(
         db.scalar(
             select(func.count())
@@ -135,7 +135,7 @@ def build_check(db: Session, semester: Semester) -> SetupCheckOut:
     if missing_time_count:
         warn(
             "bell_times_missing",
-            f"有 {missing_time_count} 个课节尚未填写完整钟点时间",
+            f"有 {missing_time_count} 个课节尚未填写完整铃声时间",
             2,
         )
 

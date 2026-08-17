@@ -56,7 +56,7 @@ const blockedCheck = {
     { code: 'regular_period_missing', message: '至少需要配置 1 节常规课', step: 2 },
   ],
   warnings: [
-    { code: 'rooms_missing', message: '尚未录入教室或场地，可稍后补充', step: 1 },
+    { code: 'rooms_missing', message: '尚未录入教室/场地，可稍后补充', step: 1 },
   ],
   summary: { subjects: 0, teachers: 1, classes: 1, rooms: 0 },
 }
@@ -66,7 +66,7 @@ const readyCheck = {
   first_incomplete_step: 3,
   blockers: [],
   warnings: [
-    { code: 'rooms_missing', message: '尚未录入教室或场地，可稍后补充', step: 1 },
+    { code: 'rooms_missing', message: '尚未录入教室/场地，可稍后补充', step: 1 },
     { code: 'special_dates_missing', message: '尚未登记停课或补课等特殊日期', step: 0 },
   ],
   summary: { subjects: 3, teachers: 4, classes: 2, rooms: 0 },
@@ -117,7 +117,10 @@ async function mountWizard(state: WizardState = baseState, roles = ['scheduler']
     global: {
       plugins: [pinia, router],
       stubs: {
-        ImportTab: { template: '<div data-testid="import-tab-stub" />' },
+        ImportTab: {
+          props: ['initialWorkspaceMode', 'initialManualSection'],
+          template: '<div data-testid="import-tab-stub">{{ initialWorkspaceMode }}/{{ initialManualSection }}</div>',
+        },
         PeriodSetup: { template: '<div data-testid="period-setup-stub" />' },
       },
     },
@@ -277,9 +280,54 @@ describe('Wizard', () => {
 
     expect(wrapper.get('[data-testid="wizard-blockers"]').text()).toContain('至少需要录入 1 个科目')
     expect(wrapper.get('[data-testid="wizard-finish"]').attributes('disabled')).toBeDefined()
-    await wrapper.get('[data-testid="wizard-blockers"] .n-button').trigger('click')
+    await wrapper.get('[data-testid="wizard-check-action-subjects_missing"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('基础数据')
+    expect(wrapper.get('[data-testid="import-tab-stub"]').text()).toContain('manual/subjects')
+  })
+
+  it('完成检查把教室提醒直接定位到手工录入页签', async () => {
+    mocks.getSetupCheck.mockResolvedValue({
+      ...readyCheck,
+      warnings: [readyCheck.warnings[0]],
+    })
+    const { wrapper } = await mountWizard({ ...baseState, current_step: 3, semester_id: semester.id })
+
+    await wrapper.get('[data-testid="wizard-check-action-rooms_missing"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="wizard-step-title"]').text()).toContain('基础数据')
+    expect(wrapper.get('[data-testid="import-tab-stub"]').text()).toContain('manual/rooms')
+  })
+
+  it('无账号管理权限时明确标注教师账号由系统管理员处理', async () => {
+    mocks.getSetupCheck.mockResolvedValue({
+      ...readyCheck,
+      warnings: [
+        { code: 'teacher_accounts_missing', message: '尚未绑定教师账号，可稍后在账号管理中处理', step: 1 },
+      ],
+    })
+    const { wrapper } = await mountWizard({ ...baseState, current_step: 3, semester_id: semester.id })
+
+    expect(wrapper.get('[data-testid="wizard-warnings"]').text()).toContain('需由系统管理员处理')
+    expect(wrapper.find('[data-testid="wizard-check-action-teacher_accounts_missing"]').exists()).toBe(false)
+  })
+
+  it('系统管理员可以从教师账号提醒进入账号管理', async () => {
+    mocks.getSetupCheck.mockResolvedValue({
+      ...readyCheck,
+      warnings: [
+        { code: 'teacher_accounts_missing', message: '尚未绑定教师账号，可稍后在账号管理中处理', step: 1 },
+      ],
+    })
+    const { router, wrapper } = await mountWizard(
+      { ...baseState, current_step: 3, semester_id: semester.id },
+      ['admin'],
+    )
+
+    await wrapper.get('[data-testid="wizard-check-action-teacher_accounts_missing"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('account-permissions')
   })
 
   it('只有提醒项时要求明确确认，确认后走专用完成接口', async () => {

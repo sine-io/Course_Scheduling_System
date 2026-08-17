@@ -28,20 +28,30 @@ import { highRiskConfirmation } from '@/api/highRisk'
 import ManualEntry from './ManualEntry.vue'
 import './basedata-workspace.css'
 
+type WorkspaceMode = 'batch' | 'manual'
+type ManualSection = 'subjects' | 'teachers' | 'classes' | 'rooms'
+
 const props = withDefaults(
   defineProps<{
     semesterId: number
     canEdit?: boolean
     canManageAccounts?: boolean
+    initialWorkspaceMode?: WorkspaceMode
+    initialManualSection?: ManualSection
   }>(),
-  { canEdit: true, canManageAccounts: false },
+  {
+    canEdit: true,
+    canManageAccounts: false,
+    initialWorkspaceMode: 'batch',
+    initialManualSection: 'subjects',
+  },
 )
 const emit = defineEmits<{ imported: [] }>()
 const message = useMessage()
 const dialog = useDialog()
 const labels = ENTITY_LABELS
 
-const workspaceMode = ref<'batch' | 'manual'>('batch')
+const workspaceMode = ref<WorkspaceMode>(props.initialWorkspaceMode)
 const mode = ref<'combined' | 'single'>('combined')
 
 const combinedFileList = ref<UploadFileInfo[]>([])
@@ -504,6 +514,7 @@ function onSingleUpload() {
       v-else
       :semester-id="semesterId"
       :can-edit="canEdit"
+      :initial-section="initialManualSection"
       @changed="emit('imported')"
     />
   </div>

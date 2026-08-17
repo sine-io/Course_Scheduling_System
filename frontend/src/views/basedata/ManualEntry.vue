@@ -15,15 +15,20 @@ import SubjectsTab from './SubjectsTab.vue'
 import TeachersTab from './TeachersTab.vue'
 import './basedata-workspace.css'
 
+type ManualSection = 'subjects' | 'teachers' | 'classes' | 'rooms'
+
 const props = withDefaults(
-  defineProps<{ semesterId: number; canEdit?: boolean }>(),
-  { canEdit: true },
+  defineProps<{
+    semesterId: number
+    canEdit?: boolean
+    initialSection?: ManualSection
+  }>(),
+  { canEdit: true, initialSection: 'subjects' },
 )
 const emit = defineEmits<{ changed: [] }>()
 const message = useMessage()
 
-type ManualSection = 'subjects' | 'teachers' | 'classes' | 'rooms'
-const activeSection = ref<ManualSection>('subjects')
+const activeSection = ref<ManualSection>(props.initialSection)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const childRevision = ref(0)

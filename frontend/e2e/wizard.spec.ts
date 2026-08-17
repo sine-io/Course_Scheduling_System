@@ -152,7 +152,7 @@ test('设置向导完整旅程：中性学期、手工录入、作息确认、�
       const switchResponse = await api.put('/api/semester-context', {
         data: { semester_id: originalSemesterId, expected_revision: context.revision },
       })
-      await requireOk(switchResponse, '恢复原当前学期')
+      await requireOk(switchResponse, '切回原当前学期')
     }
     await api.patch('/api/wizard/state', {
       data: {

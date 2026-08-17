@@ -61,11 +61,20 @@ const preview: CombinedImportPreview = {
   ],
 }
 
-async function mountTab(canEdit = true) {
+async function mountTab(
+  canEdit = true,
+  initialWorkspaceMode: 'batch' | 'manual' = 'batch',
+  initialManualSection: 'subjects' | 'teachers' | 'classes' | 'rooms' = 'subjects',
+) {
   const Host = {
     render: () => h(NMessageProvider, null, {
       default: () => h(NDialogProvider, null, {
-        default: () => h(ImportTab, { semesterId: 8, canEdit }),
+        default: () => h(ImportTab, {
+          semesterId: 8,
+          canEdit,
+          initialWorkspaceMode,
+          initialManualSection,
+        }),
       }),
     }),
   }
@@ -127,6 +136,12 @@ describe('ImportTab combined setup import', () => {
 
     expect(wrapper.get('[data-testid="manual-entry-stub"]')).toBeTruthy()
     expect(wrapper.find('[data-testid="combined-import-panel"]').exists()).toBe(false)
+  })
+
+  it('支持从完成检查直接打开指定的手工录入页签', async () => {
+    const wrapper = await mountTab(true, 'manual', 'rooms')
+
+    expect(wrapper.get('[data-testid="manual-entry-stub"]')).toBeTruthy()
   })
 
   it('预览逐行状态，修改项确认前不可提交', async () => {

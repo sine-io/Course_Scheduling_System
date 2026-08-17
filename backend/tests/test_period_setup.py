@@ -64,6 +64,33 @@ def apply(client, semester_id: int, fingerprint: str, groups: list[dict]):
     )
 
 
+def test_empty_semester_gets_a_neutral_period_suggestion(setup_env):
+    client, db, semester_id = setup_env
+
+    response = client.get(f"/api/semesters/{semester_id}/period-setup")
+
+    assert response.status_code == 200
+    draft = response.json()
+    assert draft["source"] == "suggested"
+    assert len(draft["groups"]) == 1
+    assert draft["groups"][0] == {
+        "key": "default",
+        "table_id": None,
+        "name": "默认作息",
+        "num_weekdays": 5,
+        "is_default": True,
+        "class_ids": [],
+        "periods": [pattern(1, "第一节")],
+    }
+    assert "初中" not in response.text
+    assert draft["ready"] is True
+    assert draft["warnings"] == [
+        "当前学期还没有班级，作息分组建议会随基础数据补充",
+        "有节次尚未填写完整的开始和结束时间",
+    ]
+    assert db.query(PeriodTable).count() == 0
+
+
 def test_mixed_tracks_are_only_suggested_and_do_not_write(setup_env):
     client, db, semester_id = setup_env
     junior_a = add_class(client, semester_id, "初一1班", "junior_high", 7)

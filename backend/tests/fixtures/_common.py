@@ -82,7 +82,7 @@ def _clock(value: str) -> time:
 def _create_fixture_semester(
     db: Session, academic_year: int, term: int, dataset_key: str
 ) -> Semester:
-    """直接构建测试数据，不依赖任何公开初始化预设。"""
+    """直接构建测试数据，不依赖任何公开初始化方案。"""
     if dataset_key not in _SUBJECTS:
         raise ValueError(f"未知测试数据类型：{dataset_key}")
     semester = Semester(academic_year=academic_year, term=term)

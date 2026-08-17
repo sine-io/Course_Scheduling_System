@@ -27,10 +27,13 @@ const subject = {
   is_major: true,
 }
 
-async function mountEntry(canEdit = true) {
+async function mountEntry(
+  canEdit = true,
+  initialSection: 'subjects' | 'teachers' | 'classes' | 'rooms' = 'subjects',
+) {
   const Host = {
     render: () => h(NMessageProvider, null, {
-      default: () => h(ManualEntry, { semesterId: 8, canEdit }),
+      default: () => h(ManualEntry, { semesterId: 8, canEdit, initialSection }),
     }),
   }
   const wrapper = mount(Host, {
@@ -76,6 +79,12 @@ describe('ManualEntry', () => {
     expect(wrapper.get('[data-testid="manual-section-rooms"]').text()).toContain('0 条 · 已完成')
     expect(wrapper.find('[data-testid="manual-common-preview"]').exists()).toBe(false)
     expect(mocks.createSubject).not.toHaveBeenCalled()
+  })
+
+  it('支持以指定页签作为初始录入位置', async () => {
+    const wrapper = await mountEntry(true, 'rooms')
+
+    expect(wrapper.get('[data-testid="manual-section-rooms"]').classes()).toContain('active')
   })
 
   it('逐项展示常用科目，确认前不写入，确认后只新增所选项', async () => {

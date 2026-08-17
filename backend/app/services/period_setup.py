@@ -242,17 +242,28 @@ def build_draft(db: Session, semester_id: int) -> dict[str, Any]:
         for item in classes:
             by_track[item.track].append(item.id)
         tracks = [track for track in TRACK_ORDER if track in by_track]
-        if not tracks:
-            tracks = [ClassTrack.junior_high.value]
-        for index, track in enumerate(tracks):
+        if tracks:
+            for index, track in enumerate(tracks):
+                groups.append(
+                    {
+                        "key": f"track-{track}",
+                        "table_id": None,
+                        "name": f"{TRACK_LABELS.get(track, track)}作息",
+                        "num_weekdays": 5,
+                        "is_default": index == 0,
+                        "class_ids": by_track[track],
+                        "periods": [_neutral_pattern(5)],
+                    }
+                )
+        else:
             groups.append(
                 {
-                    "key": f"track-{track}",
+                    "key": "default",
                     "table_id": None,
-                    "name": f"{TRACK_LABELS.get(track, track)}作息",
+                    "name": "默认作息",
                     "num_weekdays": 5,
-                    "is_default": index == 0,
-                    "class_ids": by_track.get(track, []),
+                    "is_default": True,
+                    "class_ids": [],
                     "periods": [_neutral_pattern(5)],
                 }
             )

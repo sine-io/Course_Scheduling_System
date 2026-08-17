@@ -133,7 +133,7 @@ curl http://localhost/api/health
 - 本机:<http://localhost>
 - 校内其他电脑:`http://<主机的局域网IP>`(例如 `http://192.168.1.50`,IP 用 `ipconfig` / `ip a` 查)
 
-以 `.env` 设置的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录,系统会要求你**首次改密码**,接着进入**设置向导**,按页面上的五个步骤创建学期、教师、班级、科目即可开始使用。
+以 `.env` 设置的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录,系统会要求你**首次改密码**,接着进入**设置向导**,按页面上的四个步骤确认学校与学期、录入基础数据、配置作息安排并完成检查，即可开始创建教学任务。
 
 ---
 

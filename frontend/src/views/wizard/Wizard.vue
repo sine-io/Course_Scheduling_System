@@ -45,12 +45,26 @@ const actionError = ref<string | null>(null)
 const checkError = ref<string | null>(null)
 const checkLoading = ref(false)
 const warningsAcknowledged = ref(false)
+type BaseDataSection = 'subjects' | 'teachers' | 'classes' | 'rooms'
+const baseDataTarget = ref<BaseDataSection | null>(null)
 
 const termOptions = [
   { label: '第一学期', value: 1 },
   { label: '第二学期', value: 2 },
 ]
 const stepNames = ['学校与学期', '基础数据', '作息安排', '完成检查']
+const baseDataSections: Partial<Record<string, BaseDataSection>> = {
+  subjects_missing: 'subjects',
+  teachers_missing: 'teachers',
+  classes_missing: 'classes',
+  rooms_missing: 'rooms',
+}
+const baseDataActionLabels: Record<BaseDataSection, string> = {
+  subjects: '录入科目',
+  teachers: '录入教师',
+  classes: '录入班级',
+  rooms: '录入教室',
+}
 const canEditCore = computed(() => (
   // Isolated component tests mount without the router guard; the API remains the final boundary.
   !auth.user || canEditCoreRole(auth.user.roles)
@@ -256,6 +270,7 @@ async function goNext() {
     }
 
     const nextStep = Math.min(step.value + 1, 3)
+    if (nextStep === 1) baseDataTarget.value = null
     step.value = nextStep
     if (!await persistStep(nextStep)) {
       step.value = previousStep
@@ -281,15 +296,18 @@ async function goPrev() {
   actionError.value = null
   const previousStep = step.value
   const nextStep = Math.max(step.value - 1, 0)
+  if (nextStep === 1) baseDataTarget.value = null
   step.value = nextStep
   busy.value = true
   if (!await persistStep(nextStep)) step.value = previousStep
   busy.value = false
 }
 
-async function goToStep(targetStep: number) {
+async function goToStep(targetStep: number, targetSection: BaseDataSection | null = null) {
   const nextStep = Math.max(0, Math.min(targetStep, 2))
   actionError.value = null
+  const previousTarget = baseDataTarget.value
+  if (nextStep === 1) baseDataTarget.value = targetSection
   if (!canEditCore.value) {
     step.value = nextStep
     return
@@ -298,19 +316,38 @@ async function goToStep(targetStep: number) {
   const previousStep = step.value
   step.value = nextStep
   busy.value = true
-  if (!await persistStep(nextStep)) step.value = previousStep
+  if (!await persistStep(nextStep)) {
+    step.value = previousStep
+    baseDataTarget.value = previousTarget
+  }
   busy.value = false
 }
 
 function checkActionLabel(item: SetupCheckItem): string {
+  const section = baseDataSections[item.code]
+  if (section) return baseDataActionLabels[section]
+  if (item.code.startsWith('semester_dates_')) return '修改学期日期'
   if (item.code === 'special_dates_missing') return '前往校历设置'
   if (item.code === 'teacher_accounts_missing' && auth.hasRole('admin')) return '前往账号管理'
-  return `返回${stepNames[item.step]}`
+  if (item.step === 2) return '修改作息安排'
+  return `修改${stepNames[item.step]}`
+}
+
+function checkActionAvailable(item: SetupCheckItem): boolean {
+  return item.code !== 'teacher_accounts_missing' || auth.hasRole('admin')
 }
 
 async function openCheckItem(item: SetupCheckItem) {
+  const section = baseDataSections[item.code]
+  if (section) {
+    await goToStep(1, section)
+    return
+  }
   if (item.code === 'special_dates_missing') {
-    await router.push({ name: 'calendar' })
+    await router.push({
+      name: 'calendar',
+      query: semesterId.value ? { semester: String(semesterId.value) } : undefined,
+    })
     return
   }
   if (item.code === 'teacher_accounts_missing' && auth.hasRole('admin')) {
@@ -492,6 +529,8 @@ onMounted(loadWizardData)
             v-if="semesterId"
             :semester-id="semesterId"
             :can-edit="canEditSemester"
+            :initial-workspace-mode="baseDataTarget ? 'manual' : 'batch'"
+            :initial-manual-section="baseDataTarget ?? 'subjects'"
             @imported="refreshCheck"
           />
           <n-empty v-else :description="'请先完成学期创建'" data-testid="wizard-import-empty" />
@@ -555,9 +594,16 @@ onMounted(loadWizardData)
                 <li v-for="item in setupCheck.blockers" :key="item.code">
                   <span class="wizard-check-marker wizard-check-marker-blocker" aria-hidden="true" />
                   <span>{{ item.message }}</span>
-                  <n-button text type="primary" @click="openCheckItem(item)">
+                  <n-button
+                    v-if="checkActionAvailable(item)"
+                    text
+                    type="primary"
+                    :data-testid="`wizard-check-action-${item.code}`"
+                    @click="openCheckItem(item)"
+                  >
                     {{ checkActionLabel(item) }}
                   </n-button>
+                  <span v-else class="wizard-check-action-note">{{ '需由系统管理员处理' }}</span>
                 </li>
               </ul>
             </section>
@@ -571,9 +617,16 @@ onMounted(loadWizardData)
                 <li v-for="item in setupCheck.warnings" :key="item.code">
                   <span class="wizard-check-marker wizard-check-marker-warning" aria-hidden="true" />
                   <span>{{ item.message }}</span>
-                  <n-button text type="primary" @click="openCheckItem(item)">
+                  <n-button
+                    v-if="checkActionAvailable(item)"
+                    text
+                    type="primary"
+                    :data-testid="`wizard-check-action-${item.code}`"
+                    @click="openCheckItem(item)"
+                  >
                     {{ checkActionLabel(item) }}
                   </n-button>
+                  <span v-else class="wizard-check-action-note">{{ '需由系统管理员处理' }}</span>
                 </li>
               </ul>
               <n-checkbox
@@ -732,6 +785,7 @@ onMounted(loadWizardData)
 .wizard-check-list { display: grid; margin: 0; padding: 0; border-top: 1px solid var(--app-border); list-style: none; }
 .wizard-check-list li { display: grid; min-width: 0; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--app-border); }
 .wizard-check-list li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.wizard-check-action-note { color: var(--app-text-faint); font-size: 12px; }
 .wizard-check-marker { width: 8px; height: 8px; border-radius: 50%; }
 .wizard-check-marker-blocker { background: var(--app-danger); }
 .wizard-check-marker-warning { background: var(--app-warning); }

@@ -1,4 +1,4 @@
-"""API 测试使用的数据构建工具，不依赖公开初始化预设。"""
+"""API 测试使用的数据构建工具，不依赖公开初始化方案。"""
 
 from collections.abc import Iterable
 
@@ -59,7 +59,7 @@ def create_period_table(
     slots: Iterable[tuple[int, str, str, str, str]] = JUNIOR_HIGH_SLOTS,
     is_default: bool = False,
 ) -> dict:
-    """直接构建测试用作息时间表，不依赖公开模板。"""
+    """直接构建测试用作息时间表，不依赖公开初始化方案。"""
     response = client.post(
         f"/api/semesters/{semester_id}/period-tables",
         json={"name": name, "is_default": is_default},
