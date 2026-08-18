@@ -8,6 +8,7 @@ import {
   ClipboardList,
   DatabaseBackup,
   History,
+  House,
   LayoutDashboard,
   Settings2,
   ShieldCheck,
@@ -26,6 +27,7 @@ import {
 
 export type NavigationRole = 'admin' | 'scheduler' | 'director' | 'teacher'
 export type NavigationKey =
+  | 'workspace-home'
   | 'dashboard'
   | 'semesters'
   | 'calendar'
@@ -85,6 +87,7 @@ function entry(
  * discover from the shell.
  */
 export const NAVIGATION_CATALOG: readonly NavigationEntry[] = [
+  entry('workspace-home', '首页总览', '掌握当前学期运行状态并处理重点教务事项。', House, '工作空间', CORE_VIEW_ROLES, { name: 'workspace-home' }),
   entry('dashboard', '仪表盘', '查看当前学期摘要、角色快捷入口和可访问的今日运行。', LayoutDashboard, '学期准备', DAILY_USER_ROLES, { name: 'dashboard' }),
   entry('semesters', '学期与作息时间表', '管理学期、作息时间表和历史学期。', CalendarDays, '学期准备', CORE_VIEW_ROLES, { name: 'semesters' }, { activeNames: ['semesters', 'period-table-editor'] }),
   entry('calendar', '校历与排课准备', '维护校历特殊日期和学期准备状态。', CalendarCheck2, '学期准备', DAILY_OPERATOR_ROLES, { name: 'calendar' }),
@@ -146,7 +149,7 @@ export function accessibleCatalog(
 }
 
 export function navigationGroupOrder(): readonly string[] {
-  return ['学期准备', '排课主流程', '日常运行', '报表', '系统管理']
+  return ['工作空间', '学期准备', '排课主流程', '日常运行', '报表', '系统管理']
 }
 
 export function navigationGroupEntries(

@@ -50,6 +50,12 @@ const routes = [
         meta: { allowedRoles: ALL_DAILY_ROLES },
       },
       {
+        path: 'workspace/home',
+        name: 'workspace-home',
+        component: () => import('@/views/WorkspaceHome.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
+      },
+      {
         path: 'settings/semesters',
         name: 'semesters',
         component: () => import('@/views/settings/Semesters.vue'),

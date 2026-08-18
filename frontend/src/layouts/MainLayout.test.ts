@@ -62,6 +62,7 @@ function makeRouter() {
         name: 'dashboard',
         component: { template: '<main data-testid="page">仪表盘内容</main>' },
       },
+      { path: '/workspace/home', name: 'workspace-home', component: { template: '<main />' } },
       { path: '/wizard', name: 'wizard', component: { template: '<main />' } },
       { path: '/timetable-query', name: 'timetable-query', component: { template: '<main />' } },
       { path: '/notifications', name: 'notifications', component: { template: '<main />' } },
@@ -123,6 +124,8 @@ describe('MainLayout', () => {
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
     expect(wrapper.get('[data-testid="shell-breadcrumb"]').text()).toContain('仪表盘')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('工作空间')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('首页总览')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('系统管理')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('学期准备')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课主流程')
@@ -156,8 +159,15 @@ describe('MainLayout', () => {
     expect(teacherNav).toContain('通知')
     expect(teacherNav).toContain('我的代课课时')
     expect(teacherNav).not.toContain('排课工作台')
+    expect(teacherNav).not.toContain('工作空间')
+    expect(teacherNav).not.toContain('首页总览')
     expect(teacherNav).not.toContain('系统管理')
     expect(teacherLayout.wrapper.find('.app-nav-common').exists()).toBe(false)
+
+    const schedulerGroups = wrapper.findAll('.app-nav-group')
+    expect(schedulerGroups[0].text()).toContain('工作空间')
+    expect(schedulerGroups[1].text()).toContain('学期准备')
+    expect(schedulerGroups[1].text()).toContain('仪表盘')
   })
 
   it('opens the mobile drawer, moves focus into it, and restores focus on escape', async () => {

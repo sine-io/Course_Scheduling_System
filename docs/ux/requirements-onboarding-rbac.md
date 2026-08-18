@@ -1,6 +1,6 @@
 # 设置向导与角色导航需求基线
 
-本文记录“功能分类、仪表盘快捷入口和 RBAC”对齐后的产品需求。导航部分以 ADR-0005 为准，设置向导以 ADR-0007 为准；本文是业务验收基线，不是页面设计稿。
+本文记录“功能分类、工作空间、仪表盘快捷入口和 RBAC”对齐后的产品需求。导航部分以 ADR-0005 和 ADR-0008 为准，设置向导以 ADR-0007 为准；本文是业务验收基线，不是页面设计稿。
 
 ## 目标
 
@@ -19,7 +19,7 @@
 
 顶部工具栏只承载当前学校/当前学期、通知、帮助和账号等全局上下文；不放删除、发布、恢复等高风险动作。
 
-侧边栏直接按“学期准备、排课主流程、日常运行、报表、系统管理”五组展示获准页面；仪表盘提供每个角色最多三个固定快捷入口。
+侧边栏直接按“工作空间、学期准备、排课主流程、日常运行、报表、系统管理”六组展示获准页面；工作空间置于学期准备和仪表盘之前，仪表盘继续提供每个角色最多三个固定快捷入口。
 
 快捷入口由角色职责固定决定，不保存个人固定、排序或最近访问状态，也不能绕过权限、检查、确认或审计。
 
@@ -33,6 +33,12 @@
 | 教师 | 已发布课表和本人事务 | 课表查询、请假登记、通知 |
 
 一个用户可以同时拥有多个角色。权限取并集；只要拥有排课管理员角色，默认进入管理视角，不提供会改变授权结果的角色切换器。
+
+## 工作空间首页总览
+
+首页总览只面向系统管理员、排课管理员和教务主任，独立于默认仪表盘。它聚合当前学期已有的教师、班级、课表完整度、求解前置检查、调代课和通知事实，不创建另一套任务或建议状态。
+
+目标课表优先使用最近更新草稿，没有草稿时使用已发布课表。页面展示六项真实指标、最多四项重点事项、角色化五个核心入口、排课进度和最多四项非阻断运行建议；无当前学期、无课表、无教学任务、无事项和局部检查失败均有明确状态。
 
 ## 动作权限基线
 
@@ -75,6 +81,7 @@
 5. 教务主任能查看全校数据并处理日常调课代课，但不能发布课表。
 6. 排课管理员兼教师时，权限取并集并默认进入管理视角。
 7. 历史/归档学期默认只读，不能误发布。
+8. 管理角色能从侧栏工作空间进入首页总览并看到真实聚合数据；教师看不到入口且直接访问或请求接口均被拒绝。
 
 ## 可重复验收
 
@@ -85,6 +92,7 @@ Issue #34 以公开用户界面和后端 HTTP 动作边界完成规格收口，�
 | 四步设置向导、保存续作与旧接口下线 | `frontend/e2e/wizard.spec.ts` | `backend/tests/test_wizard.py` |
 | 课表发布与仪表盘快捷入口 | `frontend/e2e/full-journey.spec.ts`、`frontend/e2e/issue-30-navigation.spec.ts` | `backend/tests/test_publish.py` |
 | 四个固定角色、多角色权限与导航重定向 | `frontend/e2e/issue-30-navigation.spec.ts`、`frontend/e2e/issue-31-navigation-preferences.spec.ts` | `backend/tests/test_core_rbac.py`、`backend/tests/test_daily_rbac.py` |
+| 工作空间首页总览、真实聚合与响应式状态 | `frontend/src/views/WorkspaceHome.test.ts`、工作空间 Playwright 验收 | `backend/tests/test_workspace_overview.py` |
 | 当前/历史/归档学期 | `frontend/e2e/semester-context.spec.ts`、`frontend/e2e/issue-33-high-risk-operations.spec.ts` | `backend/tests/test_semester_context.py`、`backend/tests/test_semesters.py` |
 | 发布保护、管理员高风险操作与审计 | `frontend/e2e/issue-32-publication-protection.spec.ts`、`frontend/e2e/issue-33-high-risk-operations.spec.ts` | `backend/tests/test_publish.py`、`backend/tests/test_high_risk_deletions.py`、`backend/tests/test_high_risk_accounts.py` |
 | 桌面、平板、手机、键盘与状态消息 | `frontend/e2e/app-shell.spec.ts`、`frontend/e2e/a11y.spec.ts` 及 `frontend/e2e/issue-16-responsive.spec.ts` 至 `issue-22-responsive.spec.ts` | 不适用 |

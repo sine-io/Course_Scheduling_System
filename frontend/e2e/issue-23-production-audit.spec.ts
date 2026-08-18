@@ -13,6 +13,7 @@ const VIEWPORTS = [
 
 const SCHEDULER_ROUTES = [
   ['/', '仪表盘'],
+  ['/workspace/home', '首页总览'],
   ['/settings/semesters', '学期与作息时间表'],
   ['/settings/calendar', '校历与排课准备'],
   ['/basedata', '基础数据'],
@@ -40,6 +41,7 @@ const TEACHER_ROUTES = [
 
 const RESTRICTED_TEACHER_ROUTES = [
   '/wizard',
+  '/workspace/home',
   '/change-password',
   '/settings/semesters',
   '/settings/calendar',

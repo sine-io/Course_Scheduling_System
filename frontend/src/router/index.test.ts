@@ -26,6 +26,9 @@ describe('router role boundaries', () => {
 
     await router.push('/scheduling/auto')
     expect(router.currentRoute.value.name).toBe('auto-schedule')
+
+    await router.push('/workspace/home')
+    expect(router.currentRoute.value.name).toBe('workspace-home')
   }, 10_000)
 
   it('keeps pure teachers on personal daily pages and blocks management links', async () => {
@@ -55,6 +58,8 @@ describe('router role boundaries', () => {
     await router.push('/substitution-stats')
     expect(router.currentRoute.value.name).toBe('substitution-stats')
     await router.push('/scheduling/workbench')
+    expect(router.currentRoute.value.name).toBe('timetable-query')
+    await router.push('/workspace/home')
     expect(router.currentRoute.value.name).toBe('timetable-query')
   })
 

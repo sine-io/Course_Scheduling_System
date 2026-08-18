@@ -3,7 +3,6 @@ import {
   CalendarDays,
   ChevronRight,
   CircleHelp,
-  LayoutDashboard,
   LogOut,
   Menu,
   Users,
@@ -246,20 +245,6 @@ onBeforeUnmount(() => {
       </div>
 
       <nav class="app-nav" aria-label="功能导航" data-testid="shell-nav">
-        <RouterLink
-          v-if="catalogGroups.some((group) => group.items.some((item) => item.key === 'dashboard'))"
-          :to="{ name: 'dashboard' }"
-          class="app-nav-link app-nav-dashboard-link"
-          :class="{ 'is-active': routeNavKey === 'dashboard' }"
-          :aria-current="routeNavKey === 'dashboard' ? 'page' : undefined"
-          aria-label="仪表盘"
-          title="查看当前学期、角色快捷入口和今日运行。"
-          data-nav-key="dashboard"
-          @click="onNavClick"
-        >
-          <span class="app-nav-icon" aria-hidden="true"><LayoutDashboard :size="18" :stroke-width="1.8" /></span>
-          <span class="app-nav-text">仪表盘</span>
-        </RouterLink>
         <section
           v-for="(group, groupIndex) in catalogGroups"
           :key="group.label"
@@ -268,7 +253,7 @@ onBeforeUnmount(() => {
         >
           <p :id="`catalog-nav-group-${groupIndex}`" class="app-nav-label">{{ group.label }}</p>
           <RouterLink
-            v-for="item in group.items.filter((entry) => entry.key !== 'dashboard')"
+            v-for="item in group.items"
             :key="item.key"
             :to="item.route"
             class="app-nav-link"
