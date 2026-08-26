@@ -329,7 +329,7 @@ def nav_html(current: str) -> str:
         '<span class="mark">学校排课系统</span>'
         '<span class="sub">文档</span></a>' % home,
         '<div class="grp">用户文档</div><nav>',
-        '<a href="%s">排课管理员操作手册</a>' % home,
+        '<a href="%s">教务主任操作手册</a>' % home,
         "</nav>",
     ]
     for group, items in GROUPS:

@@ -9,6 +9,7 @@ import {
   login,
   switchCurrentSemester,
 } from './helpers'
+import { SEM_END, SEM_START } from './dates'
 
 test.describe('Issue 25: current semester context', () => {
   test('persists the shared switch and rejects an old-link write', async ({ page }) => {
@@ -29,7 +30,15 @@ test.describe('Issue 25: current semester context', () => {
     await page.goto('/scheduling/assignments')
     const selector = page.getByTestId('current-semester-select')
     await expect(selector).toHaveValue(String(second.id))
+    const confirmation = new Promise<string>((resolve) => {
+      page.once('dialog', async (dialog) => {
+        const message = dialog.message()
+        await dialog.accept()
+        resolve(message)
+      })
+    })
     await selector.selectOption(String(first.id))
+    await expect(confirmation).resolves.toContain('会改变全校用户的当前工作学期')
     await expect(selector).toHaveValue(String(first.id))
 
     await page.reload()
@@ -47,7 +56,12 @@ test.describe('Issue 25: current semester context', () => {
     await expect(page.getByTestId('period-table-save')).toBeDisabled()
 
     const copied = await page.request.post(`/api/semesters/${first.id}/copy`, {
-      data: { academic_year: copyYear, term: 1 },
+      data: {
+        academic_year: copyYear,
+        term: 1,
+        start_date: SEM_START,
+        end_date: SEM_END,
+      },
     })
     expect(copied.status()).toBe(201)
     expect((await (await page.request.get('/api/semester-context')).json()).current_semester.id)
@@ -69,34 +83,41 @@ test.describe('Issue 25: current semester context', () => {
     await deleteSemesterByYearTerm(page, copyYear, 1)
   })
 
-  test('director and teacher see the current context without a switch control', async ({ page }) => {
+  test('director can switch the current context while teacher cannot', async ({ page }) => {
     const year = 2080 + (Date.now() % 10)
     await login(page)
     await deleteSemesterByYearTerm(page, year, 2)
     const semester = await createTestSemester(page, year, { term: 2, subjects: [] })
 
     try {
-      for (const [username, password] of [
-        [E2E_DIRECTOR_USER, E2E_DIRECTOR_PASS],
-        [E2E_TEACHER_USER, E2E_TEACHER_PASS],
-      ] as const) {
-        await page.request.post('/api/auth/logout')
-        await login(page, username, password)
-        await expect(page.getByTestId('current-semester-label')).toHaveText(
-          `${year}-${year + 1}学年第二学期`,
-        )
-        await expect(page.getByTestId('current-semester-select')).toHaveCount(0)
-
-        const context = await (await page.request.get('/api/semester-context')).json() as {
-          revision: number
-          can_switch: boolean
-        }
-        expect(context.can_switch).toBe(false)
-        const denied = await page.request.put('/api/semester-context', {
-          data: { semester_id: semester.id, expected_revision: context.revision },
-        })
-        expect(denied.status()).toBe(403)
+      await page.request.post('/api/auth/logout')
+      await login(page, E2E_DIRECTOR_USER, E2E_DIRECTOR_PASS)
+      await expect(page.getByTestId('current-semester-select')).toHaveValue(String(semester.id))
+      const directorContext = await (await page.request.get('/api/semester-context')).json() as {
+        revision: number
+        can_switch: boolean
       }
+      expect(directorContext.can_switch).toBe(true)
+      const switched = await page.request.put('/api/semester-context', {
+        data: { semester_id: semester.id, expected_revision: directorContext.revision },
+      })
+      expect(switched.status()).toBe(200)
+
+      await page.request.post('/api/auth/logout')
+      await login(page, E2E_TEACHER_USER, E2E_TEACHER_PASS)
+      await expect(page.getByTestId('current-semester-label')).toHaveText(
+        `${year}-${year + 1}学年第二学期`,
+      )
+      await expect(page.getByTestId('current-semester-select')).toHaveCount(0)
+      const teacherContext = await (await page.request.get('/api/semester-context')).json() as {
+        revision: number
+        can_switch: boolean
+      }
+      expect(teacherContext.can_switch).toBe(false)
+      const denied = await page.request.put('/api/semester-context', {
+        data: { semester_id: semester.id, expected_revision: teacherContext.revision },
+      })
+      expect(denied.status()).toBe(403)
     } finally {
       await page.request.post('/api/auth/logout')
       await login(page)

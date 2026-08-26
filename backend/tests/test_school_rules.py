@@ -26,7 +26,11 @@ PW = "password123"
 
 def test_school_rules_use_simplified_chinese_and_gregorian_years():
     assert TIMEZONE == "Asia/Shanghai"
-    assert ROLE_DISPLAY_NAMES["scheduler"] == "排课管理员"
+    assert ROLE_DISPLAY_NAMES == {
+        "admin": "系统管理员",
+        "director": "教务主任",
+        "teacher": "教师",
+    }
     assert format_semester_label(2026, 1) == "2026-2027学年第一学期"
     assert format_semester_label(2026, 2) == "2026-2027学年第二学期"
     assert leave_type_label("bereavement") == "丧假"
@@ -90,7 +94,7 @@ def test_public_app_config_has_only_supported_fields(env):
         "academic_year",
     }
     assert body["timezone"] == "Asia/Shanghai"
-    assert body["role_display_names"]["scheduler"] == "排课管理员"
+    assert body["role_display_names"] == ROLE_DISPLAY_NAMES
     assert body["academic_year"] == {
         "storage": "start_year",
         "min": 1900,
@@ -102,8 +106,8 @@ def test_public_app_config_has_only_supported_fields(env):
 
 def test_calendar_api_crud_and_readiness_confirmation(env):
     client, db = env
-    make_user(db, "scheduler", PW, roles=[Role.scheduler])
-    login = client.post("/api/auth/login", json={"username": "scheduler", "password": PW})
+    make_user(db, "director", PW, roles=[Role.director])
+    login = client.post("/api/auth/login", json={"username": "director", "password": PW})
     assert login.status_code == 200
 
     semester_response = client.post(

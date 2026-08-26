@@ -37,7 +37,13 @@ def _subject_exists(client, semester_id: int, subject_id: int) -> bool:
 
 def _build_delete_targets(client) -> tuple[int, list[tuple[str, str, str]]]:
     semester = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).json()
     sid = semester["id"]
     table = client.post(
@@ -135,7 +141,7 @@ def _build_delete_targets(client) -> tuple[int, list[tuple[str, str, str]]]:
 def test_all_destructive_deletes_are_admin_only_confirmed_and_audited(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])
-    make_user(db, "scheduler", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler", PW, roles=[Role.director])
     _login(client, "admin")
     _sid, targets = _build_delete_targets(client)
 
@@ -148,7 +154,7 @@ def test_all_destructive_deletes_are_admin_only_confirmed_and_audited(env):
     rejected = db.query(AuditLog).filter(AuditLog.result == "rejected").all()
     assert [item.action for item in rejected] == [item[2] for item in targets]
     assert all(item.username == "scheduler" for item in rejected)
-    assert all(item.actor_roles == [Role.scheduler.value] for item in rejected)
+    assert all(item.actor_roles == [Role.director.value] for item in rejected)
 
     _login(client, "admin")
     for path, target, _action in targets:
@@ -163,7 +169,7 @@ def test_all_destructive_deletes_are_admin_only_confirmed_and_audited(env):
 
 def test_non_admin_missing_delete_targets_are_denied_before_lookup_and_audited(env):
     client, db = env
-    make_user(db, "scheduler", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler", PW, roles=[Role.director])
     _login(client, "scheduler")
     missing_id = 987654
     targets = [
@@ -226,7 +232,13 @@ def test_delete_requires_exact_confirmation_and_reused_operation_is_zero_write(e
     make_user(db, "admin", PW, roles=[Role.admin])
     _login(client, "admin")
     semester = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).json()
     sid = semester["id"]
     first = client.post(
@@ -269,7 +281,13 @@ def test_historical_archived_and_referenced_delete_fail_without_partial_data(env
     make_user(db, "admin", PW, roles=[Role.admin])
     _login(client, "admin")
     first = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).json()
     sid = first["id"]
     subject = client.post(
@@ -287,7 +305,13 @@ def test_historical_archived_and_referenced_delete_fail_without_partial_data(env
     assert _subject_exists(client, sid, subject["id"])
 
     second = client.post(
-        "/api/semesters", json={"academic_year": 2027, "term": 1}
+        "/api/semesters",
+        json={
+            "academic_year": 2027,
+            "term": 1,
+            "start_date": "2027-09-01",
+            "end_date": "2028-01-20",
+        },
     ).json()
     context = client.get("/api/semester-context").json()
     assert client.put(

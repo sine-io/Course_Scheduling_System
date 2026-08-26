@@ -1,8 +1,10 @@
 import { apiGet, apiPost, request } from '@/api/client'
 import type { HighRiskConfirmation } from '@/api/highRisk'
 
-export const ACCOUNT_ROLES = ['admin', 'director', 'scheduler', 'teacher'] as const
+export const ACCOUNT_ROLES = ['admin', 'director', 'teacher'] as const
 export type AccountRole = typeof ACCOUNT_ROLES[number]
+export const ACCOUNT_ASSIGNABLE_ROLES = ['director', 'teacher'] as const
+export type AccountAssignableRole = typeof ACCOUNT_ASSIGNABLE_ROLES[number]
 
 export interface Account {
   id: number
@@ -12,20 +14,21 @@ export interface Account {
   is_active: boolean
   must_change_password: boolean
   auth_provider: string
+  is_builtin: boolean
 }
 
 export interface AccountCreatePayload {
   username: string
   display_name: string
   temporary_password: string
-  roles: AccountRole[]
+  roles: AccountAssignableRole[]
   confirmation: HighRiskConfirmation
 }
 
 export interface AccountUpdatePayload {
   display_name?: string
   temporary_password?: string
-  roles?: AccountRole[]
+  roles?: AccountAssignableRole[]
   is_active?: boolean
   confirmation: HighRiskConfirmation
 }

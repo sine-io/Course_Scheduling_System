@@ -11,7 +11,7 @@ const VIEWPORTS = [
   { width: 375, height: 812 },
 ] as const
 
-const SCHEDULER_ROUTES = [
+const DIRECTOR_ROUTES = [
   ['/', '仪表盘'],
   ['/workspace/home', '首页总览'],
   ['/settings/semesters', '学期与作息时间表'],
@@ -40,7 +40,6 @@ const TEACHER_ROUTES = [
 ] as const
 
 const RESTRICTED_TEACHER_ROUTES = [
-  '/wizard',
   '/workspace/home',
   '/change-password',
   '/settings/semesters',
@@ -83,7 +82,7 @@ test('生产发布不暴露原型路由、变体切换器或状态模拟器', as
 })
 
 for (const [viewportIndex, viewport] of VIEWPORTS.entries()) {
-  test(`排课管理员在 ${viewport.width}x${viewport.height} 可访问全部生产工作面且页面不溢出`, async ({ page }, testInfo) => {
+  test(`教务主任在 ${viewport.width}x${viewport.height} 可访问全部生产工作面且页面不溢出`, async ({ page }, testInfo) => {
     test.setTimeout(120_000)
     const year = 2071 + viewportIndex
     const pageErrors: string[] = []
@@ -109,7 +108,7 @@ for (const [viewportIndex, viewport] of VIEWPORTS.entries()) {
     expect(periodTableId).toBeTruthy()
 
     const routes = [
-      ...SCHEDULER_ROUTES,
+      ...DIRECTOR_ROUTES,
       [`/settings/period-tables/${periodTableId}`, '作息时间表'] as const,
     ]
 
@@ -205,11 +204,14 @@ test('教师导航只显示允许页面且受限直达 URL 在加载业务数据
   await expect(navigation.getByRole('link', { name: '系统管理' })).toHaveCount(0)
   await page.keyboard.press('Escape')
 
+  // 允许页面的异步读取必须结束后，才开始审计受限直达链接。
+  // 否则前一个页面卸载时迟到的请求会被误记到下一段断言中。
+  await page.waitForLoadState('networkidle')
+
   page.on('request', (request) => {
     const url = new URL(request.url())
     const path = url.pathname
     const allowed = ALLOWED_TEACHER_API_PATHS.has(path)
-      || /^\/api\/semesters\/\d+\/summary$/.test(path)
     if (path.startsWith('/api/') && !allowed) {
       unexpectedApiRequests.push(`${request.method()} ${path}`)
     }

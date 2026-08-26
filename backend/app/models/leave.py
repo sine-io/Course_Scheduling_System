@@ -74,7 +74,7 @@ class LeaveRequest(Base):
     reason: Mapped[str] = mapped_column(String(200), default="")
     status: Mapped[str] = mapped_column(String(20), default=LeaveStatus.registered.value)
 
-    # 登记人(教师自登或排课管理员代登);账号删除后仍保留姓名快照
+    # 登记人(教师自登或教务主任代登);账号删除后仍保留姓名快照
     created_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

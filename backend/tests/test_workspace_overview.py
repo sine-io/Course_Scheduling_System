@@ -28,7 +28,7 @@ def _login(client, db, username: str, role: Role) -> None:
     assert response.status_code == 200
 
 
-@pytest.mark.parametrize("role", [Role.admin, Role.scheduler, Role.director])
+@pytest.mark.parametrize("role", [Role.admin, Role.director, Role.director])
 def test_management_roles_can_read_overview(env, role):
     client, db = env
     semester = Semester(academic_year=2026, term=1)
@@ -188,7 +188,7 @@ def test_overview_uses_latest_draft_and_real_operational_counts(env):
         ]
     )
     db.commit()
-    _login(client, db, "scheduler", Role.scheduler)
+    _login(client, db, "scheduler", Role.director)
 
     with (
         patch("app.services.workspace_overview.clock.school_today", return_value=TODAY),
@@ -262,7 +262,7 @@ def test_preflight_failure_does_not_blank_other_sections(env):
     semester = Semester(academic_year=2026, term=1)
     db.add(semester)
     db.commit()
-    _login(client, db, "scheduler", Role.scheduler)
+    _login(client, db, "scheduler", Role.director)
 
     with patch(
         "app.services.workspace_overview.load_problem",
@@ -286,7 +286,7 @@ def test_preflight_failure_does_not_blank_other_sections(env):
 
 def test_unknown_semester_returns_404(env):
     client, db = env
-    _login(client, db, "scheduler", Role.scheduler)
+    _login(client, db, "scheduler", Role.director)
 
     response = client.get("/api/workspace-overview", params={"semester_id": 999})
 

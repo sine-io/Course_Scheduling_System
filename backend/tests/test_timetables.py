@@ -39,11 +39,19 @@ def _periods(slots, weekdays=5):
 
 @pytest.fixture
 def env2(env):
-    """已登录排课管理员 + 空白学期 + 主作息时间表(默认)+ 一份课表草稿。"""
+    """已登录教务主任 + 空白学期 + 主作息时间表(默认)+ 一份课表草稿。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
+    sem = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
+    ).json()
     sid = sem["id"]
     pt = client.post(
         f"/api/semesters/{sid}/period-tables", json={"name": "主表", "is_default": True}
@@ -226,10 +234,10 @@ def test_slot_label_uses_period_name_not_index(env):
     """回归:信息中的时段须用作息时间表名称(早自习/午休/第一节),不可用内部 period_no。
 
     初中测试作息的「第一节」period_no 是 2(第 1 格是早自习),先前硬拼 f"第{period_no}节"
-    会显示「第2节」,与排课管理员的认知不符(2026-07-10 实际环境验证发现)。
+    会显示「第2节」,与教务主任的认知不符(2026-07-10 实际环境验证发现)。
     """
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(client, academic_year=2028)["id"]
     tid = client.post(f"/api/timetables?semester_id={sid}", json={"name": "草稿"}).json()["id"]
@@ -340,7 +348,15 @@ def test_place_rejects_room_from_other_semester(env2):
     t = _teacher(client, sid, "师一")
     s = _subject(client, sid, "生物学")
     a = _assign(client, sid, class_id=c["id"], subject_id=s["id"], teacher_ids=[t["id"]])
-    other = client.post("/api/semesters", json={"academic_year": 2027, "term": 1}).json()
+    other = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2027,
+            "term": 1,
+            "start_date": "2027-09-01",
+            "end_date": "2028-01-20",
+        },
+    ).json()
     context = client.get("/api/semester-context").json()
     switched = client.put(
         "/api/semester-context",
@@ -644,9 +660,17 @@ SENIOR_SLOTS = [  # 50 分/节
 def mixed(env):
     """完全中学场景:小学部(40 分)与高中部(50 分)两套作息时间表 + 一位跨部教师。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sid = client.post("/api/semesters", json={"academic_year": 2027, "term": 1}).json()["id"]
+    sid = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2027,
+            "term": 1,
+            "start_date": "2027-09-01",
+            "end_date": "2028-01-20",
+        },
+    ).json()["id"]
     pt_e = client.post(f"/api/semesters/{sid}/period-tables",
                        json={"name": "小学部", "is_default": True}).json()
     pt_s = client.post(f"/api/semesters/{sid}/period-tables", json={"name": "高中部"}).json()
@@ -747,7 +771,7 @@ def test_daily_cap_follows_the_semester_config(env):
     而 M4 调课与代课直接重用这支检查器。
     """
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
 
     sid = create_api_semester(client, academic_year=2091)["id"]

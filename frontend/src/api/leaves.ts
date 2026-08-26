@@ -46,7 +46,7 @@ export interface LeaveCancelled {
 }
 
 export interface NewLeave {
-  teacher_id?: number | null // 排课管理员代登时指定;教师自登留空
+  teacher_id?: number | null // 教务主任代登时指定;教师自登留空
   leave_type: string
   start_date: string
   start_time?: string | null

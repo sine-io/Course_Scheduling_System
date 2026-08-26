@@ -34,7 +34,7 @@ SHEETS = {
 @pytest.fixture
 def scheduler_env(env):
     client, db = env
-    make_user(db, "setup", PW, roles=[Role.scheduler])
+    make_user(db, "setup", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "setup", "password": PW})
     response = client.post(
         "/api/semesters",

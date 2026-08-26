@@ -27,7 +27,6 @@ from app.api import (
     substitution_stats,
     substitutions,
     timetables,
-    wizard,
     workspace_overview,
 )
 from app.api import (
@@ -114,5 +113,4 @@ app.include_router(settings_api.router, prefix="/api")
 app.include_router(backups.router, prefix="/api")
 app.include_router(audit.router, prefix="/api")
 app.include_router(imports.router, prefix="/api")
-app.include_router(wizard.router, prefix="/api")
 app.include_router(workspace_overview.router, prefix="/api")

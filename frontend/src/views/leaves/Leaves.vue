@@ -23,7 +23,7 @@ const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 const message = useMessage()
 
-// 排课管理员/主任可代登、可看全校;教师只登记自己的假、只看自己的假单。
+// 教务主任可代登、可看全校;教师只登记自己的假、只看自己的假单。
 const canManage = computed(() => canOperateDaily(auth.user?.roles))
 
 const semesters = ref<{ id: number; label: string }[]>([])
@@ -209,7 +209,7 @@ const STATUS_TAG = computed<Record<AffectedPeriod['status'], {
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
-/** “2026-11-11（星期三）”便于排课管理员快速核对日期。 */
+/** “2026-11-11（星期三）”便于教务主任快速核对日期。 */
 function withWeekday(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number)
   return `${iso}（${WEEKDAYS[new Date(year, month - 1, day).getDay()]}）`

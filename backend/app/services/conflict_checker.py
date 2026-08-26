@@ -121,7 +121,7 @@ class _Checker:
         """易懂说明时段标签:用作息时间表里的名称(早自习/午休/第一节),而非内部 period_no。
 
         period_no 是含早自习/午休的内部索引(初中模板第一节的 period_no 是 2),
-        直接显示会与排课管理员的认知不符。
+        直接显示会与教务主任的认知不符。
         """
         p = pmap.get((weekday, pno))
         return f"{_wd(weekday)}{p.name}" if p else f"{_wd(weekday)}第{pno}节"

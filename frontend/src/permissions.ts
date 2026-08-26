@@ -3,11 +3,11 @@
  * 角色权限取并集，admin 明确列入每个业务动作的允许集合。
  */
 
-export const CORE_VIEW_ROLES = ['admin', 'scheduler', 'director'] as const
-export const CORE_EDIT_ROLES = ['admin', 'scheduler'] as const
-export const BATCH_EXPORT_ROLES = ['admin', 'scheduler'] as const
-export const DAILY_OPERATOR_ROLES = ['admin', 'scheduler', 'director'] as const
-export const DAILY_USER_ROLES = ['admin', 'scheduler', 'director', 'teacher'] as const
+export const CORE_VIEW_ROLES = ['admin', 'director'] as const
+export const CORE_EDIT_ROLES = ['admin', 'director'] as const
+export const BATCH_EXPORT_ROLES = ['admin', 'director'] as const
+export const DAILY_OPERATOR_ROLES = ['admin', 'director'] as const
+export const DAILY_USER_ROLES = ['admin', 'director', 'teacher'] as const
 
 export function hasAnyRole(
   userRoles: readonly string[] | null | undefined,

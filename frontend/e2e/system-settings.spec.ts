@@ -9,7 +9,7 @@ const SHOTS = 'e2e/screenshots'
  * 这一页先前**完全没有 e2e 覆盖**,于是一个致命 bug 一路上了 v1.0.0 与 v1.1.0:
  * `System.vue` 调用 `useDialog()`,但 `App.vue` 没有挂 `<n-dialog-provider>`——
  * Naive 会在 setup 直接抛出异常,整页渲染不出来(侧边菜单还在,内容区一片空白)。
- * 也就是说备份、恢复、SMTP、重设向导这四件事,用户根本点不进去。
+ * 也就是说备份、恢复、SMTP 和审计记录等系统管理功能，用户根本点不进去。
  *
  * 因此本测试的第一个断言(卡片看得到)就是核心:页面只要 setup 抛出异常(或错误路由加载),必红。
  */
@@ -23,7 +23,6 @@ test('系统管理与备份恢复页面可独立打开并完成备份操作', as
   // 系统配置页只显示系统配置职责
   await expect(page.getByTestId('smtp-status')).toBeVisible()
   await expect(page.getByTestId('backup-card')).toHaveCount(0)
-  await expect(page.getByTestId('reset-wizard')).toHaveText('检查并补全当前学期')
   await page.screenshot({ path: `${SHOTS}/system-1-page.png` })
 
   await page.getByRole('link', { name: '备份恢复' }).click()

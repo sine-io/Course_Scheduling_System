@@ -20,7 +20,7 @@ PW = "password123"
 @pytest.fixture
 def school(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(client)["id"]
     return client, db, sid
@@ -33,7 +33,7 @@ def _class(client, sid, name, grade=3):
 
 # ── ① 同学期班名唯一 ────────────────────────────────────────
 def test_duplicate_class_name_in_the_same_semester_is_rejected(school):
-    """冲突信息、课表、导出都以班名指称班级——两个「301」会让排课管理员分不出是哪一班。"""
+    """冲突信息、课表、导出都以班名指称班级——两个「301」会让教务主任分不出是哪一班。"""
     client, _db, sid = school
     assert _class(client, sid, "301").status_code == 201
     r = _class(client, sid, "301")
@@ -45,7 +45,15 @@ def test_the_same_class_name_in_another_semester_is_fine(school):
     """唯一性只在学期内:每年都会有 301。"""
     client, _db, sid = school
     assert _class(client, sid, "301").status_code == 201
-    other = client.post("/api/semesters", json={"academic_year": 2027, "term": 1}).json()["id"]
+    other = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2027,
+            "term": 1,
+            "start_date": "2027-09-01",
+            "end_date": "2028-01-20",
+        },
+    ).json()["id"]
     context = client.get("/api/semester-context").json()
     switched = client.put(
         "/api/semester-context",
@@ -83,11 +91,12 @@ def test_api_docs_are_off_by_default(env):
     assert client.get("/api/openapi.json").status_code == 404
 
 
-def test_api_docs_can_be_switched_on():
+def test_api_docs_can_be_switched_on(monkeypatch):
     """需要对接 API 时可用 .env 打开(开发用 compose 默认带开)。"""
     from app.core.config import Settings
 
-    assert Settings().api_docs_enabled is False
+    monkeypatch.delenv("API_DOCS_ENABLED", raising=False)
+    assert Settings(_env_file=None).api_docs_enabled is False
     assert Settings(api_docs_enabled=True).api_docs_enabled is True
 
 
@@ -125,7 +134,7 @@ def test_substitution_log_query_applies_the_limit_in_sql(env):
     from tests.test_substitutions import _World
 
     client, db = env
-    make_user(db, "s2", PW, roles=[Role.scheduler])
+    make_user(db, "s2", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s2", "password": PW})
     sid = create_api_semester(
         client,

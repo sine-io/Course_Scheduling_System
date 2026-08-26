@@ -3,8 +3,8 @@ import type { Page } from '@playwright/test'
 import {
   createTestSemester,
   deleteSemesterByYearTerm,
-  E2E_DIRECTOR_PASS,
-  E2E_DIRECTOR_USER,
+  E2E_TEACHER_PASS,
+  E2E_TEACHER_USER,
   login,
   semesterLabel,
 } from './helpers'
@@ -85,7 +85,7 @@ test('发布入口统一经过检查确认，取消不发布且尝试均可审�
   expect(versions[0].status).toBe('published')
 
   await page.request.post('/api/auth/logout')
-  await login(page, E2E_DIRECTOR_USER, E2E_DIRECTOR_PASS)
+  await login(page, E2E_TEACHER_USER, E2E_TEACHER_PASS)
   const forbidden = await page.request.post(`/api/timetables/${timetable.id}/publish`, {
     data: { fingerprint: 'invalid' },
   })
@@ -101,9 +101,9 @@ test('发布入口统一经过检查确认，取消不发布且尝试均可审�
   const attempts = logs.filter((log) => log.target_id === timetable.id)
   expect(attempts).toHaveLength(3)
   expect(attempts.map((log) => [log.username, log.result, log.reason])).toEqual([
-    [E2E_DIRECTOR_USER, 'rejected', 'publication_permission_denied'],
-    ['e2e_scheduler', 'success', ''],
-    ['e2e_scheduler', 'rejected', 'publication_confirmation_required'],
+    [E2E_TEACHER_USER, 'rejected', 'publication_permission_denied'],
+    ['e2e_director', 'success', ''],
+    ['e2e_director', 'rejected', 'publication_confirmation_required'],
   ])
   for (const attempt of attempts) {
     expect(attempt.semester_id).toBe(semester.id)

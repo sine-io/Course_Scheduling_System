@@ -46,11 +46,12 @@ function makeRouter() {
       { path: '/settings/semesters', name: 'semesters', component: Semesters },
       { path: '/settings/calendar', name: 'calendar', component: { template: '<main />' } },
       { path: '/settings/period-tables/:id', name: 'period-table-editor', component: { template: '<main />' } },
+      { path: '/basedata', name: 'basedata', component: { template: '<main />' } },
     ],
   })
 }
 
-async function mountSemesters(options: Record<string, unknown> = {}, role = 'scheduler') {
+async function mountSemesters(options: Record<string, unknown> = {}, role = 'director') {
   const pinia = createPinia()
   const auth = useAuthStore(pinia)
   auth.user = {
@@ -105,19 +106,26 @@ describe('Semesters', () => {
     expect(wrapper.text()).toContain('尚未创建任何学期')
   })
 
-  it('创建学期时不显示或提交学校模板', async () => {
+  it('创建学期时要求日期且不显示或提交学校模板', async () => {
     mocks.createSemester.mockResolvedValue(semester)
 
     const wrapper = await mountSemesters()
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('学校模板')
+    expect(wrapper.get('[data-testid="semester-create"]').attributes('disabled')).toBeDefined()
+    const datePickers = wrapper.findAll('.n-date-picker')
+    expect(datePickers.length).toBeGreaterThanOrEqual(2)
+    await datePickers[0].find('input').setValue('2042-09-01')
+    await datePickers[1].find('input').setValue('2043-01-20')
     await wrapper.get('[data-testid="semester-create"]').trigger('click')
     await flushPromises()
 
     expect(mocks.createSemester).toHaveBeenCalledWith({
       academic_year: expect.any(Number),
       term: 1,
+      start_date: '2042-09-01',
+      end_date: '2043-01-20',
     })
   })
 

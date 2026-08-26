@@ -14,7 +14,7 @@ PW = "password123"
 
 @pytest.fixture
 def env2(env):
-    """已登录排课管理员和一份默认使用初中测试作息时间表的学期。"""
+    """已登录教务主任和一份默认使用初中测试作息时间表的学期。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
@@ -86,7 +86,15 @@ def test_delete_period_table_referenced_by_class_blocked(env2):
 def test_assign_cross_semester_table_rejected(env2):
     client, sem = env2
     sid = sem["id"]
-    other = client.post("/api/semesters", json={"academic_year": 2026, "term": 2}).json()
+    other = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 2,
+            "start_date": "2027-02-01",
+            "end_date": "2027-07-10",
+        },
+    ).json()
     context = client.get("/api/semester-context").json()
     switched = client.put(
         "/api/semester-context",

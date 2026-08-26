@@ -43,6 +43,8 @@ const currentYear = new Date().getFullYear()
 const form = ref({
   academic_year: currentYear,
   term: 1,
+  start_date: null as string | null,
+  end_date: null as string | null,
 })
 const yearMin = computed(() => appConfig.config.academic_year.min)
 const yearMax = computed(() => appConfig.config.academic_year.max)
@@ -55,7 +57,7 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
   value: semester.id,
 })))
 const canManageSemesters = computed(() => (
-  !auth.user || auth.hasRole('admin') || auth.hasRole('scheduler')
+  !auth.user || auth.hasRole('admin') || auth.hasRole('director')
 ))
 
 function isCurrentSemester(semester: SemesterListItem): boolean {
@@ -121,6 +123,8 @@ async function onCreateSemester() {
     await createSemester({
       academic_year: form.value.academic_year,
       term: form.value.term,
+      start_date: form.value.start_date as string,
+      end_date: form.value.end_date as string,
     })
     message.success('学期已创建')
     await refreshData()
@@ -219,7 +223,12 @@ function halfYearLater(day: string | null): string | null {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-const emptyCopyForm = (): CopyOptions => ({
+type CopyForm = Omit<CopyOptions, 'start_date' | 'end_date'> & {
+  start_date: string | null
+  end_date: string | null
+}
+
+const emptyCopyForm = (): CopyForm => ({
   academic_year: currentYear,
   term: 1,
   start_date: null,
@@ -232,7 +241,7 @@ const emptyCopyForm = (): CopyOptions => ({
   grade_promotion: true,
   constraint_config: true,
 })
-const copyForm = ref<CopyOptions>(emptyCopyForm())
+const copyForm = ref<CopyForm>(emptyCopyForm())
 
 function openCopy(semester: Semester) {
   copySource.value = semester
@@ -252,9 +261,15 @@ async function onCopy() {
     message.warning('请选择目标学期的起止日期')
     return
   }
+  const startDate = copyForm.value.start_date
+  const endDate = copyForm.value.end_date
   copying.value = true
   try {
-    await copySemester(copySource.value.id, copyForm.value)
+    await copySemester(copySource.value.id, {
+      ...copyForm.value,
+      start_date: startDate,
+      end_date: endDate,
+    })
     showCopy.value = false
     message.success('已复制到新学期')
     await refreshData()
@@ -274,6 +289,7 @@ const statusLabel = (value: string) => (
   { preparing: '准备中', active: '进行中', archived: '已归档' }[value] ?? value
 )
 const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '待完善')
+
 </script>
 
 <template>
@@ -282,7 +298,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
       <div>
         <p class="settings-eyebrow">{{ '学期配置' }}</p>
         <h1>{{ '学期与作息时间表' }}</h1>
-        <p>{{ '管理学期生命周期、作息表和排课准备状态。每个危险操作都会在提交前明确确认。' }}</p>
+        <p>{{ '管理学期生命周期、作息表和校历。每个危险操作都会在提交前明确确认。' }}</p>
       </div>
       <div class="settings-header-actions">
         <n-select
@@ -335,9 +351,17 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
             <span class="settings-field-label">{{ '学期' }}</span>
             <n-select v-model:value="form.term" :options="termOptions" />
           </div>
+          <div class="settings-field">
+            <label for="semester-start-date">{{ '开始日期' }}</label>
+            <n-date-picker id="semester-start-date" v-model:formatted-value="form.start_date" data-testid="semester-start-date" value-format="yyyy-MM-dd" type="date" />
+          </div>
+          <div class="settings-field">
+            <label for="semester-end-date">{{ '结束日期' }}</label>
+            <n-date-picker id="semester-end-date" v-model:formatted-value="form.end_date" data-testid="semester-end-date" value-format="yyyy-MM-dd" type="date" />
+          </div>
         </div>
         <div class="settings-actions">
-          <n-button type="primary" data-testid="semester-create" :loading="creating" :disabled="creating" @click="onCreateSemester">
+          <n-button type="primary" data-testid="semester-create" :loading="creating" :disabled="creating || !form.start_date || !form.end_date" @click="onCreateSemester">
             <template #icon><Plus :size="16" aria-hidden="true" /></template>
             {{ '创建学期' }}
           </n-button>

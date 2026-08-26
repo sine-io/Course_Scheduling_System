@@ -41,7 +41,7 @@ const loadError = ref<string | null>(null)
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
 const canEdit = computed(() => (
-  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  (auth.hasRole('admin') || auth.hasRole('director'))
   && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 const drafts = ref<TimetableBrief[]>([])
@@ -79,7 +79,7 @@ const readonlyReason = computed(() => {
   ) {
     return '所选学期不是当前工作学期，历史学期只允许查询。'
   }
-  if (!canEdit.value) return '当前角色仅可查看课表，排课写入仅对排课管理员开放。'
+  if (!canEdit.value) return '当前角色仅可查看课表，排课写入仅对教务主任开放。'
   if (view.value !== 'class') return '教师与教室/场地视图为只读视图，请在班级视图中调整排课。'
   if (tt.value && tt.value.status !== 'draft') return '当前课表不是草稿，无法在工作台中写入更改。'
   return ''
@@ -789,7 +789,7 @@ function onKey(event: KeyboardEvent) {
       <section v-if="!tt" class="scheduling-state workbench-inline-state" data-testid="workbench-no-draft">
         <Save :size="22" aria-hidden="true" />
         <strong>{{ '当前学期还没有课表草稿' }}</strong>
-        <span>{{ canEdit ? '重新读取工作台后将创建默认草稿。' : '排课管理员创建草稿后即可在此查看。' }}</span>
+        <span>{{ canEdit ? '重新读取工作台后将创建默认草稿。' : '教务主任创建草稿后即可在此查看。' }}</span>
         <n-button v-if="canEdit" type="primary" @click="retryLoad">{{ '重新读取' }}</n-button>
       </section>
 

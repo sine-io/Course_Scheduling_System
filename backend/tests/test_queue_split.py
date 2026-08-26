@@ -85,7 +85,7 @@ def test_email_goes_to_ops(queues):
     (lambda: q.run_restore("x.dump", timeout=1), q.BackupJobError, "restore_job"),
 ])
 def test_blocking_ops_work_goes_to_ops_queue(queues, call, error, expected):
-    """导出/备份/恢复统一走 ops——正是排课那几分钟里排课管理员会按的东西。
+    """导出/备份/恢复统一走 ops——正是排课那几分钟里教务主任会按的东西。
 
     这些是阻塞式分派任务,假队列不会回结果,必然以超时作收;此处只在意「派去哪条队列」。
     """

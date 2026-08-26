@@ -92,7 +92,7 @@ def prepare_data(connection: Connection, rows: int) -> float:
                 'operator-' || (series_id % 50000),
                 CASE
                     WHEN series_id % 3 = 0 THEN '["admin"]'::json
-                    WHEN series_id % 3 = 1 THEN '["scheduler"]'::json
+                    WHEN series_id % 3 = 1 THEN '["director"]'::json
                     ELSE '["director"]'::json
                 END,
                 CASE series_id % 5

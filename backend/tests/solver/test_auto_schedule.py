@@ -32,12 +32,12 @@ PW = "password123"
 
 @pytest.fixture
 def sched(env, monkeypatch):
-    """已登录排课管理员 + 初中测试作息学期 + 一份草稿 + 内存版进度存储 + 假队列。
+    """已登录教务主任 + 初中测试作息学期 + 一份草稿 + 内存版进度存储 + 假队列。
 
     返回 (client, db, sid, timetable_id, store, calls)。
     """
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
 
     store = InMemoryProgressStore()

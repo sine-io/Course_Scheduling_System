@@ -7,7 +7,7 @@ from tests.conftest import make_user
 PW = "password123"
 
 
-def _login(client, db, username="s", roles=(Role.scheduler,)):
+def _login(client, db, username="s", roles=(Role.director,)):
     make_user(db, username, PW, roles=list(roles))
     client.post("/api/auth/login", json={"username": username, "password": PW})
 
@@ -75,7 +75,13 @@ def test_preflight_requires_scheduler(env):
     client, db = env
     _login(client, db, username="t", roles=(Role.teacher,))
     sid = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).status_code
     assert sid == 403  # teacher 连建学期都不行
     assert client.get("/api/solver/preflight?semester_id=1").status_code == 403

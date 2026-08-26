@@ -10,9 +10,9 @@ const VIEWPORTS = [
 
 const USER = {
   id: 21,
-  username: 'issue-21-scheduler',
+  username: 'issue-21-director',
   display_name: '自动排课验收用户',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: false,
 }
 
@@ -158,7 +158,6 @@ async function mockApplication(
         role_display_names: {
           admin: '系统管理员',
           director: '教务主任',
-          scheduler: '排课管理员',
           teacher: '教师',
         },
         academic_year: {
@@ -171,15 +170,6 @@ async function mockApplication(
       })
     }
     if (path === '/api/auth/me') return fulfillJson(route, { ...USER, roles })
-    if (path === '/api/wizard/state') return fulfillJson(route, {
-      current_step: 3,
-      resume_step: 3,
-      completed: true,
-      paused: false,
-      semester_id: SEMESTER.id,
-      total_steps: 4,
-      has_semesters: true,
-    })
     if (path === '/api/notifications/mine' || path === '/api/notifications/mine/unread-count') {
       return fulfillJson(route, path.endsWith('unread-count') ? { unread: 0 } : { items: [], unread: 0 })
     }
@@ -292,20 +282,19 @@ for (const viewport of VIEWPORTS) {
   })
 }
 
-test('教务主任能读取准备度和版本，但不会看到写入入口', async ({ page }) => {
+test('教务主任看到自动排课和课表版本管理入口', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
-  const state = await mockApplication(page, ['director'])
+  await mockApplication(page, ['director'])
 
   await page.goto('/scheduling/auto')
-  await expect(page.getByTestId('as-restricted')).toContainText('仅可查看')
-  await expect(page.getByTestId('as-start')).toBeDisabled()
+  await expect(page.getByTestId('as-restricted')).toHaveCount(0)
+  await expect(page.getByTestId('as-start')).toBeEnabled()
 
   await page.goto('/scheduling/versions')
-  await expect(page.getByTestId('versions-restricted')).toContainText('可查看版本')
-  await expect(page.getByTestId('v-new')).toHaveCount(0)
-  await expect(page.getByTestId('v-publish')).toHaveCount(0)
-  await expect(page.getByTestId('v-duplicate')).toHaveCount(0)
-  expect(state.writeRequests).toEqual([])
+  await expect(page.getByTestId('versions-restricted')).toHaveCount(0)
+  await expect(page.getByTestId('v-new')).toBeEnabled()
+  await expect(page.getByTestId('v-publish')).toBeVisible()
+  await expect(page.getByTestId('v-duplicate').first()).toBeVisible()
 })
 
 test('课表查询在加载中和读取失败时提供明确反馈', async ({ page }) => {

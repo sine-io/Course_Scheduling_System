@@ -56,7 +56,7 @@ let timer: ReturnType<typeof setInterval> | null = null
 let pollGeneration = 0
 
 const canEdit = computed(() => (
-  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  (auth.hasRole('admin') || auth.hasRole('director'))
   && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 const activeJobKey = computed(() => `${LAST_JOB_KEY}:${auth.user?.id ?? 'anonymous'}`)
@@ -376,7 +376,7 @@ function openResult() {
     <template v-else>
       <n-alert v-if="!canEdit" type="info" data-testid="as-restricted">
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
-        {{ '当前角色仅可查看排课准备度和运行结果，启动、停止和取消任务仅对排课管理员开放。' }}
+        {{ '当前角色仅可查看排课准备度和运行结果，启动、停止和取消任务仅对教务主任开放。' }}
       </n-alert>
 
       <section v-if="check" class="scheduling-panel auto-preflight-panel" data-testid="as-preflight">

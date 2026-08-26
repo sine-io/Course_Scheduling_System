@@ -7,11 +7,11 @@ import { useAuthStore } from '@/stores/auth'
 import { useAppConfigStore } from '@/stores/appConfig'
 import MainLayout from './MainLayout.vue'
 
-const scheduler = {
+const managementUser = {
   id: 1,
-  username: 'scheduler',
+  username: 'director',
   display_name: '张教务',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: false,
 }
 
@@ -39,11 +39,11 @@ const teacher = {
   must_change_password: false,
 }
 
-const adminScheduler = {
+const combinedUser = {
   id: 5,
-  username: 'admin-scheduler',
+  username: 'admin-director',
   display_name: '兼任管理员',
-  roles: ['admin', 'scheduler'],
+  roles: ['admin', 'director'],
   must_change_password: false,
 }
 
@@ -63,7 +63,6 @@ function makeRouter() {
         component: { template: '<main data-testid="page">仪表盘内容</main>' },
       },
       { path: '/workspace/home', name: 'workspace-home', component: { template: '<main />' } },
-      { path: '/wizard', name: 'wizard', component: { template: '<main />' } },
       { path: '/timetable-query', name: 'timetable-query', component: { template: '<main />' } },
       { path: '/notifications', name: 'notifications', component: { template: '<main />' } },
       { path: '/leaves', name: 'leaves', component: { template: '<main />' } },
@@ -72,6 +71,7 @@ function makeRouter() {
       { path: '/settings/calendar', name: 'calendar', component: { template: '<main />' } },
       { path: '/basedata', name: 'basedata', component: { template: '<main />' } },
       { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main />' } },
+      { path: '/scheduling/settings', name: 'scheduling-settings', component: { template: '<main />' } },
       { path: '/scheduling/workbench', name: 'workbench', component: { template: '<main />' } },
       { path: '/scheduling/auto', name: 'auto-schedule', component: { template: '<main />' } },
       { path: '/scheduling/versions', name: 'versions', component: { template: '<main />' } },
@@ -85,7 +85,7 @@ function makeRouter() {
   })
 }
 
-async function mountLayout(user: typeof scheduler | typeof teacher) {
+async function mountLayout(user: typeof managementUser | typeof teacher) {
   const pinia = createPinia()
   const auth = useAuthStore(pinia)
   auth.user = user
@@ -93,7 +93,6 @@ async function mountLayout(user: typeof scheduler | typeof teacher) {
   useAppConfigStore(pinia).config.role_display_names = {
     admin: '系统管理员',
     director: '教务主任',
-    scheduler: '排课管理员',
     teacher: '教师',
   }
 
@@ -118,11 +117,11 @@ async function mountLayout(user: typeof scheduler | typeof teacher) {
 
 describe('MainLayout', () => {
   it('exposes the real product shell and filters navigation by role', async () => {
-    const { wrapper } = await mountLayout(scheduler)
+    const { wrapper } = await mountLayout(managementUser)
 
     expect(wrapper.find('[data-testid="app-shell"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
-    expect(wrapper.get('[data-testid="shell-breadcrumb"]').text()).toContain('仪表盘')
+    expect(wrapper.find('[data-testid="shell-breadcrumb"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('工作空间')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('首页总览')
@@ -134,7 +133,8 @@ describe('MainLayout', () => {
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('完整功能')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('课表组件（演示）')
     expect(wrapper.find('.app-nav-common').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="shell-school-context"]').text()).toContain('示范学校')
+    expect(wrapper.find('[data-testid="shell-school-context"]').exists()).toBe(false)
+    expect(wrapper.get('.app-sidebar-footer').text()).toContain('示范学校')
     expect(wrapper.get('[data-testid="shell-help"]').attributes('href')).toBe('/docs/index.html')
     expect(wrapper.get('[data-testid="shell-logout"]').text()).toContain('退出登录')
     expect(wrapper.find('input[placeholder*="搜索"]').exists()).toBe(false)
@@ -147,7 +147,7 @@ describe('MainLayout', () => {
     expect(directorNav).toContain('版本与发布')
     expect(directorNav).not.toContain('系统管理')
 
-    const combinedLayout = await mountLayout(adminScheduler)
+    const combinedLayout = await mountLayout(combinedUser)
     const combinedNav = combinedLayout.wrapper.get('[data-testid="shell-nav"]').text()
     expect(combinedNav).toContain('教学任务')
     expect(combinedNav).toContain('系统管理')
@@ -164,14 +164,14 @@ describe('MainLayout', () => {
     expect(teacherNav).not.toContain('系统管理')
     expect(teacherLayout.wrapper.find('.app-nav-common').exists()).toBe(false)
 
-    const schedulerGroups = wrapper.findAll('.app-nav-group')
-    expect(schedulerGroups[0].text()).toContain('工作空间')
-    expect(schedulerGroups[1].text()).toContain('学期准备')
-    expect(schedulerGroups[1].text()).toContain('仪表盘')
+    const managementGroups = wrapper.findAll('.app-nav-group')
+    expect(managementGroups[0].text()).toContain('工作空间')
+    expect(managementGroups[1].text()).toContain('学期准备')
+    expect(managementGroups[1].text()).toContain('仪表盘')
   })
 
   it('opens the mobile drawer, moves focus into it, and restores focus on escape', async () => {
-    const { wrapper } = await mountLayout(scheduler)
+    const { wrapper } = await mountLayout(managementUser)
     const menu = wrapper.get('[data-testid="shell-menu"]')
 
     expect(menu.attributes('aria-expanded')).toBe('false')

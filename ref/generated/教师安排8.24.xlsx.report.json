@@ -1,0 +1,2292 @@
+{
+  "adapter_version": "reference-xlsx-v1",
+  "source_scope": "xlsx-only",
+  "fingerprint": "ea45cc5679d06f7465eb0ae2df6462862eeb855ff2c59c9b9a7dd4bc3388e3db",
+  "semester": {
+    "academic_year": 2026,
+    "term": 1,
+    "start_date": "2026-09-01",
+    "end_date": "2027-01-25"
+  },
+  "counts": {
+    "classes": 12,
+    "subjects": 14,
+    "teachers": 43,
+    "teacher_subjects": 47,
+    "assignments": 124,
+    "periods": 369
+  },
+  "source": {
+    "xlsx_filename": "教师安排8.24.xlsx",
+    "xlsx_sha256": "1ab82e256dad2d26bc8331f4a071b3230a255f97a4961c14fd76577416b4e32f",
+    "word_processed": false
+  },
+  "classes": [
+    {
+      "name": "7.1",
+      "grade": 7,
+      "track": "junior_high",
+      "homeroom_teacher": "韩晶雪"
+    },
+    {
+      "name": "7.2",
+      "grade": 7,
+      "track": "junior_high",
+      "homeroom_teacher": "韩晶雪"
+    },
+    {
+      "name": "7.3",
+      "grade": 7,
+      "track": "junior_high",
+      "homeroom_teacher": "徐盛"
+    },
+    {
+      "name": "7.4",
+      "grade": 7,
+      "track": "junior_high",
+      "homeroom_teacher": "徐盛"
+    },
+    {
+      "name": "7.5",
+      "grade": 7,
+      "track": "junior_high",
+      "homeroom_teacher": "耿雪琪"
+    },
+    {
+      "name": "8.1",
+      "grade": 8,
+      "track": "junior_high",
+      "homeroom_teacher": "韩孝贤"
+    },
+    {
+      "name": "8.2",
+      "grade": 8,
+      "track": "junior_high",
+      "homeroom_teacher": "赵乃泽"
+    },
+    {
+      "name": "8.3",
+      "grade": 8,
+      "track": "junior_high",
+      "homeroom_teacher": "赵乃泽"
+    },
+    {
+      "name": "8.4",
+      "grade": 8,
+      "track": "junior_high",
+      "homeroom_teacher": "韩孝贤"
+    },
+    {
+      "name": "9.1",
+      "grade": 9,
+      "track": "junior_high",
+      "homeroom_teacher": "常雨婷"
+    },
+    {
+      "name": "9.2",
+      "grade": 9,
+      "track": "junior_high",
+      "homeroom_teacher": "梁亚琼"
+    },
+    {
+      "name": "9.3",
+      "grade": 9,
+      "track": "junior_high",
+      "homeroom_teacher": "王少凤"
+    }
+  ],
+  "subjects": [
+    {
+      "name": "体育与健康",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "信息科技",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "化学",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "历史",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "地理",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "心理健康教育",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "数学",
+      "is_major": true,
+      "required_room_type": null
+    },
+    {
+      "name": "物理",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "生物学",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "美术",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "英语",
+      "is_major": true,
+      "required_room_type": null
+    },
+    {
+      "name": "语文",
+      "is_major": true,
+      "required_room_type": null
+    },
+    {
+      "name": "道德与法治",
+      "is_major": false,
+      "required_room_type": null
+    },
+    {
+      "name": "音乐",
+      "is_major": false,
+      "required_room_type": null
+    }
+  ],
+  "teachers": {
+    "刘瑛琦": {
+      "notes": "刘瑛琦 8.1-8.3",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "刘锴": {
+      "notes": "刘锴（行政）7.5；刘锴7.5班两节体育；刘锴（1-5国防军事训练）；刘锴（1-4国防军事训练）",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "劼唅": {
+      "notes": "劼唅（王稳）8.3-8.4（一学期产假）；劼唅（王稳）9.3（一学期产假）",
+      "external": false,
+      "admin": false,
+      "maternity": true
+    },
+    "周嘉辉": {
+      "notes": "周嘉辉7.5班三节体育；周嘉辉 7.1-8.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "唐延艳": {
+      "notes": "唐延艳（汇盛道走教）7.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "孔德馨": {
+      "notes": "孔德馨 9.1-9.2 + 9.1班主任",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "孙佳伟": {
+      "notes": "孙佳伟 （双周七年级；三周八年级；四周九年级）",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "孙婉秋": {
+      "notes": "孙婉秋（拔节） 8.3 8.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "孟召磊": {
+      "notes": "孟召磊（行政）9.1 9.3",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "宋广莲": {
+      "notes": "宋广莲（行政）9.3+9.3班主任（双）",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "崔波": {
+      "notes": "崔波 9.1 9.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "崔洪刚": {
+      "notes": "崔洪刚（王稳走教） 9.1-9.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "常雨婷": {
+      "notes": "常雨婷  8.1 8.2    9.1 - 9.3  +  8.1 班主任  +  八年级主管",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "张灿": {
+      "notes": "张灿（六幼） 8.1- 8.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "张诗琪": {
+      "notes": "张诗琪 7.1-7.3；张诗琪 8.1",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "徐盛": {
+      "notes": "徐盛 7.3 7.4 + 7.3班主任；贾宁（行政）7.1 7.2 7.4 7.5  + 徐盛 7.3",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "朱峻": {
+      "notes": "朱峻 （六幼）7.1-8.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "朱振华": {
+      "notes": "朱振华（大寺走教） 7.5",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "李康": {
+      "notes": "李康（外聘）8.1-8.2",
+      "external": true,
+      "admin": false,
+      "maternity": false
+    },
+    "杨书贤": {
+      "notes": "杨书贤8.4；杨书贤 9.3",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "杨晓芳": {
+      "notes": "杨晓芳（拔节）7.1-7.3",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "杨紫文": {
+      "notes": "杨紫文 8.3-8.4     7.1-7.5",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "梁亚琼": {
+      "notes": "梁亚琼（王稳） 9.2 9.3 + 9.2班主任 + 九年级主管",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "梁枢": {
+      "notes": "梁枢 7.4+7.4班主任；梁枢8.1-8.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "沈文媛": {
+      "notes": "沈文媛 8.2 + 8.2班主任",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "王少凤": {
+      "notes": "王少凤（行政）9.3班+9.3班主任（双）",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "王怡凡": {
+      "notes": "王怡凡（产假）8.1班",
+      "external": false,
+      "admin": false,
+      "maternity": true
+    },
+    "王立立": {
+      "notes": "王立立（大寺）9.1 9.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "田铭哲": {
+      "notes": "田铭哲 7.1-7.3     韩博忠7.4      张诗琪7.5；田铭哲 8.1-8.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "耿雪琪": {
+      "notes": "耿雪琪 7.4  7.5 + 7.5班主任；耿雪琪 8.2-8.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "裴树丹": {
+      "notes": "裴树丹（行政）7.3 7.4 7.5；裴树丹（行政）9.3",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "贺温雁": {
+      "notes": "贺温雁（大寺）7.5+9.1（跨头）；贺温雁（大寺）9.1+7.5（跨头）",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "贾宁": {
+      "notes": "贾宁（行政）7.1 7.2 7.4 7.5  + 徐盛 7.3",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "赵乃泽": {
+      "notes": "赵乃泽 8.2 8.3 + 8.3班主任",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "路兆宇": {
+      "notes": "路兆宇（行政） 8.3-8.4；路兆宇9.2",
+      "external": false,
+      "admin": true,
+      "maternity": false
+    },
+    "郭慧": {
+      "notes": "郭慧（外聘） 7.1 7.2",
+      "external": true,
+      "admin": false,
+      "maternity": false
+    },
+    "陈静雯": {
+      "notes": "陈静雯 7.1 7.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "韩博忠": {
+      "notes": "韩博忠（大寺）7.3",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "韩孝贤": {
+      "notes": "韩孝贤（王稳） 8.1 8.4 + 8.4班主任",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "韩晶雪": {
+      "notes": "韩晶雪7.1 7.2 + 7.2班主任 + 七年级主管",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "韩欣": {
+      "notes": "韩欣 7.3 7.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "马丽": {
+      "notes": "马丽 7.1 7.2；马丽 9.1 9.2",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    },
+    "高岩": {
+      "notes": "高岩8.3-8.4",
+      "external": false,
+      "admin": false,
+      "maternity": false
+    }
+  },
+  "teacher_subjects": [
+    {
+      "teacher": "刘瑛琦",
+      "subject": "物理"
+    },
+    {
+      "teacher": "刘锴",
+      "subject": "体育与健康"
+    },
+    {
+      "teacher": "刘锴",
+      "subject": "英语"
+    },
+    {
+      "teacher": "劼唅",
+      "subject": "化学"
+    },
+    {
+      "teacher": "劼唅",
+      "subject": "道德与法治"
+    },
+    {
+      "teacher": "周嘉辉",
+      "subject": "体育与健康"
+    },
+    {
+      "teacher": "周嘉辉",
+      "subject": "音乐"
+    },
+    {
+      "teacher": "唐延艳",
+      "subject": "语文"
+    },
+    {
+      "teacher": "孔德馨",
+      "subject": "化学"
+    },
+    {
+      "teacher": "孙佳伟",
+      "subject": "心理健康教育"
+    },
+    {
+      "teacher": "孙婉秋",
+      "subject": "英语"
+    },
+    {
+      "teacher": "孟召磊",
+      "subject": "体育与健康"
+    },
+    {
+      "teacher": "宋广莲",
+      "subject": "英语"
+    },
+    {
+      "teacher": "崔波",
+      "subject": "语文"
+    },
+    {
+      "teacher": "崔洪刚",
+      "subject": "物理"
+    },
+    {
+      "teacher": "常雨婷",
+      "subject": "历史"
+    },
+    {
+      "teacher": "张灿",
+      "subject": "道德与法治"
+    },
+    {
+      "teacher": "张诗琪",
+      "subject": "生物学"
+    },
+    {
+      "teacher": "徐盛",
+      "subject": "信息科技"
+    },
+    {
+      "teacher": "徐盛",
+      "subject": "数学"
+    },
+    {
+      "teacher": "朱峻",
+      "subject": "美术"
+    },
+    {
+      "teacher": "朱振华",
+      "subject": "语文"
+    },
+    {
+      "teacher": "李康",
+      "subject": "语文"
+    },
+    {
+      "teacher": "杨书贤",
+      "subject": "物理"
+    },
+    {
+      "teacher": "杨晓芳",
+      "subject": "体育与健康"
+    },
+    {
+      "teacher": "杨紫文",
+      "subject": "历史"
+    },
+    {
+      "teacher": "梁亚琼",
+      "subject": "数学"
+    },
+    {
+      "teacher": "梁枢",
+      "subject": "体育与健康"
+    },
+    {
+      "teacher": "沈文媛",
+      "subject": "英语"
+    },
+    {
+      "teacher": "王少凤",
+      "subject": "语文"
+    },
+    {
+      "teacher": "王怡凡",
+      "subject": "英语"
+    },
+    {
+      "teacher": "王立立",
+      "subject": "英语"
+    },
+    {
+      "teacher": "田铭哲",
+      "subject": "地理"
+    },
+    {
+      "teacher": "耿雪琪",
+      "subject": "生物学"
+    },
+    {
+      "teacher": "裴树丹",
+      "subject": "道德与法治"
+    },
+    {
+      "teacher": "贺温雁",
+      "subject": "数学"
+    },
+    {
+      "teacher": "贾宁",
+      "subject": "信息科技"
+    },
+    {
+      "teacher": "赵乃泽",
+      "subject": "数学"
+    },
+    {
+      "teacher": "路兆宇",
+      "subject": "体育与健康"
+    },
+    {
+      "teacher": "郭慧",
+      "subject": "英语"
+    },
+    {
+      "teacher": "陈静雯",
+      "subject": "数学"
+    },
+    {
+      "teacher": "韩博忠",
+      "subject": "语文"
+    },
+    {
+      "teacher": "韩孝贤",
+      "subject": "数学"
+    },
+    {
+      "teacher": "韩晶雪",
+      "subject": "语文"
+    },
+    {
+      "teacher": "韩欣",
+      "subject": "英语"
+    },
+    {
+      "teacher": "马丽",
+      "subject": "道德与法治"
+    },
+    {
+      "teacher": "高岩",
+      "subject": "语文"
+    }
+  ],
+  "assignments": [
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "杨晓芳",
+      "source_key": "reference-xlsx-v1:7.1:体育与健康:xlsx:杨晓芳",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "杨晓芳",
+      "source_key": "reference-xlsx-v1:7.2:体育与健康:xlsx:杨晓芳",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "杨晓芳",
+      "source_key": "reference-xlsx-v1:7.3:体育与健康:xlsx:杨晓芳",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "梁枢",
+      "source_key": "reference-xlsx-v1:7.4:体育与健康:xlsx:梁枢",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "体育与健康",
+      "periods": 2,
+      "teacher": "刘锴",
+      "source_key": "reference-xlsx-v1:7.5:体育与健康:xlsx:刘锴",
+      "notes": "Excel 明确的 7.5 班体育分工"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "体育与健康",
+      "periods": 3,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:7.5:体育与健康:xlsx:周嘉辉",
+      "notes": "Excel 明确的 7.5 班体育分工"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "梁枢",
+      "source_key": "reference-xlsx-v1:8.1:体育与健康:xlsx:梁枢",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "梁枢",
+      "source_key": "reference-xlsx-v1:8.2:体育与健康:xlsx:梁枢",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "路兆宇",
+      "source_key": "reference-xlsx-v1:8.3:体育与健康:xlsx:路兆宇",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "路兆宇",
+      "source_key": "reference-xlsx-v1:8.4:体育与健康:xlsx:路兆宇",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "孟召磊",
+      "source_key": "reference-xlsx-v1:9.1:体育与健康:xlsx:孟召磊",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "路兆宇",
+      "source_key": "reference-xlsx-v1:9.2:体育与健康:xlsx:路兆宇",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "体育与健康",
+      "periods": 5,
+      "teacher": "孟召磊",
+      "source_key": "reference-xlsx-v1:9.3:体育与健康:xlsx:孟召磊",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "信息科技",
+      "periods": 1,
+      "teacher": "贾宁",
+      "source_key": "reference-xlsx-v1:7.1:信息科技:xlsx:贾宁",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "信息科技",
+      "periods": 1,
+      "teacher": "贾宁",
+      "source_key": "reference-xlsx-v1:7.2:信息科技:xlsx:贾宁",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "信息科技",
+      "periods": 1,
+      "teacher": "徐盛",
+      "source_key": "reference-xlsx-v1:7.3:信息科技:xlsx:徐盛",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "信息科技",
+      "periods": 1,
+      "teacher": "贾宁",
+      "source_key": "reference-xlsx-v1:7.4:信息科技:xlsx:贾宁",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "信息科技",
+      "periods": 1,
+      "teacher": "贾宁",
+      "source_key": "reference-xlsx-v1:7.5:信息科技:xlsx:贾宁",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "化学",
+      "periods": 3,
+      "teacher": "孔德馨",
+      "source_key": "reference-xlsx-v1:9.1:化学:xlsx:孔德馨",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "化学",
+      "periods": 3,
+      "teacher": "孔德馨",
+      "source_key": "reference-xlsx-v1:9.2:化学:xlsx:孔德馨",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "化学",
+      "periods": 3,
+      "teacher": "劼唅",
+      "source_key": "reference-xlsx-v1:9.3:化学:xlsx:劼唅",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:7.1:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:7.2:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:7.3:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:7.4:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:7.5:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "常雨婷",
+      "source_key": "reference-xlsx-v1:8.1:历史:xlsx:常雨婷",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "常雨婷",
+      "source_key": "reference-xlsx-v1:8.2:历史:xlsx:常雨婷",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:8.3:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "杨紫文",
+      "source_key": "reference-xlsx-v1:8.4:历史:xlsx:杨紫文",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "常雨婷",
+      "source_key": "reference-xlsx-v1:9.1:历史:xlsx:常雨婷",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "常雨婷",
+      "source_key": "reference-xlsx-v1:9.2:历史:xlsx:常雨婷",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "历史",
+      "periods": 2,
+      "teacher": "常雨婷",
+      "source_key": "reference-xlsx-v1:9.3:历史:xlsx:常雨婷",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:7.1:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:7.2:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:7.3:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:7.4:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:7.5:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:8.1:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:8.2:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:8.3:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "地理",
+      "periods": 2,
+      "teacher": "田铭哲",
+      "source_key": "reference-xlsx-v1:8.4:地理:xlsx:田铭哲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "陈静雯",
+      "source_key": "reference-xlsx-v1:7.1:数学:xlsx:陈静雯",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "陈静雯",
+      "source_key": "reference-xlsx-v1:7.2:数学:xlsx:陈静雯",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "徐盛",
+      "source_key": "reference-xlsx-v1:7.3:数学:xlsx:徐盛",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "徐盛",
+      "source_key": "reference-xlsx-v1:7.4:数学:xlsx:徐盛",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "贺温雁",
+      "source_key": "reference-xlsx-v1:7.5:数学:xlsx:贺温雁",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "韩孝贤",
+      "source_key": "reference-xlsx-v1:8.1:数学:xlsx:韩孝贤",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "赵乃泽",
+      "source_key": "reference-xlsx-v1:8.2:数学:xlsx:赵乃泽",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "赵乃泽",
+      "source_key": "reference-xlsx-v1:8.3:数学:xlsx:赵乃泽",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "数学",
+      "periods": 4,
+      "teacher": "韩孝贤",
+      "source_key": "reference-xlsx-v1:8.4:数学:xlsx:韩孝贤",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "数学",
+      "periods": 5,
+      "teacher": "贺温雁",
+      "source_key": "reference-xlsx-v1:9.1:数学:xlsx:贺温雁",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "数学",
+      "periods": 5,
+      "teacher": "梁亚琼",
+      "source_key": "reference-xlsx-v1:9.2:数学:xlsx:梁亚琼",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "数学",
+      "periods": 5,
+      "teacher": "梁亚琼",
+      "source_key": "reference-xlsx-v1:9.3:数学:xlsx:梁亚琼",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "刘瑛琦",
+      "source_key": "reference-xlsx-v1:8.1:物理:xlsx:刘瑛琦",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "刘瑛琦",
+      "source_key": "reference-xlsx-v1:8.2:物理:xlsx:刘瑛琦",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "刘瑛琦",
+      "source_key": "reference-xlsx-v1:8.3:物理:xlsx:刘瑛琦",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "杨书贤",
+      "source_key": "reference-xlsx-v1:8.4:物理:xlsx:杨书贤",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "崔洪刚",
+      "source_key": "reference-xlsx-v1:9.1:物理:xlsx:崔洪刚",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "崔洪刚",
+      "source_key": "reference-xlsx-v1:9.2:物理:xlsx:崔洪刚",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "物理",
+      "periods": 3,
+      "teacher": "杨书贤",
+      "source_key": "reference-xlsx-v1:9.3:物理:xlsx:杨书贤",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "生物学",
+      "periods": 3,
+      "teacher": "张诗琪",
+      "source_key": "reference-xlsx-v1:7.1:生物学:xlsx:张诗琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "生物学",
+      "periods": 3,
+      "teacher": "张诗琪",
+      "source_key": "reference-xlsx-v1:7.2:生物学:xlsx:张诗琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "生物学",
+      "periods": 3,
+      "teacher": "张诗琪",
+      "source_key": "reference-xlsx-v1:7.3:生物学:xlsx:张诗琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "生物学",
+      "periods": 3,
+      "teacher": "耿雪琪",
+      "source_key": "reference-xlsx-v1:7.4:生物学:xlsx:耿雪琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "生物学",
+      "periods": 3,
+      "teacher": "耿雪琪",
+      "source_key": "reference-xlsx-v1:7.5:生物学:xlsx:耿雪琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "生物学",
+      "periods": 2,
+      "teacher": "张诗琪",
+      "source_key": "reference-xlsx-v1:8.1:生物学:xlsx:张诗琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "生物学",
+      "periods": 2,
+      "teacher": "耿雪琪",
+      "source_key": "reference-xlsx-v1:8.2:生物学:xlsx:耿雪琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "生物学",
+      "periods": 2,
+      "teacher": "耿雪琪",
+      "source_key": "reference-xlsx-v1:8.3:生物学:xlsx:耿雪琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "生物学",
+      "periods": 2,
+      "teacher": "耿雪琪",
+      "source_key": "reference-xlsx-v1:8.4:生物学:xlsx:耿雪琪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:7.1:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:7.2:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:7.3:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:7.4:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:7.5:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:8.1:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:8.2:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:8.3:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "美术",
+      "periods": 1,
+      "teacher": "朱峻",
+      "source_key": "reference-xlsx-v1:8.4:美术:xlsx:朱峻",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "郭慧",
+      "source_key": "reference-xlsx-v1:7.1:英语:xlsx:郭慧",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "郭慧",
+      "source_key": "reference-xlsx-v1:7.2:英语:xlsx:郭慧",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "韩欣",
+      "source_key": "reference-xlsx-v1:7.3:英语:xlsx:韩欣",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "韩欣",
+      "source_key": "reference-xlsx-v1:7.4:英语:xlsx:韩欣",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "刘锴",
+      "source_key": "reference-xlsx-v1:7.5:英语:xlsx:刘锴",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "王怡凡",
+      "source_key": "reference-xlsx-v1:8.1:英语:xlsx:王怡凡",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "沈文媛",
+      "source_key": "reference-xlsx-v1:8.2:英语:xlsx:沈文媛",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "孙婉秋",
+      "source_key": "reference-xlsx-v1:8.3:英语:xlsx:孙婉秋",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "孙婉秋",
+      "source_key": "reference-xlsx-v1:8.4:英语:xlsx:孙婉秋",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "王立立",
+      "source_key": "reference-xlsx-v1:9.1:英语:xlsx:王立立",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "王立立",
+      "source_key": "reference-xlsx-v1:9.2:英语:xlsx:王立立",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "英语",
+      "periods": 3,
+      "teacher": "宋广莲",
+      "source_key": "reference-xlsx-v1:9.3:英语:xlsx:宋广莲",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "韩晶雪",
+      "source_key": "reference-xlsx-v1:7.1:语文:xlsx:韩晶雪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "韩晶雪",
+      "source_key": "reference-xlsx-v1:7.2:语文:xlsx:韩晶雪",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "韩博忠",
+      "source_key": "reference-xlsx-v1:7.3:语文:xlsx:韩博忠",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "唐延艳",
+      "source_key": "reference-xlsx-v1:7.4:语文:xlsx:唐延艳",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "朱振华",
+      "source_key": "reference-xlsx-v1:7.5:语文:xlsx:朱振华",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "语文",
+      "periods": 5,
+      "teacher": "李康",
+      "source_key": "reference-xlsx-v1:8.1:语文:xlsx:李康",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "语文",
+      "periods": 5,
+      "teacher": "李康",
+      "source_key": "reference-xlsx-v1:8.2:语文:xlsx:李康",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "语文",
+      "periods": 5,
+      "teacher": "高岩",
+      "source_key": "reference-xlsx-v1:8.3:语文:xlsx:高岩",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "语文",
+      "periods": 5,
+      "teacher": "高岩",
+      "source_key": "reference-xlsx-v1:8.4:语文:xlsx:高岩",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "崔波",
+      "source_key": "reference-xlsx-v1:9.1:语文:xlsx:崔波",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "崔波",
+      "source_key": "reference-xlsx-v1:9.2:语文:xlsx:崔波",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "语文",
+      "periods": 6,
+      "teacher": "王少凤",
+      "source_key": "reference-xlsx-v1:9.3:语文:xlsx:王少凤",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "马丽",
+      "source_key": "reference-xlsx-v1:7.1:道德与法治:xlsx:马丽",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "马丽",
+      "source_key": "reference-xlsx-v1:7.2:道德与法治:xlsx:马丽",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "裴树丹",
+      "source_key": "reference-xlsx-v1:7.3:道德与法治:xlsx:裴树丹",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "裴树丹",
+      "source_key": "reference-xlsx-v1:7.4:道德与法治:xlsx:裴树丹",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "裴树丹",
+      "source_key": "reference-xlsx-v1:7.5:道德与法治:xlsx:裴树丹",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "张灿",
+      "source_key": "reference-xlsx-v1:8.1:道德与法治:xlsx:张灿",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "张灿",
+      "source_key": "reference-xlsx-v1:8.2:道德与法治:xlsx:张灿",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "劼唅",
+      "source_key": "reference-xlsx-v1:8.3:道德与法治:xlsx:劼唅",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "劼唅",
+      "source_key": "reference-xlsx-v1:8.4:道德与法治:xlsx:劼唅",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.1",
+      "grade": 9,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "马丽",
+      "source_key": "reference-xlsx-v1:9.1:道德与法治:xlsx:马丽",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.2",
+      "grade": 9,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "马丽",
+      "source_key": "reference-xlsx-v1:9.2:道德与法治:xlsx:马丽",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "9.3",
+      "grade": 9,
+      "subject": "道德与法治",
+      "periods": 3,
+      "teacher": "裴树丹",
+      "source_key": "reference-xlsx-v1:9.3:道德与法治:xlsx:裴树丹",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.1",
+      "grade": 7,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:7.1:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.2",
+      "grade": 7,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:7.2:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.3",
+      "grade": 7,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:7.3:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.4",
+      "grade": 7,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:7.4:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "7.5",
+      "grade": 7,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:7.5:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.1",
+      "grade": 8,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:8.1:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.2",
+      "grade": 8,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:8.2:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.3",
+      "grade": 8,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:8.3:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    },
+    {
+      "class_name": "8.4",
+      "grade": 8,
+      "subject": "音乐",
+      "periods": 1,
+      "teacher": "周嘉辉",
+      "source_key": "reference-xlsx-v1:8.4:音乐:xlsx:周嘉辉",
+      "notes": "Excel 周课时主值"
+    }
+  ],
+  "source_rows": [
+    {
+      "row": 4,
+      "subject": "语文",
+      "grade": "七年级",
+      "weekly_periods": 6,
+      "fee": 2340,
+      "existing_staff": "4\n",
+      "shortage_staff": "缺口2人",
+      "assignment_grade": "七年级（4）",
+      "assignment_cells": [
+        "韩晶雪7.1 7.2 + 7.2班主任 + 七年级主管",
+        "韩博忠（大寺）7.3",
+        " 唐延艳（汇盛道走教）7.4  \n朱振华（大寺走教） 7.5\n",
+        "●缺1人"
+      ],
+      "need": "●缺1人"
+    },
+    {
+      "row": 5,
+      "subject": "语文",
+      "grade": "八年级",
+      "weekly_periods": 5,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "八年级（4）",
+      "assignment_cells": [
+        "李康（外聘）8.1-8.2",
+        "高岩8.3-8.4",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 6,
+      "subject": "语文",
+      "grade": "九年级",
+      "weekly_periods": 6,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "九年级（3）",
+      "assignment_cells": [
+        "崔波 9.1 9.2",
+        "王少凤（行政）9.3班+9.3班主任（双）",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 7,
+      "subject": "数学",
+      "grade": "七年级",
+      "weekly_periods": "4+1",
+      "fee": 1800,
+      "existing_staff": "3\n（含交流1人）\n",
+      "shortage_staff": "缺口4人",
+      "assignment_grade": "七年级",
+      "assignment_cells": [
+        "陈静雯 7.1 7.2",
+        "徐盛 7.3 7.4 + 7.3班主任",
+        "贺温雁（大寺）7.5+9.1（跨头）",
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 8,
+      "subject": "数学",
+      "grade": "八年级",
+      "weekly_periods": "4+1",
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "八年级",
+      "assignment_cells": [
+        "韩孝贤（王稳） 8.1 8.4 + 8.4班主任",
+        "赵乃泽 8.2 8.3 + 8.3班主任",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 9,
+      "subject": "数学",
+      "grade": "九年级",
+      "weekly_periods": 5,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "九年级",
+      "assignment_cells": [
+        "贺温雁（大寺）9.1+7.5（跨头）",
+        "梁亚琼（王稳） 9.2 9.3 + 9.2班主任 + 九年级主管",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 10,
+      "subject": "英语",
+      "grade": "七年级",
+      "weekly_periods": "3+2",
+      "fee": 2700,
+      "existing_staff": "3\n\n",
+      "shortage_staff": "缺口3人",
+      "assignment_grade": "七年级",
+      "assignment_cells": [
+        "郭慧（外聘） 7.1 7.2",
+        "韩欣 7.3 7.4",
+        "刘锴（行政）7.5",
+        "●缺1人"
+      ],
+      "need": "●缺1人"
+    },
+    {
+      "row": 11,
+      "subject": "英语",
+      "grade": "八年级",
+      "weekly_periods": "3+2",
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "八年级",
+      "assignment_cells": [
+        "沈文媛 8.2 + 8.2班主任",
+        "孙婉秋（拔节） 8.3 8.4",
+        "王怡凡（产假）8.1班",
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 12,
+      "subject": "英语",
+      "grade": "九年级",
+      "weekly_periods": "3+2",
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "九年级",
+      "assignment_cells": [
+        "王立立（大寺）9.1 9.2",
+        "宋广莲（行政）9.3+9.3班主任（双）",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 13,
+      "subject": "道德与法治",
+      "grade": "七年级",
+      "weekly_periods": 3,
+      "fee": 1200,
+      "existing_staff": "3\n（含交流1人）",
+      "shortage_staff": null,
+      "assignment_grade": "七年级",
+      "assignment_cells": [
+        "马丽 7.1 7.2",
+        "裴树丹（行政）7.3 7.4 7.5",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 14,
+      "subject": "道德与法治",
+      "grade": "八年级",
+      "weekly_periods": 3,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "八年级",
+      "assignment_cells": [
+        "张灿（六幼） 8.1- 8.2",
+        "劼唅（王稳）8.3-8.4（一学期产假）",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 15,
+      "subject": "道德与法治",
+      "grade": "九年级",
+      "weekly_periods": 3,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "九年级",
+      "assignment_cells": [
+        "马丽 9.1 9.2",
+        "裴树丹（行政）9.3",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 16,
+      "subject": "历史",
+      "grade": "八、九年级",
+      "weekly_periods": 2,
+      "fee": 1200,
+      "existing_staff": 2,
+      "shortage_staff": null,
+      "assignment_grade": "八、九",
+      "assignment_cells": [
+        "常雨婷  8.1 8.2    9.1 - 9.3  +  8.1 班主任  +  八年级主管",
+        null,
+        "杨紫文 8.3-8.4     7.1-7.5",
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 17,
+      "subject": "生物学",
+      "grade": "七年级",
+      "weekly_periods": "3",
+      "fee": 1150,
+      "existing_staff": 1,
+      "shortage_staff": "缺口1人",
+      "assignment_grade": "七年级",
+      "assignment_cells": [
+        "张诗琪 7.1-7.3；   耿雪琪 7.4  7.5 + 7.5班主任",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 18,
+      "subject": "生物学",
+      "grade": "八年级",
+      "weekly_periods": "2",
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "八年级",
+      "assignment_cells": [
+        "张诗琪 8.1  ； 耿雪琪 8.2-8.4   ",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 19,
+      "subject": "地理",
+      "grade": "七年级",
+      "weekly_periods": 2,
+      "fee": "300(三支一扶按6节）",
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": null,
+      "assignment_cells": [
+        " 田铭哲 7.1-7.3     韩博忠7.4      张诗琪7.5 ",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 20,
+      "subject": "地理",
+      "grade": "八年级",
+      "weekly_periods": 2,
+      "fee": null,
+      "existing_staff": "1\n（三支一扶）",
+      "shortage_staff": null,
+      "assignment_grade": "七、八",
+      "assignment_cells": [
+        "  田铭哲 8.1-8.4   ",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 21,
+      "subject": "物理",
+      "grade": "八年级",
+      "weekly_periods": "3+1",
+      "fee": 960,
+      "existing_staff": 1,
+      "shortage_staff": "缺口1人",
+      "assignment_grade": "八年级",
+      "assignment_cells": [
+        "刘瑛琦 8.1-8.3",
+        "杨书贤8.4",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 22,
+      "subject": "物理",
+      "grade": "九年级",
+      "weekly_periods": "3+2",
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "九年级",
+      "assignment_cells": [
+        "崔洪刚（王稳走教） 9.1-9.2",
+        " 杨书贤 9.3",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 23,
+      "subject": "化学",
+      "grade": "九年级",
+      "weekly_periods": "3+1",
+      "fee": 480,
+      "existing_staff": 0,
+      "shortage_staff": "缺口1人",
+      "assignment_grade": "九年级",
+      "assignment_cells": [
+        "劼唅（王稳）9.3（一学期产假）",
+        "孔德馨 9.1-9.2 + 9.1班主任",
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 24,
+      "subject": "体育与健康",
+      "grade": "七年级",
+      "weekly_periods": 5,
+      "fee": 2568,
+      "existing_staff": 3,
+      "shortage_staff": "缺3人",
+      "assignment_grade": null,
+      "assignment_cells": [
+        "杨晓芳（拔节）7.1-7.3   \n+ 7.1班主任",
+        "梁枢 7.4+7.4班主任   ",
+        "刘锴7.5班两节体育；\n周嘉辉7.5班三节体育\n刘锴（1-5国防军事训练）\n",
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 25,
+      "subject": "体育与健康",
+      "grade": "八年级",
+      "weekly_periods": null,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "八年级",
+      "assignment_cells": [
+        "梁枢8.1-8.2",
+        "路兆宇（行政） 8.3-8.4",
+        "刘锴（1-4国防军事训练）",
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 26,
+      "subject": "体育与健康",
+      "grade": "九年级",
+      "weekly_periods": null,
+      "fee": null,
+      "existing_staff": null,
+      "shortage_staff": null,
+      "assignment_grade": "九年级",
+      "assignment_cells": [
+        "孟召磊（行政）9.1 9.3 ；  路兆宇9.2",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 27,
+      "subject": "美术",
+      "grade": "七、八、九",
+      "weekly_periods": 1,
+      "fee": 0,
+      "existing_staff": "1（交流）",
+      "shortage_staff": null,
+      "assignment_grade": "七、八、九",
+      "assignment_cells": [
+        "朱峻 （六幼）7.1-8.4",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 28,
+      "subject": "音乐",
+      "grade": "七、八、九",
+      "weekly_periods": 1,
+      "fee": 385,
+      "existing_staff": 1,
+      "shortage_staff": null,
+      "assignment_grade": "七、八、九",
+      "assignment_cells": [
+        "周嘉辉 7.1-8.4",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 29,
+      "subject": "心理",
+      "grade": "七、八、九",
+      "weekly_periods": 1,
+      "fee": 214,
+      "existing_staff": 1,
+      "shortage_staff": null,
+      "assignment_grade": "七、八、九",
+      "assignment_cells": [
+        "孙佳伟 （双周七年级；三周八年级；四周九年级）",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 30,
+      "subject": "信息科技",
+      "grade": "七、八",
+      "weekly_periods": 1,
+      "fee": 214,
+      "existing_staff": 1,
+      "shortage_staff": null,
+      "assignment_grade": "七、八、九",
+      "assignment_cells": [
+        "贾宁（行政）7.1 7.2 7.4 7.5  + 徐盛 7.3 ",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    },
+    {
+      "row": 31,
+      "subject": "校医",
+      "grade": "",
+      "weekly_periods": null,
+      "fee": 0,
+      "existing_staff": 1,
+      "shortage_staff": null,
+      "assignment_grade": "七、八、九",
+      "assignment_cells": [
+        "金铭（产假）",
+        null,
+        null,
+        null
+      ],
+      "need": null
+    }
+  ],
+  "warnings": [
+    "本批次只处理 Excel；未读取排课规则.docx，不生成排课规则、固定课位或草稿课表",
+    "费用、现有人数和缺口只保留在来源行摘要中，不会冒充教师或课时",
+    "复合课时只取周课时字段中的第一个数字；加号后的附加课时不拆成未命名课程",
+    "空白周课时、没有明确班级的年级范围只保留为警告，不生成教学任务",
+    "如果目标学期没有作息表，SQL 会补一个‘初中五天八节’基础作息表；这不是 Excel 课表",
+    "已有人工数据只复用，不覆盖；SQL 发现关键字段冲突时会回滚",
+    "化学 9年级周课时 3+1 只写入 3 节，未命名附加课时 +1 留在来源摘要",
+    "数学 7年级周课时 4+1 只写入 4 节，未命名附加课时 +1 留在来源摘要",
+    "数学 8年级周课时 4+1 只写入 4 节，未命名附加课时 +1 留在来源摘要",
+    "物理 8年级周课时 3+1 只写入 3 节，未命名附加课时 +1 留在来源摘要",
+    "物理 9年级周课时 3+2 只写入 3 节，未命名附加课时 +2 留在来源摘要",
+    "英语 7年级周课时 3+2 只写入 3 节，未命名附加课时 +2 留在来源摘要",
+    "英语 8年级周课时 3+2 只写入 3 节，未命名附加课时 +2 留在来源摘要",
+    "英语 9年级周课时 3+2 只写入 3 节，未命名附加课时 +2 留在来源摘要",
+    "心理健康教育只有周期说明，没有明确班级教师映射，未生成教学任务"
+  ],
+  "unresolved": [],
+  "composite_periods": [
+    {
+      "subject": "化学",
+      "grade": 9,
+      "raw": "3+1",
+      "primary_periods": 3,
+      "unmodeled_suffix": "+1"
+    },
+    {
+      "subject": "数学",
+      "grade": 7,
+      "raw": "4+1",
+      "primary_periods": 4,
+      "unmodeled_suffix": "+1"
+    },
+    {
+      "subject": "数学",
+      "grade": 8,
+      "raw": "4+1",
+      "primary_periods": 4,
+      "unmodeled_suffix": "+1"
+    },
+    {
+      "subject": "物理",
+      "grade": 8,
+      "raw": "3+1",
+      "primary_periods": 3,
+      "unmodeled_suffix": "+1"
+    },
+    {
+      "subject": "物理",
+      "grade": 9,
+      "raw": "3+2",
+      "primary_periods": 3,
+      "unmodeled_suffix": "+2"
+    },
+    {
+      "subject": "英语",
+      "grade": 7,
+      "raw": "3+2",
+      "primary_periods": 3,
+      "unmodeled_suffix": "+2"
+    },
+    {
+      "subject": "英语",
+      "grade": 8,
+      "raw": "3+2",
+      "primary_periods": 3,
+      "unmodeled_suffix": "+2"
+    },
+    {
+      "subject": "英语",
+      "grade": 9,
+      "raw": "3+2",
+      "primary_periods": 3,
+      "unmodeled_suffix": "+2"
+    }
+  ]
+}

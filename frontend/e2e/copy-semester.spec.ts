@@ -37,7 +37,7 @@ test('开新学期:复制到新学期,带起止日与排课偏好设置', async 
   await expect(page.getByTestId('semester-select')).toBeVisible()
   await srcCard.getByTestId('copy-semester').first().click()
 
-  // 对话框:目标学年默认 +1;起止日默认为来源往后推半年(排课管理员只要确认校历再改)
+  // 对话框:目标学年默认 +1;起止日默认为来源往后推半年(教务主任只要确认校历再改)
   const start = page.getByTestId('copy-start').locator('input')
   const end = page.getByTestId('copy-end').locator('input')
   await expect(start).toHaveValue(EXPECT_START)

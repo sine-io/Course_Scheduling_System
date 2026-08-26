@@ -13,6 +13,7 @@ import pytest
 
 from app.models.leave import AffectedStatus, LeaveRequest, LeaveStatus
 from app.models.notification import Notification, NotificationType
+from app.models.semester import Semester
 from app.models.user import Role
 from tests.api_helpers import create_api_semester, publish_checked_timetable
 from tests.conftest import make_user
@@ -42,7 +43,7 @@ def school(env):
     返回 (client, db, semester_id, teacher_id)。
     """
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler, Role.admin])
+    make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
 
     sid = create_api_semester(
@@ -201,9 +202,14 @@ def test_end_time_before_start_time_on_the_same_day_is_rejected(school):
 
 def test_semester_without_dates_cannot_accept_leaves(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(client, academic_year=2027)["id"]
+    semester = db.get(Semester, sid)
+    assert semester is not None
+    semester.start_date = None
+    semester.end_date = None
+    db.commit()
     t = client.post(f"/api/teachers?semester_id={sid}",
                     json={"name": "王师", "base_periods": 20}).json()
 
@@ -331,7 +337,7 @@ def test_teacher_cannot_register_for_someone_else(school):
 
 
 def test_registrar_on_behalf_notifies_the_teacher(school):
-    """排课管理员代登 → 当事人要知道有人替他请了假;自登则不必通知自己。"""
+    """教务主任代登 → 当事人要知道有人替他请了假;自登则不必通知自己。"""
     client, db, sid, tid = school
     _leave(client, sid, tid, start_date=MON.isoformat(), end_date=MON.isoformat())
 
@@ -354,7 +360,7 @@ def test_unbound_account_gets_a_helpful_error(school):
 
 def test_leave_without_published_timetable_registers_with_no_periods(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(
         client,

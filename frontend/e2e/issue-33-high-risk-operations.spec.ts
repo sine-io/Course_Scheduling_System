@@ -62,7 +62,7 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     const subject = await subjectResponse.json() as { id: number }
 
     await page.goto('/basedata')
-    await page.locator('.n-tabs-tab', { hasText: '科目' }).click()
+    await page.getByTestId('manual-section-subjects').click()
     await expect(page.getByRole('cell', { name: '高风险边界测试科目' })).toBeVisible()
     await expect(page.getByTestId(`subject-delete-${subject.id}`)).toHaveCount(0)
 
@@ -91,8 +91,8 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     const logs = auditPage.items
     const rejected = logs.find((log) => log.operation_id === confirmation.operation_id)
     expect(rejected).toMatchObject({
-      username: 'e2e_scheduler',
-      actor_roles: ['scheduler'],
+      username: 'e2e_director',
+      actor_roles: ['director'],
       target_id: subject.id,
       result: 'rejected',
     })
@@ -165,6 +165,70 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     expect(restoreCalls).toBe(1)
   })
 
+  test('内置管理员可见且账号确认提交只执行一次', async ({ page }) => {
+    await login(page, E2E_ADMIN_USER, E2E_ADMIN_PASS)
+    let accountCreates = 0
+    let markRequestStarted!: () => void
+    let releaseRequest!: () => void
+    const requestStarted = new Promise<void>((resolve) => { markRequestStarted = resolve })
+    const requestRelease = new Promise<void>((resolve) => { releaseRequest = resolve })
+    const pageError = new Promise<Error>((resolve) => { page.once('pageerror', resolve) })
+    await page.route('**/api/accounts', async (route) => {
+      if (route.request().method() !== 'POST') {
+        await route.continue()
+        return
+      }
+      accountCreates += 1
+      markRequestStarted()
+      await requestRelease
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          id: 9001,
+          username: 'issue33-confirmed',
+          display_name: '确认创建测试',
+          roles: ['teacher'],
+          is_active: true,
+          must_change_password: true,
+          auth_provider: 'local',
+          is_builtin: false,
+        }),
+      })
+    })
+
+    await page.goto('/settings/accounts')
+    const builtinRow = page.getByTestId('account-row').filter({ hasText: E2E_ADMIN_USER })
+    await expect(builtinRow).toContainText('内置账号')
+    await expect(builtinRow.getByRole('button', { name: '编辑' })).toBeDisabled()
+
+    await page.getByTestId('account-add').click()
+    await expect(page.getByTestId('account-role-admin')).toHaveCount(0)
+    await page.getByTestId('account-username').locator('input').fill('issue33-confirmed')
+    await page.getByTestId('account-display-name').locator('input').fill('确认创建测试')
+    await page.getByTestId('account-password').locator('input').fill('temporary123')
+    await page.getByTestId('account-save').click()
+
+    const dialog = page.getByRole('dialog').filter({ hasText: '确认账号与角色变更' })
+    await expect(dialog).not.toContainText('temporary123')
+    const confirm = dialog.getByRole('button', { name: '确认提交' })
+    await expect(confirm).toHaveClass(/n-button--primary-type/)
+    await confirm.click()
+    const firstOutcome = await Promise.race([
+      requestStarted.then(() => ({ type: 'request' as const })),
+      pageError.then((error) => ({ type: 'pageerror' as const, message: error.message })),
+    ])
+    expect(firstOutcome, '确认提交必须调用创建接口，不能触发页面异常').toEqual({ type: 'request' })
+    await expect(confirm).toBeDisabled()
+
+    await confirm.dispatchEvent('click')
+    expect(accountCreates).toBe(1)
+    releaseRequest()
+    await expect(page.getByText('账号已创建')).toBeVisible()
+    await expect(page.locator('.n-modal').filter({ hasText: '新增账号' })).toHaveCount(0)
+    expect(accountCreates).toBe(1)
+  })
+
   test('管理员确认后可删除，历史/归档学期入口隐藏且接口拒绝', async ({ page }) => {
     await login(page, E2E_ADMIN_USER, E2E_ADMIN_PASS)
     await deleteSemesterByYearTerm(page, YEAR + 1, 1)
@@ -178,7 +242,7 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     const first = await firstResponse.json() as { id: number }
 
     await page.goto('/basedata')
-    await page.locator('.n-tabs-tab', { hasText: '科目' }).click()
+    await page.getByTestId('manual-section-subjects').click()
     const deleteButton = page.getByTestId(`subject-delete-${first.id}`)
     await deleteButton.click()
     const deletePopover = page.locator('.n-popover')

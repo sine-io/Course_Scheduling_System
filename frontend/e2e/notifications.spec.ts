@@ -102,7 +102,7 @@ async function seedAssignment(page: Page, sid: number, chenId: number) {
     { data: { type: 'substitute', handler_teacher_id: chenId } })
 }
 
-// ── 验收①②:教师端铃铛确认(手机) + 排课管理员看板再次提醒 ──
+// ── 验收①②:教师端铃铛确认(手机) + 教务主任看板再次提醒 ──
 // 这些测试共用 e2e_teacher 账号并发布课表;留下的学期会盖掉别的测试的「最近学期」
 // 默认,故统一以 afterEach 兜底清理(即使测试中途失败也删掉)。
 const YEARS = [2053, 2054]
@@ -114,7 +114,7 @@ test.describe('通知系统', () => {
     for (const y of YEARS) await deleteSemesterByYearTerm(page, y, 1)
   })
 
-  test('排课管理员指派代课后,教师手机收到通知并确认;排课管理员看板可再次提醒', async ({ page }) => {
+  test('教务主任指派代课后,教师手机收到通知并确认;教务主任看板可再次提醒', async ({ page }) => {
     test.setTimeout(180_000)
     const YEAR = 2053
     await login(page)
@@ -125,7 +125,7 @@ test.describe('通知系统', () => {
     await seedAssignment(page, sem.id, chenId)
     await ensureTeacherPassword(page)
 
-    // ── 排课管理员看板:陈老师的代课通知未确认,可再次提醒 ──
+    // ── 教务主任看板:陈老师的代课通知未确认,可再次提醒 ──
     await login(page)
     await page.goto('/notification-board')
     await selectSemester(page, YEAR)

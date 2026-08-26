@@ -52,7 +52,7 @@ def _teacher_xlsx(username: str) -> bytes:
 
 def test_non_admin_account_creation_is_rejected_and_audited(env):
     client, db = env
-    make_user(db, "scheduler", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler", PW, roles=[Role.director])
     make_user(db, "audit-admin", PW, roles=[Role.admin])
     _login(client, "scheduler")
 
@@ -68,7 +68,7 @@ def test_non_admin_account_creation_is_rejected_and_audited(env):
     logs = client.get("/api/audit-logs?action=create_account").json()["items"]
     assert len(logs) == 1
     assert logs[0]["username"] == "scheduler"
-    assert logs[0]["actor_roles"] == ["scheduler"]
+    assert logs[0]["actor_roles"] == ["director"]
     assert logs[0]["target_version"] == "new-teacher"
     assert logs[0]["result"] == "rejected"
     assert logs[0]["reason"] == "high_risk_permission_denied"
@@ -100,16 +100,68 @@ def test_admin_account_creation_requires_confirmation_and_is_idempotent(env):
 
     listed = client.get("/api/accounts").json()
     assert [item["username"] for item in listed] == ["admin", "new-teacher"]
+    assert listed[0]["is_builtin"] is True
+    assert listed[1]["is_builtin"] is False
+
+
+def test_admin_role_is_reserved_for_the_builtin_account(env):
+    client, db = env
+    make_user(db, "admin", PW, roles=[Role.admin])
+    _login(client, "admin")
+
+    response = client.post(
+        "/api/accounts",
+        json={
+            **_create_payload(
+                "10000000-0000-4000-8000-000000000010",
+                username="second-admin",
+            ),
+            "roles": ["admin"],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "system_admin_role_reserved"
+    assert db.query(User).filter(User.username == "second-admin").one_or_none() is None
+    log = client.get("/api/audit-logs?action=create_account").json()["items"][0]
+    assert log["result"] == "rejected"
+    assert log["reason"] == "system_admin_role_reserved"
+
+
+def test_existing_account_cannot_be_promoted_to_system_admin(env):
+    client, db = env
+    make_user(db, "admin", PW, roles=[Role.admin])
+    target = make_user(db, "teacher-login", PW, roles=[Role.teacher])
+    _login(client, "admin")
+
+    response = client.patch(
+        f"/api/accounts/{target.id}",
+        json={
+            "roles": ["admin"],
+            "confirmation": _confirmation(
+                "10000000-0000-4000-8000-000000000011",
+                f"account:{target.id}",
+            ),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "system_admin_role_reserved"
+    db.refresh(target)
+    assert target.role_names == {Role.teacher.value}
+    log = client.get("/api/audit-logs?action=update_account").json()["items"][0]
+    assert log["result"] == "rejected"
+    assert log["reason"] == "system_admin_role_reserved"
 
 
 def test_admin_can_change_roles_and_deactivate_an_account_with_exact_target(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])
-    target = make_user(db, "operator", PW, roles=[Role.scheduler])
+    target = make_user(db, "operator", PW, roles=[Role.director])
     _login(client, "admin")
     body = {
         "display_name": "兼任教师",
-        "roles": ["scheduler", "teacher"],
+        "roles": ["director", "teacher"],
         "is_active": False,
         "confirmation": _confirmation(
             "10000000-0000-4000-8000-000000000003",
@@ -121,18 +173,18 @@ def test_admin_can_change_roles_and_deactivate_an_account_with_exact_target(env)
 
     assert changed.status_code == 200, changed.text
     assert changed.json()["display_name"] == "兼任教师"
-    assert changed.json()["roles"] == ["scheduler", "teacher"]
+    assert changed.json()["roles"] == ["director", "teacher"]
     assert changed.json()["is_active"] is False
     logs = client.get("/api/audit-logs?action=update_account").json()["items"]
     assert len(logs) == 1
     assert logs[0]["target_id"] == target.id
     assert logs[0]["target_version"] == "operator"
     assert logs[0]["result"] == "success"
-    assert "scheduler" in logs[0]["detail"]
+    assert "director" in logs[0]["detail"]
     assert "teacher" in logs[0]["detail"]
 
 
-def test_account_change_rejects_wrong_target_and_protects_current_admin(env):
+def test_account_change_rejects_wrong_target_and_protects_builtin_admin(env):
     client, db = env
     admin = make_user(db, "admin", PW, roles=[Role.admin])
     _login(client, "admin")
@@ -150,7 +202,7 @@ def test_account_change_rejects_wrong_target_and_protects_current_admin(env):
     assert wrong.status_code == 409
     assert wrong.json()["detail"]["code"] == "high_risk_target_mismatch"
 
-    self_demotion = client.patch(
+    builtin_change = client.patch(
         f"/api/accounts/{admin.id}",
         json={
             "roles": ["teacher"],
@@ -160,15 +212,15 @@ def test_account_change_rejects_wrong_target_and_protects_current_admin(env):
             ),
         },
     )
-    assert self_demotion.status_code == 409
-    assert self_demotion.json()["detail"]["code"] == "current_admin_protected"
+    assert builtin_change.status_code == 409
+    assert builtin_change.json()["detail"]["code"] == "builtin_account_protected"
     db.refresh(admin)
     assert admin.role_names == {Role.admin.value}
 
     logs = client.get("/api/audit-logs?action=update_account").json()["items"]
     assert [(log["result"], log["reason"]) for log in reversed(logs)] == [
         ("rejected", "high_risk_target_mismatch"),
-        ("rejected", "current_admin_protected"),
+        ("rejected", "builtin_account_protected"),
     ]
 
 
@@ -197,7 +249,7 @@ def test_duplicate_username_is_zero_write_and_audited(env):
 @pytest.mark.parametrize(
     ("username", "role"),
     [
-        ("scheduler", Role.scheduler),
+        ("scheduler", Role.director),
         ("director", Role.director),
         ("teacher-user", Role.teacher),
     ],
@@ -210,7 +262,12 @@ def test_non_admin_cannot_bind_a_login_account_to_teacher(env, username, role):
     _login(client, "audit-admin")
     semester = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1},
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).json()
     client.post("/api/auth/logout")
     _login(client, username)
@@ -239,12 +296,17 @@ def test_non_admin_cannot_bind_a_login_account_to_teacher(env, username, role):
 
 def test_scheduler_cannot_create_accounts_through_teacher_import(env):
     client, db = env
-    make_user(db, "scheduler", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler", PW, roles=[Role.director])
     make_user(db, "audit-admin", PW, roles=[Role.admin])
     _login(client, "scheduler")
     semester = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1},
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).json()
     operation_id = "10000000-0000-4000-8000-000000000008"
 
@@ -280,7 +342,12 @@ def test_bulk_account_import_rolls_back_when_final_audit_cannot_commit(
     _login(client, "admin")
     semester = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1},
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
     ).json()
 
     def fail_finish(session, *_args, **_kwargs):

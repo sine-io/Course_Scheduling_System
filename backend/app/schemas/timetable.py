@@ -44,7 +44,7 @@ class TimetableOut(BaseModel):
     name: str
     status: str
     entries: list[ScheduleEntryOut] = []
-    # 发布后回填:今日之后、依旧课表展开的受影响节次数(>0 提醒排课管理员重新查看调课与代课)
+    # 发布后回填:今日之后、依旧课表展开的受影响节次数(>0 提醒教务主任重新查看调课与代课)
     stale_affected: int = 0
 
 

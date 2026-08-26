@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import { describe, expect, it, vi } from 'vitest'
 import SubstitutionLog from './SubstitutionLog.vue'
 
-// 后端取到条数上限就代表「还有更早的没列出来」。不讲的话,排课管理员会以为这学期就只有这些记录。
+// 后端取到条数上限就代表「还有更早的没列出来」。不讲的话,教务主任会以为这学期就只有这些记录。
 const MAX_ROWS = 1000
 
 const entry = (id: number) => ({

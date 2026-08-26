@@ -11,7 +11,7 @@ import { createTestSemester, semesterLabel } from './helpers'
 //   2) E2E_BASE_URL=http://localhost:<port> npm run e2e:manual
 //
 // 两支测试对站点状态的要求不同,故分开(执行顺序即文件顺序,workers=1):
-//   01–02:需**向导尚未完成**的全新站点。
+//   01–02:需没有学期数据的全新站点。
 //   03–10:自己把示范数据备齐(幂等),再逐页截图。
 //
 // 示范数据与改密都刻意做在这支 spec 里、不靠外部脚本:上一次是临时手动灌的,
@@ -185,19 +185,19 @@ async function seedHalfScheduledDraft(page: Page, sid: number) {
   await place('数学', 1, [1, 2, 3, 4])
 }
 
-test('生成操作手册截图（01–02，需要全新未设置站点）', async ({ page }) => {
+test('生成操作手册截图（01–02，需要全新站点）', async ({ page }) => {
   // ── 01 登录页 ──
   await page.goto('/login')
   await expect(page.getByRole('button', { name: '登录' })).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(500)
   await page.screenshot({ path: `${SHOTS}/01-login.png` })
 
-  // ── 02 设置向导(第一步:学校与学期)──
+  // ── 02 学期与作息设置（从真实业务页面开始首次准备）──
   await loginAsAdmin(page)
-  await page.goto('/wizard')
-  await expect(page.getByRole('heading', { name: '设置向导' })).toBeVisible({ timeout: 20_000 })
+  await page.goto('/settings/semesters')
+  await expect(page.getByRole('heading', { name: '学期与作息时间表' })).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(700)
-  await page.screenshot({ path: `${SHOTS}/02-wizard.png` })
+  await page.screenshot({ path: `${SHOTS}/02-semesters.png` })
 })
 
 test('生成操作手册截图（03–10）', async ({ page }) => {
@@ -205,11 +205,6 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
 
   await loginAsAdmin(page)
   const sid = await ensureManualData(page)
-  // 通过与产品相同的完成检查放行后续页面，不从测试侧直接改完成标记。
-  const completed = await page.request.post('/api/wizard/complete', {
-    data: { semester_id: sid, acknowledge_warnings: true },
-  })
-  expect(completed.ok(), `完成设置失败：${await completed.text()}`).toBeTruthy()
 
   // ── 03 教学任务管理 ──
   await page.goto('/scheduling/assignments')

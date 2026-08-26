@@ -1,11 +1,13 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { NDialogProvider, NMessageProvider } from 'naive-ui'
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import System from './System.vue'
 import { useAuthStore } from '@/stores/auth'
+
+enableAutoUnmount(afterEach)
 
 const backupMocks = vi.hoisted(() => ({
   createBackup: vi.fn(),
@@ -25,10 +27,6 @@ const notificationMocks = vi.hoisted(() => ({
   getSmtp: vi.fn(),
   saveSmtp: vi.fn(),
 }))
-const wizardMocks = vi.hoisted(() => ({
-  reopenWizard: vi.fn(),
-  getWizardState: vi.fn(),
-}))
 const accountMocks = vi.hoisted(() => ({
   createAccount: vi.fn(),
   listAccounts: vi.fn(),
@@ -41,7 +39,6 @@ const auditMocks = vi.hoisted(() => ({
 vi.mock('@/api/backups', () => ({ ...backupMocks }))
 vi.mock('@/api/assignments', () => ({ ...assignmentMocks }))
 vi.mock('@/api/notifications', () => ({ ...notificationMocks }))
-vi.mock('@/api/wizard', () => ({ ...wizardMocks }))
 vi.mock('@/api/accounts', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/api/accounts')>(),
   ...accountMocks,
@@ -68,7 +65,6 @@ function makeRouter() {
       { path: '/settings/system', name: 'system', component: System },
       { path: '/settings/backup', name: 'backup', component: System },
       { path: '/settings/accounts', name: 'account-permissions', component: System },
-      { path: '/wizard', name: 'wizard', component: { template: '<main />' } },
       { path: '/login', name: 'login', component: { template: '<main />' } },
     ],
   })
@@ -100,7 +96,7 @@ async function mountSystem(role: string, stubs: Record<string, unknown> = {}, pa
         Popconfirm: {
           emits: ['positive-click'],
           props: ['confirmId'],
-          template: '<span><slot name="trigger" /><button :data-testid="confirmId || \'confirm-reset-wizard\'" @click="$emit(\'positive-click\')">确认</button></span>',
+          template: '<span><slot name="trigger" /><button :data-testid="confirmId || \'confirm-action\'" @click="$emit(\'positive-click\')">确认</button></span>',
         },
         ...stubs,
       },
@@ -119,21 +115,16 @@ describe('System', () => {
     assignmentMocks.getSchedulingSettings.mockResolvedValue(adminSettings.scheduling)
     assignmentMocks.getSchoolSettings.mockResolvedValue(adminSettings.school)
     notificationMocks.getSmtp.mockResolvedValue(adminSettings.smtp)
-    wizardMocks.getWizardState.mockResolvedValue({ current_step: 0, resume_step: 0, completed: true, paused: false, semester_id: null, total_steps: 4, has_semesters: false })
     backupMocks.createBackup.mockResolvedValue(backup)
     backupMocks.deleteBackup.mockResolvedValue({ deleted: backup.name })
-    wizardMocks.reopenWizard.mockResolvedValue({ current_step: 0, resume_step: 0, completed: false, paused: false, semester_id: 8, total_steps: 4, has_semesters: true })
   })
 
-  it('非管理员保持原有可见性，只显示设置向导且不读取管理员接口', async () => {
-    const wrapper = await mountSystem('scheduler')
+  it('非管理员不显示系统管理内容且不读取管理员接口', async () => {
+    const wrapper = await mountSystem('director')
     await flushPromises()
 
     expect(wrapper.find('[data-testid="school-card"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="backup-card"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="wizard-reset-card"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="wizard-reset-card"]').text()).toContain('检查并补全当前学期')
-    expect(wrapper.get('[data-testid="wizard-reset-card"]').text()).not.toContain('重新启动设置向导')
     expect(notificationMocks.getSmtp).not.toHaveBeenCalled()
     expect(backupMocks.listBackups).not.toHaveBeenCalled()
   })
@@ -174,10 +165,12 @@ describe('System', () => {
       id: 7,
       username: 'operator',
       display_name: '操作员',
-      roles: ['scheduler'],
+      roles: ['director'],
       is_active: true,
       must_change_password: false,
       last_login_at: null,
+      auth_provider: 'local',
+      is_builtin: false,
     }])
     const wrapper = await mountSystem('admin', {}, '/settings/accounts')
     await flushPromises()
@@ -190,12 +183,92 @@ describe('System', () => {
     expect(auditMocks.listAuditLogs).not.toHaveBeenCalled()
   })
 
+  it('新增账号不提供系统管理员角色', async () => {
+    const wrapper = await mountSystem('admin', {}, '/settings/accounts')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="account-add"]').trigger('click')
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="account-role-admin"]')).toBeNull()
+    expect(document.body.querySelector('[data-testid="account-role-teacher"]')).not.toBeNull()
+  })
+
+  it('账号列表显示内置系统管理员并禁用编辑', async () => {
+    accountMocks.listAccounts.mockResolvedValue([{
+      id: 1,
+      username: 'admin',
+      display_name: '系统管理员',
+      roles: ['admin'],
+      is_active: true,
+      must_change_password: false,
+      auth_provider: 'local',
+      is_builtin: true,
+    }])
+    const wrapper = await mountSystem('admin', {}, '/settings/accounts')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="account-row"]').text()).toContain('内置账号')
+    const edit = wrapper.get('[data-testid="account-edit-1"]')
+    expect(edit.attributes('disabled')).toBeDefined()
+    expect(edit.attributes('title')).toBe('内置账号不可编辑')
+  })
+
+  it('确认提交使用蓝色主按钮并在请求期间只允许一次提交', async () => {
+    let resolve!: (value: unknown) => void
+    const pending = new Promise((done) => { resolve = done })
+    accountMocks.createAccount.mockReturnValue(pending)
+    const wrapper = await mountSystem('admin', {}, '/settings/accounts')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="account-add"]').trigger('click')
+    await flushPromises()
+    const username = document.body.querySelector('[data-testid="account-username"] input') as HTMLInputElement
+    const displayName = document.body.querySelector('[data-testid="account-display-name"] input') as HTMLInputElement
+    const password = document.body.querySelector('[data-testid="account-password"] input') as HTMLInputElement
+    username.value = 'confirm-account'
+    username.dispatchEvent(new Event('input', { bubbles: true }))
+    displayName.value = '确认账号'
+    displayName.dispatchEvent(new Event('input', { bubbles: true }))
+    password.value = 'temporary123'
+    password.dispatchEvent(new Event('input', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+    ;(document.body.querySelector('[data-testid="account-save"]') as HTMLButtonElement).click()
+    await flushPromises()
+
+    const dialog = Array.from(document.body.querySelectorAll<HTMLElement>('[role="dialog"]'))
+      .filter((item) => item.textContent?.includes('确认账号与角色变更')).at(-1)
+    expect(dialog).toBeDefined()
+    const positive = Array.from(dialog?.querySelectorAll('button') ?? [])
+      .find((item) => item.textContent?.includes('确认提交')) as HTMLButtonElement
+    expect(positive.className).toContain('n-button--primary-type')
+
+    positive.click()
+    await flushPromises()
+    expect(accountMocks.createAccount).toHaveBeenCalledTimes(1)
+    expect(positive.disabled).toBe(true)
+
+    positive.click()
+    expect(accountMocks.createAccount).toHaveBeenCalledTimes(1)
+    resolve({
+      id: 9,
+      username: 'confirm-account',
+      display_name: '确认账号',
+      roles: ['teacher'],
+      is_active: true,
+      must_change_password: true,
+      auth_provider: 'local',
+      is_builtin: false,
+    })
+    await flushPromises()
+  })
+
   it('审计表以简体中文展示和搜索内部代码', async () => {
     const auditLog = {
       id: 1,
       operation_id: 'operation-1',
-      username: 'scheduler',
-      actor_roles: ['scheduler'],
+      username: 'director',
+      actor_roles: ['director'],
       action: 'delete_subject',
       target_type: 'subject',
       target_id: 23,
@@ -219,7 +292,7 @@ describe('System', () => {
     await flushPromises()
 
     const row = wrapper.get('[data-testid="audit-row"]')
-    expect(row.text()).toContain('排课管理员')
+    expect(row.text()).toContain('教务主任')
     expect(row.text()).toContain('删除科目')
     expect(row.text()).toContain('科目 #23')
     expect(row.text()).toContain('已拒绝')
@@ -279,26 +352,6 @@ describe('System', () => {
     await flushPromises()
     expect(wrapper.find('[data-testid="audit-error"]').exists()).toBe(false)
     expect(auditMocks.listAuditLogs).toHaveBeenCalledTimes(2)
-  })
-
-  it('检查当前学期进行中时重复确认只发送一次请求', async () => {
-    const reset = (() => {
-      let resolve!: (value: unknown) => void
-      const promise = new Promise((done) => { resolve = done })
-      return { promise, resolve }
-    })()
-    wizardMocks.reopenWizard.mockReturnValue(reset.promise)
-    const wrapper = await mountSystem('scheduler')
-    await flushPromises()
-
-    const confirm = wrapper.get('[data-testid="confirm-reset-wizard"]')
-    await confirm.trigger('click')
-    await confirm.trigger('click')
-
-    expect(wizardMocks.reopenWizard).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('[data-testid="reset-wizard"]').attributes('disabled')).toBeDefined()
-    reset.resolve({ current_step: 0, resume_step: 0, completed: false, paused: false, semester_id: 8, total_steps: 4, has_semesters: true })
-    await flushPromises()
   })
 
   it('恢复备份进行中时重复确认只发送一次请求', async () => {

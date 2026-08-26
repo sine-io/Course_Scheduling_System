@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import { readFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import {
@@ -108,7 +109,7 @@ test('教学任务管理:走班群组创建、协同教师+连堂、班级超节
   await deleteSemesterByYearTerm(page, YEAR, 1)
 })
 
-test('批量导入:教学任务 Excel 导入(单班×协同教师×连堂)', async ({ page }) => {
+test('批量导入 API:教学任务 Excel 导入(单班×协同教师×连堂)', async ({ page }) => {
   const YEAR = 2039
   await login(page)
 
@@ -122,18 +123,18 @@ test('批量导入:教学任务 Excel 导入(单班×协同教师×连堂)', asy
     await api(page, `/api/teachers?semester_id=${sid}`, { name: n })
   }
 
-  await page.goto('/basedata')
-  await selectSemester(page, YEAR)
-  await page.locator('.n-tabs-tab', { hasText: '批量导入' }).click()
-  await page.locator('.n-radio-button', { hasText: '按表导入' }).click()
-  await page.locator('.n-radio-button', { hasText: '教学任务' }).click()
-
   const file = fileURLToPath(new URL('./fixtures/assignments_import.xlsx', import.meta.url))
-  await page.locator('input[type="file"]').setInputFiles(file)
-  await page.getByRole('button', { name: '开始导入' }).click()
-
-  await expect(page.getByText('成功导入 1 条数据。')).toBeVisible()
-  await page.screenshot({ path: `${SHOTS}/adv-4-import.png` })
+  const importResponse = await page.request.post(`/api/import/assignments?semester_id=${sid}`, {
+    multipart: {
+      file: {
+        name: 'assignments_import.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buffer: await readFile(file),
+      },
+    },
+  })
+  expect(importResponse.ok()).toBeTruthy()
+  expect(await importResponse.json()).toEqual({ imported: 1, errors: [] })
 
   // 经 API 验证:2 位教师(陈师为主讲教师)+ 3 连堂×2
   const list = await (await page.request.get(`/api/assignments?semester_id=${sid}`)).json()

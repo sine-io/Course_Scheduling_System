@@ -1,6 +1,7 @@
 """账号与角色 model。
 
 一个 User 可有多个角色(RBAC);admin 为超级用户,通过所有角色检查。
+系统管理员是唯一的内置账号,由 is_builtin 明确标识;admin 角色不能授予普通账号。
 teacher 角色的账号日后(M1)以 nullable 的 teacher_id 绑定教师基础信息。
 """
 
@@ -11,10 +12,12 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,13 +28,21 @@ class Role(enum.StrEnum):
     """系统角色。值即为数据库与 API 使用的字符串。"""
 
     admin = "admin"          # 系统管理员(超级用户)
-    director = "director"    # 教务主任
-    scheduler = "scheduler"  # 排课管理员
+    director = "director"    # 教务主任(全校教务与排课)
     teacher = "teacher"      # 教师
 
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "uq_users_single_builtin",
+            "is_builtin",
+            unique=True,
+            postgresql_where=text("is_builtin"),
+            sqlite_where=text("is_builtin = 1"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
@@ -42,6 +53,8 @@ class User(Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     # 认证来源:local(本地账号和密码)或未来的 oidc(教育云端账号)
     auth_provider: Mapped[str] = mapped_column(String(20), default="local")
+    # 首次初始化创建的唯一系统管理员账号,不可通过账号管理页面编辑
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # 登录失败锁定机制
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -33,7 +33,7 @@ const router = useRouter()
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
 const canEdit = computed(() => (
-  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  (auth.hasRole('admin') || auth.hasRole('director'))
   && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 const canDelete = computed(() => (
@@ -347,7 +347,7 @@ function blockLabel(a: Assignment): string {
     <template v-else>
       <n-alert v-if="!canEdit" type="info" data-testid="assignments-readonly">
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
-        {{ '当前角色仅可查看教学任务和课时负载，写入操作仅对排课管理员开放。' }}
+        {{ '当前角色仅可查看教学任务和课时负载，写入操作仅对教务主任开放。' }}
       </n-alert>
 
       <div class="assignments-layout" data-testid="assignments-workspace">

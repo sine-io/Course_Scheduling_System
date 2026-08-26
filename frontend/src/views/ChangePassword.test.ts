@@ -11,7 +11,7 @@ const user = {
   id: 1,
   username: 'new-user',
   display_name: '新用户',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: true,
 }
 

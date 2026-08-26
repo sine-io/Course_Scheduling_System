@@ -12,11 +12,19 @@ PW = "password123"
 
 @pytest.fixture
 def scheduler_env(env):
-    """已登录排课管理员 + 一个学期,返回 (client, semester_id)。"""
+    """已登录教务主任 + 一个学期,返回 (client, semester_id)。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
+    sem = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
+    ).json()
     return client, sem["id"]
 
 
@@ -63,7 +71,15 @@ def test_teacher_with_subjects(scheduler_env):
 
 def test_teacher_subject_cross_semester_rejected(scheduler_env):
     client, sid = scheduler_env
-    other = client.post("/api/semesters", json={"academic_year": 2026, "term": 2}).json()
+    other = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 2,
+            "start_date": "2027-02-01",
+            "end_date": "2027-07-10",
+        },
+    ).json()
     context = client.get("/api/semester-context").json()
     switched = client.put(
         "/api/semester-context",
@@ -195,8 +211,8 @@ def test_search_teachers_by_name(scheduler_env):
 
 def test_teacher_viewer_role_readonly(env):
     client, db = env
-    make_user(db, "d", PW, roles=[Role.director])
-    client.post("/api/auth/login", json={"username": "d", "password": PW})
-    # director 可读(需先有学期,由 admin/scheduler 创建;此处直接测写入被拒)
+    make_user(db, "t", PW, roles=[Role.teacher])
+    client.post("/api/auth/login", json={"username": "t", "password": PW})
+    # 教师只能读取基础数据，写入仍由教务主任负责。
     r = client.post("/api/teachers?semester_id=1", json={"name": "x"})
     assert r.status_code == 403

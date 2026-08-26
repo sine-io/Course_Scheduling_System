@@ -20,7 +20,15 @@ def sched(env):
     client, db = env
     make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
+    sem = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
+    ).json()
     return client, sem["id"], db
 
 
@@ -239,7 +247,13 @@ def test_copy_preserves_binding_and_contact(sched):
     )
     r = client.post(
         f"/api/semesters/{sid}/copy",
-        json={"academic_year": 2027, "term": 1, "grade_promotion": False},
+        json={
+            "academic_year": 2027,
+            "term": 1,
+            "start_date": "2027-09-01",
+            "end_date": "2028-01-20",
+            "grade_promotion": False,
+        },
     )
     assert r.status_code == 201
     nid = r.json()["id"]

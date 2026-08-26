@@ -11,9 +11,9 @@ type RoleCase = {
 
 const ROLE_CASES: RoleCase[] = [
   {
-    title: '排课管理员',
-    username: 'e2e_scheduler',
-    password: 'e2etest1234',
+    title: '教务主任',
+    username: 'e2e_director',
+    password: 'e2edirector1234',
     links: [
       { label: '首页总览', href: '/workspace/home' },
       { label: '仪表盘', href: '/' },
@@ -21,21 +21,11 @@ const ROLE_CASES: RoleCase[] = [
       { label: '自动排课', href: '/scheduling/auto' },
       { label: '排课工作台', href: '/scheduling/workbench' },
       { label: '版本与发布', href: '/scheduling/versions' },
-      { label: '通知', href: '/notifications' },
-    ],
-    forbidden: ['系统管理'],
-  },
-  {
-    title: '教务主任',
-    username: 'e2e_director',
-    password: 'e2edirector1234',
-    links: [
-      { label: '首页总览', href: '/workspace/home' },
-      { label: '仪表盘', href: '/' },
+      { label: '排课规则', href: '/scheduling/settings' },
       { label: '课表查询', href: '/timetable-query' },
       { label: '今日看板', href: '/daily-board' },
-      { label: '版本与发布', href: '/scheduling/versions' },
       { label: '代课课时统计', href: '/substitution-stats' },
+      { label: '通知', href: '/notifications' },
     ],
     forbidden: ['系统管理'],
   },
@@ -111,7 +101,7 @@ test.describe('角色导航与页面兼容', () => {
   })
 
   test('旧通知、演示和系统分区链接重定向到新页面', async ({ page }) => {
-    await login(page, 'e2e_scheduler', 'e2etest1234')
+    await login(page, 'e2e_director', 'e2edirector1234')
 
     await page.goto('/notification-board')
     await expect(page).toHaveURL(/\/notifications\?view=board$/)

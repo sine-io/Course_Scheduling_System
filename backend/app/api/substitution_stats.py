@@ -1,6 +1,6 @@
 """代课课时月结统计(M4-5)。
 
-排课管理员/主任看全校并可导出 Excel;教师只能查自己的明细(`/mine`)。
+教务主任看全校并可导出 Excel;教师只能查自己的明细(`/mine`)。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status

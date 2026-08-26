@@ -16,7 +16,7 @@ PW = "password123"
 
 @pytest.fixture
 def env2(env):
-    """已登录排课管理员和一份含测试作息时间表的学期。"""
+    """已登录教务主任和一份含测试作息时间表的学期。"""
     client, db = env
     make_user(db, "s", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
@@ -135,7 +135,7 @@ def test_teacher_target_subtracts_admin_reduction(env2):
     client, sid = env2
     tr = client.post(
         f"/api/teachers?semester_id={sid}",
-        json={"name": "排课管理员", "base_periods": 20, "admin_reduction": 4},
+        json={"name": "教务主任", "base_periods": 20, "admin_reduction": 4},
     ).json()
     loads = client.get(f"/api/assignments/teacher-load?semester_id={sid}").json()
     row = next(x for x in loads if x["teacher_id"] == tr["id"])
@@ -348,12 +348,9 @@ def test_import_assignments_unknown_class_zero_write(env2):
 
 
 def _set_limit(client, db, n):
-    """上限是校务政策,端点限管理员;测试里暂时切换身份再切回教学负责人。"""
-    make_user(db, "adm", PW, roles=[Role.admin])
-    client.post("/api/auth/login", json={"username": "adm", "password": PW})
+    """上限是校务政策,当前测试账号已是内置管理员。"""
     r = client.put("/api/settings/scheduling", json={"max_overtime": n})
     assert r.status_code == 200
-    client.post("/api/auth/login", json={"username": "s", "password": PW})
     return r
 
 

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ArrowRight, CheckCircle2, CircleAlert, Plus, RefreshCw } from '@lucide/vue'
 import {
-  NAlert, NButton, NCheckbox, NInput, NSpin, NTabPane, NTabs, NTag, useMessage,
+  NAlert, NButton, NCheckbox, NInput, NSpin, NTag, useMessage,
 } from 'naive-ui'
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, useId, watch } from 'vue'
 import { apiErrorMessage } from '@/api/client'
 import {
   createSubject, listClassUnits, listRooms, listSubjects, listTeachers,
@@ -21,12 +21,23 @@ const props = withDefaults(
   defineProps<{
     semesterId: number
     canEdit?: boolean
+    canDelete?: boolean
+    canManageAccounts?: boolean
     initialSection?: ManualSection
+    showReadonlyNotice?: boolean
   }>(),
-  { canEdit: true, initialSection: 'subjects' },
+  {
+    canEdit: true,
+    canDelete: false,
+    canManageAccounts: false,
+    initialSection: 'subjects',
+    showReadonlyNotice: true,
+  },
 )
 const emit = defineEmits<{ changed: [] }>()
 const message = useMessage()
+const entryId = useId()
+const sectionPanelId = `${entryId}-panel`
 
 const activeSection = ref<ManualSection>(props.initialSection)
 const loading = ref(true)
@@ -39,6 +50,10 @@ const selectedQuick = ref<string[]>([])
 const quickSearch = ref('')
 const quickBusy = ref(false)
 const quickError = ref<string | null>(null)
+
+watch(() => props.initialSection, (section) => {
+  activeSection.value = section
+})
 
 const commonSubjects = [
   { name: '语文', domain: '语言与文学', is_major: true },
@@ -57,6 +72,19 @@ const commonSubjects = [
   { name: '综合实践', domain: '综合实践', is_major: false },
 ]
 
+// The quick-add labels are user-facing aliases; scheduling data keeps the domain's canonical names.
+const commonSubjectCanonicalNames: Record<string, string> = {
+  生物: '生物学',
+  信息: '信息科技',
+  信息技术: '信息科技',
+  体育: '体育与健康',
+  综合实践: '综合实践活动',
+}
+
+function canonicalCommonSubjectName(name: string): string {
+  return commonSubjectCanonicalNames[name.trim()] ?? name.trim()
+}
+
 const sectionMeta: Array<{ key: ManualSection; label: string; required: boolean }> = [
   { key: 'subjects', label: '科目', required: true },
   { key: 'teachers', label: '教师', required: true },
@@ -64,7 +92,12 @@ const sectionMeta: Array<{ key: ManualSection; label: string; required: boolean 
   { key: 'rooms', label: '教室/场地', required: false },
 ]
 
-const subjectNames = computed(() => new Set(subjectList.value.map((item) => item.name.trim())))
+const subjectNames = computed(() => new Set(
+  subjectList.value.map((item) => canonicalCommonSubjectName(item.name)),
+))
+function isCommonSubjectExisting(name: string): boolean {
+  return subjectNames.value.has(canonicalCommonSubjectName(name))
+}
 const filteredCommonSubjects = computed(() => {
   const query = quickSearch.value.trim()
   return commonSubjects.filter((item) => !query || item.name.includes(query))
@@ -113,6 +146,31 @@ function selectSection(section: ManualSection) {
   activeSection.value = section
 }
 
+function sectionTabId(section: ManualSection): string {
+  return `${entryId}-${section}-tab`
+}
+
+async function handleSectionKeydown(event: KeyboardEvent, index: number) {
+  let nextIndex: number | null = null
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    nextIndex = (index + 1) % sectionMeta.length
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    nextIndex = (index - 1 + sectionMeta.length) % sectionMeta.length
+  } else if (event.key === 'Home') {
+    nextIndex = 0
+  } else if (event.key === 'End') {
+    nextIndex = sectionMeta.length - 1
+  }
+  if (nextIndex === null) return
+
+  event.preventDefault()
+  const section = sectionMeta[nextIndex]?.key
+  if (!section) return
+  selectSection(section)
+  await nextTick()
+  document.getElementById(sectionTabId(section))?.focus()
+}
+
 function toggleQuick(name: string, checked: boolean) {
   selectedQuick.value = checked
     ? [...selectedQuick.value, name]
@@ -127,10 +185,11 @@ async function addSelectedSubjects() {
   const failures: string[] = []
   try {
     for (const subject of selectedCommonSubjects.value) {
-      if (subjectNames.value.has(subject.name)) continue
+      const canonicalName = canonicalCommonSubjectName(subject.name)
+      if (isCommonSubjectExisting(subject.name)) continue
       try {
         await createSubject(props.semesterId, {
-          name: subject.name,
+          name: canonicalName,
           domain: subject.domain,
           default_block_size: 1,
           is_major: subject.is_major,
@@ -163,8 +222,8 @@ async function handleChildChanged() {
 
 <template>
   <section class="manual-entry" data-testid="manual-entry">
-    <n-alert v-if="!canEdit" type="info" data-testid="manual-readonly">
-      {{ '当前角色只能查看基础数据；手工录入和常用科目确认仅对排课管理员开放。' }}
+    <n-alert v-if="!canEdit && showReadonlyNotice" type="info" data-testid="manual-readonly">
+      {{ '当前角色只能查看基础数据；手工录入和常用科目确认仅对教务主任开放。' }}
     </n-alert>
     <n-alert v-if="loadError" type="error" data-testid="manual-load-error" role="alert">
       {{ loadError }}
@@ -177,20 +236,25 @@ async function handleChildChanged() {
     <section class="manual-entry-guide" aria-labelledby="manual-entry-title">
       <div class="manual-entry-heading">
         <div>
-          <p class="manual-entry-eyebrow">{{ '少量数据' }}</p>
           <h2 id="manual-entry-title">{{ '按引用关系逐项录入' }}</h2>
           <p>{{ '先建立科目，再补教师和班级；教室/场地可以最后再补。每一步都会显示当前已完成数量。' }}</p>
         </div>
         <n-tag type="info" size="small">{{ '不会创建教师登录账号' }}</n-tag>
       </div>
-      <div class="manual-entry-sequence" aria-label="手工录入顺序">
+      <div class="manual-entry-sequence" role="tablist" aria-label="手工录入分类">
         <template v-for="(item, index) in sectionMeta" :key="item.key">
           <button
+            :id="sectionTabId(item.key)"
             type="button"
+            role="tab"
             class="manual-entry-sequence-item"
             :class="{ active: activeSection === item.key }"
+            :aria-selected="activeSection === item.key"
+            :aria-controls="sectionPanelId"
+            :tabindex="activeSection === item.key ? 0 : -1"
             :data-testid="`manual-section-${item.key}`"
             @click="selectSection(item.key)"
+            @keydown="handleSectionKeydown($event, index)"
           >
             <span class="manual-entry-sequence-number">{{ index + 1 }}</span>
             <span>
@@ -210,89 +274,111 @@ async function handleChildChanged() {
       <span>{{ '正在读取现有基础数据' }}</span>
     </section>
 
-    <n-tabs v-else v-model:value="activeSection" type="line" animated :tabs-padding="0" class="manual-entry-tabs">
-      <n-tab-pane v-for="item in sectionMeta" :key="item.key" :name="item.key">
-        <template #tab>
-          <span class="manual-entry-tab-label">
-            {{ item.label }}
-            <n-tag size="small" :type="sectionComplete(item.key) ? 'success' : 'warning'">
-              {{ sectionCount(item.key) }}
-            </n-tag>
-          </span>
-        </template>
-
-        <div v-if="item.key === 'subjects'" class="manual-entry-pane">
-          <section class="manual-common-subjects" data-testid="manual-common-subjects">
-            <div class="manual-pane-heading">
-              <div>
-                <h3>{{ '常用科目' }}</h3>
-                <p>{{ '按名称逐项选择，默认全部未选择；确认前不会写入，也不会按学段成套添加。' }}</p>
-              </div>
-              <n-input
-                v-model:value="quickSearch"
-                clearable
-                size="small"
-                :placeholder="'搜索常用科目'"
-                aria-label="搜索常用科目"
-              />
+    <section
+      v-else
+      :id="sectionPanelId"
+      class="manual-entry-pane"
+      role="tabpanel"
+      :aria-labelledby="sectionTabId(activeSection)"
+      data-testid="manual-section-panel"
+      tabindex="0"
+    >
+      <template v-if="activeSection === 'subjects'">
+        <section class="manual-common-subjects" data-testid="manual-common-subjects">
+          <div class="manual-pane-heading">
+            <div>
+              <h3>{{ '常用科目' }}</h3>
+              <p>{{ '按名称逐项选择，默认全部未选择；确认前不会写入，也不会按学段成套添加。' }}</p>
             </div>
-            <div class="manual-common-subject-list">
-              <n-checkbox
-                v-for="subject in filteredCommonSubjects"
-                :key="subject.name"
-                :checked="selectedQuick.includes(subject.name)"
-                :disabled="subjectNames.has(subject.name) || !canEdit"
-                :data-testid="`manual-common-${subject.name}`"
-                @update:checked="toggleQuick(subject.name, $event)"
-              >
-                {{ subject.name }}
-                <span v-if="subjectNames.has(subject.name)" class="manual-common-existing">{{ '已存在' }}</span>
-              </n-checkbox>
-            </div>
-            <n-alert v-if="selectedCommonSubjects.length" type="info" :show-icon="true" data-testid="manual-common-preview">
-              {{ `确认后将新增 ${selectedCommonSubjects.length} 个科目：${selectedCommonSubjects.map((item) => item.name).join('、')}` }}
-            </n-alert>
-            <n-alert v-if="quickError" type="error" data-testid="manual-common-error" role="alert">
-              {{ quickError }}
-            </n-alert>
-            <n-button
-              type="primary"
-              data-testid="manual-common-confirm"
-              :loading="quickBusy"
-              :disabled="!canEdit || quickBusy || !selectedCommonSubjects.length"
-              @click="addSelectedSubjects"
+            <n-input
+              v-model:value="quickSearch"
+              clearable
+              size="small"
+              :placeholder="'搜索常用科目'"
+              aria-label="搜索常用科目"
+            />
+          </div>
+          <div class="manual-common-subject-list">
+            <n-checkbox
+              v-for="subject in filteredCommonSubjects"
+              :key="subject.name"
+              :checked="selectedQuick.includes(subject.name)"
+              :disabled="isCommonSubjectExisting(subject.name) || !canEdit"
+              :data-testid="`manual-common-${subject.name}`"
+              @update:checked="toggleQuick(subject.name, $event)"
             >
-              <template #icon><Plus :size="15" aria-hidden="true" /></template>
-              {{ `确认新增所选科目${selectedCommonSubjects.length ? `（${selectedCommonSubjects.length}）` : ''}` }}
-            </n-button>
-          </section>
-          <SubjectsTab :key="`subjects-${childRevision}`" :semester-id="semesterId" :can-edit="canEdit" @changed="handleChildChanged" />
-        </div>
-
-        <div v-else-if="item.key === 'teachers'" class="manual-entry-pane">
-          <n-alert v-if="!counts.subjects" type="warning" data-testid="manual-teachers-dependency">
-            {{ '建议先添加至少一个科目，录入教师时可以直接选择任教科目。' }}
+              {{ subject.name }}
+              <span v-if="isCommonSubjectExisting(subject.name)" class="manual-common-existing">{{ '已存在' }}</span>
+            </n-checkbox>
+          </div>
+          <n-alert v-if="selectedCommonSubjects.length" type="info" :show-icon="true" data-testid="manual-common-preview">
+            {{ `确认后将新增 ${selectedCommonSubjects.length} 个科目：${selectedCommonSubjects.map((item) => item.name).join('、')}` }}
           </n-alert>
-          <n-button v-if="!counts.subjects" size="small" data-testid="manual-go-subjects" @click="selectSection('subjects')">{{ '去添加科目' }}</n-button>
-          <TeachersTab :key="`teachers-${childRevision}`" :semester-id="semesterId" :can-edit="canEdit" :can-manage-accounts="false" @changed="handleChildChanged" />
-        </div>
-
-        <div v-else-if="item.key === 'classes'" class="manual-entry-pane">
-          <n-alert v-if="!counts.teachers" type="warning" data-testid="manual-classes-dependency">
-            {{ '班主任可以稍后补充；如果现在已有教师，录入班级时可以直接选择。' }}
+          <n-alert v-if="quickError" type="error" data-testid="manual-common-error" role="alert">
+            {{ quickError }}
           </n-alert>
-          <n-button v-if="!counts.teachers" size="small" data-testid="manual-go-teachers" @click="selectSection('teachers')">{{ '去添加教师' }}</n-button>
-          <ClassesTab :key="`classes-${childRevision}`" :semester-id="semesterId" :can-edit="canEdit" @changed="handleChildChanged" />
-        </div>
+          <n-button
+            type="primary"
+            data-testid="manual-common-confirm"
+            :loading="quickBusy"
+            :disabled="!canEdit || quickBusy || !selectedCommonSubjects.length"
+            @click="addSelectedSubjects"
+          >
+            <template #icon><Plus :size="15" aria-hidden="true" /></template>
+            {{ `确认新增所选科目${selectedCommonSubjects.length ? `（${selectedCommonSubjects.length}）` : ''}` }}
+          </n-button>
+        </section>
+        <SubjectsTab
+          :key="`subjects-${childRevision}`"
+          :semester-id="semesterId"
+          :can-edit="canEdit"
+          :can-delete="canDelete"
+          @changed="handleChildChanged"
+        />
+      </template>
 
-        <div v-else class="manual-entry-pane">
-          <n-alert type="info" data-testid="manual-rooms-optional">
-            {{ '教室/场地是可选数据；没有时仍可先完成基础设置，之后在基础数据页补录。' }}
-          </n-alert>
-          <RoomsTab :key="`rooms-${childRevision}`" :semester-id="semesterId" :can-edit="canEdit" @changed="handleChildChanged" />
-        </div>
-      </n-tab-pane>
-    </n-tabs>
+      <template v-else-if="activeSection === 'teachers'">
+        <n-alert v-if="!counts.subjects" type="warning" data-testid="manual-teachers-dependency">
+          {{ '建议先添加至少一个科目，录入教师时可以直接选择任教科目。' }}
+        </n-alert>
+        <n-button v-if="!counts.subjects" size="small" data-testid="manual-go-subjects" @click="selectSection('subjects')">{{ '去添加科目' }}</n-button>
+        <TeachersTab
+          :key="`teachers-${childRevision}`"
+          :semester-id="semesterId"
+          :can-edit="canEdit"
+          :can-delete="canDelete"
+          :can-manage-accounts="canManageAccounts"
+          @changed="handleChildChanged"
+        />
+      </template>
+
+      <template v-else-if="activeSection === 'classes'">
+        <n-alert v-if="!counts.teachers" type="warning" data-testid="manual-classes-dependency">
+          {{ '班主任可以稍后补充；如果现在已有教师，录入班级时可以直接选择。' }}
+        </n-alert>
+        <n-button v-if="!counts.teachers" size="small" data-testid="manual-go-teachers" @click="selectSection('teachers')">{{ '去添加教师' }}</n-button>
+        <ClassesTab
+          :key="`classes-${childRevision}`"
+          :semester-id="semesterId"
+          :can-edit="canEdit"
+          :can-delete="canDelete"
+          @changed="handleChildChanged"
+        />
+      </template>
+
+      <template v-else>
+        <n-alert type="info" data-testid="manual-rooms-optional">
+          {{ '教室/场地是可选数据；没有时仍可先完成基础设置，之后在基础数据页补录。' }}
+        </n-alert>
+        <RoomsTab
+          :key="`rooms-${childRevision}`"
+          :semester-id="semesterId"
+          :can-edit="canEdit"
+          :can-delete="canDelete"
+          @changed="handleChildChanged"
+        />
+      </template>
+    </section>
   </section>
 </template>
 
@@ -301,10 +387,8 @@ async function handleChildChanged() {
 .manual-entry-guide { display: grid; gap: 18px; padding: 18px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface-muted); }
 .manual-entry-heading,
 .manual-pane-heading,
-.manual-entry-sequence,
-.manual-entry-tab-label { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 10px; }
+.manual-entry-sequence { display: flex; min-width: 0; align-items: center; flex-wrap: wrap; gap: 10px; }
 .manual-entry-heading { justify-content: space-between; align-items: flex-start; }
-.manual-entry-eyebrow { margin: 0 0 4px; color: var(--app-primary-strong); font-size: 11px; font-weight: 700; }
 .manual-entry-heading h2 { margin: 0; font-size: 18px; }
 .manual-entry-heading p:last-child { margin: 6px 0 0; color: var(--app-text-muted); font-size: 13px; line-height: 1.6; }
 .manual-entry-sequence { align-items: stretch; }
@@ -317,9 +401,7 @@ async function handleChildChanged() {
 .manual-entry-sequence-item svg { margin-left: auto; flex: 0 0 auto; color: var(--app-success); }
 .manual-entry-sequence-item:not(.active) svg { color: var(--app-text-faint); }
 .manual-entry-sequence-arrow { align-self: center; color: var(--app-text-faint); }
-.manual-entry-tabs { min-width: 0; }
-.manual-entry-tab-label { gap: 6px; }
-.manual-entry-pane { display: grid; min-width: 0; gap: 16px; padding-top: 18px; }
+.manual-entry-pane { display: grid; min-width: 0; gap: 16px; }
 .manual-common-subjects { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface-muted); }
 .manual-pane-heading { justify-content: space-between; align-items: flex-start; }
 .manual-pane-heading h3 { margin: 0; font-size: 15px; }

@@ -171,7 +171,7 @@ def test_junior_high_features(db):
 
     # 兼行政减课教师
     admins = [t for t in fx.teachers.values() if t.admin_reduction > 0]
-    assert {t.admin_title for t in admins} == {"排课管理员", "德育干事"}
+    assert {t.admin_title for t in admins} == {"教务主任", "德育干事"}
     loads = {r["teacher_id"]: r for r in teacher_loads(db, fx.semester_id)}
     for t in admins:
         assert loads[t.id]["target"] == t.base_periods - t.admin_reduction

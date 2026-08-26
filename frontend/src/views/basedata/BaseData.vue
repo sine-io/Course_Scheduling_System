@@ -1,32 +1,29 @@
 <script setup lang="ts">
-import { Database, RefreshCw, ShieldCheck } from '@lucide/vue'
-import { NAlert, NButton, NSelect, NSpin, NTabPane, NTabs } from 'naive-ui'
+import { Database, FileUp, RefreshCw, ShieldCheck } from '@lucide/vue'
+import { NAlert, NButton, NSelect, NSpin } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
-import ClassesTab from './ClassesTab.vue'
-import ImportTab from './ImportTab.vue'
-import RoomsTab from './RoomsTab.vue'
-import SubjectsTab from './SubjectsTab.vue'
-import TeachersTab from './TeachersTab.vue'
+import ManualEntry from './ManualEntry.vue'
+import ReferenceImport from './ReferenceImport.vue'
 import './basedata-workspace.css'
 
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
+const route = useRoute()
 const router = useRouter()
 const semesters = ref<SemesterListItem[]>([])
 const currentId = ref<number | null>(null)
-const activeTab = ref('teachers')
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
 const canEdit = computed(() => (
-  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  (auth.hasRole('admin') || auth.hasRole('director'))
   && (!semesterContext.authoritative || semesterContext.isCurrent(currentId.value))
 ))
 const canAdminHighRisk = computed(() => (
@@ -37,6 +34,12 @@ const canAdminHighRisk = computed(() => (
 const semesterOptions = computed(() =>
   semesters.value.map((s) => ({ label: s.label, value: s.id })),
 )
+const initialSection = computed(() => {
+  const value = String(route.query.tab ?? '')
+  return ['subjects', 'teachers', 'classes', 'rooms', 'reference'].includes(value)
+    ? value as 'subjects' | 'teachers' | 'classes' | 'rooms' | 'reference'
+    : 'subjects'
+})
 
 async function loadSemesters() {
   loading.value = true
@@ -44,7 +47,9 @@ async function loadSemesters() {
   try {
     await semesterContext.load()
     semesters.value = await listSemesters()
-    currentId.value = semesters.value.find((semester) => semester.is_current)?.id
+    const querySemesterId = Number(route.query.semester)
+    currentId.value = semesters.value.find((semester) => semester.id === querySemesterId)?.id
+      ?? semesters.value.find((semester) => semester.is_current)?.id
       ?? semesterContext.currentSemesterId
       ?? semesters.value[0]?.id
       ?? null
@@ -75,6 +80,10 @@ onMounted(loadSemesters)
           data-testid="basedata-semester-select"
           :placeholder="'选择学期'"
         />
+        <n-button secondary data-testid="basedata-reference-import" @click="router.push({ query: { ...route.query, tab: 'reference' } })">
+          <template #icon><FileUp :size="16" aria-hidden="true" /></template>
+          {{ '参考文件导入' }}
+        </n-button>
       </div>
     </header>
 
@@ -101,54 +110,27 @@ onMounted(loadSemesters)
       <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
     </section>
 
-    <section v-else class="basedata-panel basedata-tabs-panel" data-testid="basedata-workspace">
+    <section v-else class="basedata-panel basedata-manual-panel" data-testid="basedata-workspace">
       <n-alert v-if="!canEdit" class="basedata-readonly" type="info" data-testid="basedata-readonly">
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
-        {{ '当前角色仅可查看基础数据，写入操作仅对排课管理员开放。' }}
+        {{ '当前角色仅可查看基础数据，写入操作仅对教务主任开放。' }}
       </n-alert>
-      <n-tabs v-model:value="activeTab" type="line" :animated="false">
-        <n-tab-pane name="teachers" :tab="'教师'">
-          <TeachersTab
-            :key="`t-${currentId}`"
-            :semester-id="currentId"
-            :can-edit="canEdit"
-            :can-delete="canAdminHighRisk"
-            :can-manage-accounts="canAdminHighRisk"
-          />
-        </n-tab-pane>
-        <n-tab-pane name="classes" :tab="'班级'">
-          <ClassesTab
-            :key="`c-${currentId}`"
-            :semester-id="currentId"
-            :can-edit="canEdit"
-            :can-delete="canAdminHighRisk"
-          />
-        </n-tab-pane>
-        <n-tab-pane name="subjects" :tab="'科目'">
-          <SubjectsTab
-            :key="`s-${currentId}`"
-            :semester-id="currentId"
-            :can-edit="canEdit"
-            :can-delete="canAdminHighRisk"
-          />
-        </n-tab-pane>
-        <n-tab-pane name="rooms" :tab="'教室/场地'">
-          <RoomsTab
-            :key="`r-${currentId}`"
-            :semester-id="currentId"
-            :can-edit="canEdit"
-            :can-delete="canAdminHighRisk"
-          />
-        </n-tab-pane>
-        <n-tab-pane name="import" :tab="'批量导入'">
-          <ImportTab
-            :key="`i-${currentId}`"
-            :semester-id="currentId"
-            :can-edit="canEdit"
-            :can-manage-accounts="canAdminHighRisk"
-          />
-        </n-tab-pane>
-      </n-tabs>
+      <ReferenceImport
+        v-if="initialSection === 'reference'"
+        :key="`reference-${currentId}`"
+        :semester-id="currentId"
+        :can-edit="canEdit"
+      />
+      <ManualEntry
+        v-else
+        :key="`manual-${currentId}-${initialSection}`"
+        :semester-id="currentId"
+        :initial-section="initialSection"
+        :can-edit="canEdit"
+        :can-delete="canAdminHighRisk"
+        :can-manage-accounts="canAdminHighRisk"
+        :show-readonly-notice="false"
+      />
     </section>
   </div>
 </template>

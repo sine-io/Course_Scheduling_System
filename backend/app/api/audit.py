@@ -61,6 +61,7 @@ AUDIT_ACTION_LABELS: dict[str, str] = {
     "delete_teacher": "删除教师",
     "delete_timetable": "删除课表版本",
     "publish_timetable": "发布课表",
+    "recover_builtin_admin": "恢复系统管理员",
     "restore_backup": "恢复备份",
     "revoke_semester_readiness": "撤回排课准备确认",
     "update_account": "更新账号",

@@ -25,9 +25,9 @@ PW = "password123"
 
 @pytest.fixture
 def env3(env):
-    """排课管理员 + 学期 + 主作息时间表 + 一份草稿A。返回 (client, sid, ttA_id, db)。"""
+    """教务主任 + 学期 + 主作息时间表 + 一份草稿A。返回 (client, sid, ttA_id, db)。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = client.post(
         "/api/semesters",
@@ -115,7 +115,7 @@ def test_publication_check_marks_complete_current_draft_as_checked(env3):
     assert versions[0]["publication_state"] == "checked"
 
 
-def test_director_can_read_completeness_but_cannot_record_publication_check(env3):
+def test_director_can_read_completeness_and_record_publication_check(env3):
     client, sid, tid, db = env3
     make_user(db, "director-check", PW, roles=[Role.director])
     client.post("/api/auth/logout")
@@ -125,9 +125,9 @@ def test_director_can_read_completeness_but_cannot_record_publication_check(env3
     )
 
     assert client.get(f"/api/timetables/{tid}/completeness").status_code == 200
-    assert client.post(f"/api/timetables/{tid}/publication-check").status_code == 403
+    assert client.post(f"/api/timetables/{tid}/publication-check").status_code == 200
     versions = client.get(f"/api/timetables?semester_id={sid}").json()
-    assert versions[0]["publication_state"] == "draft"
+    assert versions[0]["publication_state"] == "checked"
 
 
 def test_publish_requires_confirmation_from_a_fresh_check(env3):
@@ -162,10 +162,11 @@ def test_rejected_publish_attempts_have_structured_audit_records(env3):
         make_user(db, username, PW, roles=[role])
         client.post("/api/auth/logout")
         client.post("/api/auth/login", json={"username": username, "password": PW})
-        assert client.post(
+        response = client.post(
             f"/api/timetables/{tid}/publish",
             json={"fingerprint": "not-a-valid-check"},
-        ).status_code == 403
+        )
+        assert response.status_code == (409 if role is Role.director else 403)
 
     make_user(db, "admin1", PW, roles=[Role.admin])
     client.post("/api/auth/logout")
@@ -174,11 +175,13 @@ def test_rejected_publish_attempts_have_structured_audit_records(env3):
 
     assert len(logs) == 3
     by_user = {log["username"]: log for log in logs}
-    assert by_user["s"]["actor_roles"] == ["scheduler"]
+    assert by_user["s"]["actor_roles"] == ["director"]
     assert by_user["s"]["reason"] == "publication_confirmation_required"
     for username, role in (("director1", "director"), ("teacher1", "teacher")):
         assert by_user[username]["actor_roles"] == [role]
-        assert by_user[username]["reason"] == "publication_permission_denied"
+        assert by_user[username]["reason"] == (
+            "publication_check_stale" if role == "director" else "publication_permission_denied"
+        )
     for log in logs:
         assert log["semester_id"] == sid
         assert log["target_version"] == f"草稿A (#{tid})"
@@ -429,7 +432,7 @@ def test_published_endpoints_readable_by_teacher(env3):
     me = client.get(f"/api/published/my-teacher?semester_id={sid}").json()
     assert me["id"] == teacher["id"] and me["name"] == "王师"
 
-    # 但不得动用排课管理员 API
+    # 但不得动用教务主任 API
     assert client.get(f"/api/timetables?semester_id={sid}").status_code == 403
     assert client.post(f"/api/timetables/{tid}/publish").status_code == 403
 
@@ -459,7 +462,7 @@ def test_publish_writes_audit_log(env3):
     logs = client.get("/api/audit-logs?action=publish_timetable").json()["items"]
     assert len(logs) == 1
     assert logs[0]["username"] == "s"
-    assert logs[0]["actor_roles"] == ["scheduler"]
+    assert logs[0]["actor_roles"] == ["director"]
     assert logs[0]["target_id"] == tid
     assert logs[0]["semester_id"] == sid
     assert logs[0]["target_version"] == f"草稿A (#{tid})"

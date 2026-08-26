@@ -14,18 +14,17 @@ const SHOTS = 'e2e/screenshots'
 // 完全中学场景:同学期两套作息时间表,班级可指定所属作息时间表。
 test('混合学制:班级可指定作息时间表(≥2 套时出现下拉)', async ({ page }) => {
   await login(page)
-  // 标记向导已完成,避免首登守卫把导航转向 /wizard
 
   // 前置(API):清掉测试学期后,创建含两套作息时间表的学期
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR)
   await createTestPeriodTable(page, sem.id, '高中部作息时间表', SENIOR_HIGH_SLOTS)
 
-  // 进入基础数据 → 选择该学期 → 打开班级页签
+  // 进入基础数据 → 选择该学期 → 打开班级分类
   await page.goto('/basedata')
   await page.locator('.n-base-selection').first().click()
   await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
-  await page.locator('.n-tabs-tab', { hasText: '班级' }).click()
+  await page.getByTestId('manual-section-classes').click()
 
   // 新增班级:作息时间表下拉应出现(因有 2 套)
   await page.getByTestId('class-add').click()

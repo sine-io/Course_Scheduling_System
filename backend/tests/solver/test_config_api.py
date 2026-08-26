@@ -13,7 +13,7 @@ from tests.conftest import make_user
 PW = "password123"
 
 
-def _login(client, db, username="s", roles=(Role.scheduler,)):
+def _login(client, db, username="s", roles=(Role.director,)):
     make_user(db, username, PW, roles=list(roles))
     client.post("/api/auth/login", json={"username": username, "password": PW})
 
@@ -83,12 +83,16 @@ def test_put_rejects_unknown_code_and_negative_weight(env):
     assert r.status_code == 400
 
 
-def test_config_requires_scheduler_to_write(env):
+def test_director_can_write_solver_config(env):
     client, db = env
     _login(client, db, username="d", roles=(Role.director,))
-    # director 不能建学期,借用 admin 建好的?此处仅验权限:director 可读不可写
-    assert client.get("/api/solver/config?semester_id=1").status_code in (403, 404)
-    assert client.put("/api/solver/config?semester_id=1", json={"weights": {}}).status_code == 403
+    sid = _semester(client)
+    assert client.get(f"/api/solver/config?semester_id={sid}").status_code == 200
+    response = client.put(
+        f"/api/solver/config?semester_id={sid}",
+        json={"weights": {}},
+    )
+    assert response.status_code == 200
 
 
 def test_unknown_semester_404(env):

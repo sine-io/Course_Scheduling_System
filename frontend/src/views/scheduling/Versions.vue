@@ -31,7 +31,7 @@ const semesterContext = useSemesterContextStore()
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
 const canEdit = computed(() => (
-  (auth.hasRole('admin') || auth.hasRole('scheduler'))
+  (auth.hasRole('admin') || auth.hasRole('director'))
   && (!semesterContext.authoritative || semesterContext.isCurrent(sid.value))
 ))
 const canDelete = computed(() => (
@@ -298,7 +298,7 @@ async function onCheck(timetable: TimetableBrief) {
     <template v-else>
       <n-alert v-if="!canEdit" type="info" data-testid="versions-restricted">
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
-        {{ '当前角色可查看版本并执行完整性检查，新增、复制、改名、发布和删除仅对排课管理员开放。' }}
+        {{ '当前角色可查看版本并执行完整性检查，新增、复制、改名和发布由教务主任负责。' }}
       </n-alert>
       <n-alert type="info" data-testid="versions-policy">
         {{ '同学期可有多份草稿并存，但至多一份“已发布”。发布新版本时，旧的已发布课表会自动转为已归档。已发布/已归档的课表为快照；要修改请先复制为新草稿。' }}

@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import type { Period } from '@/api/semesters'
 import PeriodTableEditor from './PeriodTableEditor.vue'
 
 const mocks = vi.hoisted(() => ({
@@ -95,6 +96,35 @@ describe('PeriodTableEditor', () => {
 
     expect(wrapper.get('[data-testid="period-grid-scroll"]').classes()).toContain('settings-table-scroll')
     expect(wrapper.get('[data-testid="period-add-row"]').text()).toContain('新增节次行')
+  })
+
+  it('保存前把单数字小时归一化为 API 可接受的时间格式', async () => {
+    const wrapper = await mountEditor()
+    await flushPromises()
+
+    await wrapper.get('[aria-label="第一节开始时间"] input').setValue('8:00')
+    await wrapper.get('[aria-label="第一节结束时间"] input').setValue('8:40')
+    await wrapper.get('[data-testid="period-table-save"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.replacePeriods).toHaveBeenCalledOnce()
+    const periods = mocks.replacePeriods.mock.calls[0][1] as Period[]
+    expect(periods.filter((period) => period.period_no === 1)).toHaveLength(3)
+    expect(periods.filter((period) => period.period_no === 1).every((period) => (
+      period.start_time === '08:00' && period.end_time === '08:40'
+    ))).toBe(true)
+  })
+
+  it('时间无法解析时在页面内阻止提交', async () => {
+    const wrapper = await mountEditor()
+    await flushPromises()
+
+    await wrapper.get('[aria-label="第一节开始时间"] input').setValue('上午八点')
+    await wrapper.get('[data-testid="period-table-save"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.replacePeriods).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('第一节的开始时间格式不正确')
   })
 
   it('旧链接指向历史学期时显示只读并禁用保存入口', async () => {

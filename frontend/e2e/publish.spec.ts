@@ -107,7 +107,7 @@ test.describe('教师端(手机)', () => {
 
   test('teacher 角色登录手机浏览器,课表查询默认显示本人课表', async ({ page }) => {
     const YEAR = 2043
-    await login(page) // 先以排课管理员构建数据
+    await login(page) // 先以教务主任构建数据
 
     await deleteSemesterByYearTerm(page, YEAR, 1)
     const sem = await createTestSemester(page, YEAR, { subjects: [] })
@@ -204,7 +204,7 @@ test.describe('教师端(手机)', () => {
     await expect(page.locator('[data-weekday="3"][data-period="4"] .tg-card'))
       .toHaveAttribute('draggable', 'false')
 
-    // 清理(以排课管理员身份)
+    // 清理(以教务主任身份)
     await page.request.post('/api/auth/logout')
     await login(page)
     await deleteSemesterByYearTerm(page, YEAR, 1)

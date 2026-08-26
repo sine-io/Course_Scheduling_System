@@ -403,7 +403,7 @@ function openRules(teacher: Teacher) {
           <n-input
             id="teacher-admin-title"
             v-model:value="form.admin_title"
-            :placeholder="'如：教务排课管理员'"
+            :placeholder="'如：教务主任'"
             :input-props="{ 'aria-label': '行政职务' }"
           />
         </div>

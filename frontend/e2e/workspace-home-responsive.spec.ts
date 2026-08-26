@@ -12,7 +12,7 @@ const USER = {
   id: 31,
   username: 'workspace-user',
   display_name: '张教务',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: false,
 }
 
@@ -59,12 +59,12 @@ const OVERVIEW = {
   unacknowledged_notifications: 7,
   focus_items: [
     {
-      code: 'setup_blockers',
-      title: '完成学期准备',
+      code: 'period_assignment_unresolved',
+      title: '完善班级作息安排',
       description: '有 2 个班级没有可用的作息分组',
       tone: 'critical',
-      target: 'wizard',
-      count: 2,
+      target: 'semesters',
+      count: null,
     },
     {
       code: 'preflight_errors',
@@ -82,14 +82,6 @@ const OVERVIEW = {
       target: 'substitutions',
       count: 4,
     },
-    {
-      code: 'remaining_periods',
-      title: '继续完成课表',
-      description: '秋季开学课表草稿仍有课时尚未排入。',
-      tone: 'warning',
-      target: 'workbench',
-      count: 236,
-    },
   ],
   recommendations: [
     {
@@ -105,7 +97,7 @@ const OVERVIEW = {
       title: '绑定教师账号',
       description: '尚未绑定教师账号，可稍后在账号管理中处理',
       tone: 'warning',
-      target: 'wizard',
+      target: 'account-permissions',
       count: null,
     },
     {
@@ -141,7 +133,7 @@ async function mockWorkspace(page: Page) {
     school_name: '明德实验学校',
     timezone: 'Asia/Shanghai',
     role_display_names: {
-      admin: '系统管理员', director: '教务主任', scheduler: '排课管理员', teacher: '教师',
+      admin: '系统管理员', director: '教务主任', teacher: '教师',
     },
     academic_year: {
       storage: 'start_year', min: 1900, max: 2100,
@@ -158,15 +150,6 @@ async function mockWorkspace(page: Page) {
       ? fulfillJson(route, USER)
       : fulfillJson(route, { detail: 'Not authenticated' }, 401)
   ))
-  await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-    current_step: 3,
-    resume_step: 3,
-    completed: true,
-    paused: false,
-    semester_id: SEMESTER.id,
-    total_steps: 4,
-    has_semesters: true,
-  }))
   await page.route('**/api/semester-context', (route) => fulfillJson(route, {
     current_semester: SEMESTER,
     revision: 2,
@@ -176,9 +159,6 @@ async function mockWorkspace(page: Page) {
   await page.route('**/api/workspace-overview**', (route) => fulfillJson(route, OVERVIEW))
   await page.route('**/api/notifications/mine**', (route) => fulfillJson(route, {
     items: [], unread: 0,
-  }))
-  await page.route('**/api/semesters/18/summary', (route) => fulfillJson(route, {
-    subjects: 14, teachers: 86, classes: 32, rooms: 20,
   }))
   await page.route('**/api/daily-board**', (route) => fulfillJson(route, {
     date: '2026-08-17',
@@ -222,8 +202,8 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole('heading', { name: '首页总览', level: 1 })).toBeVisible()
     await expect(page.getByTestId('overview-hero')).toBeVisible()
     await expect(page.locator('.workspace-metric')).toHaveCount(6)
-    await expect(page.locator('.workspace-feature-link')).toHaveCount(5)
-    await expect(page.locator('.workspace-focus-item')).toHaveCount(4)
+    await expect(page.locator('.workspace-feature-link')).toHaveCount(6)
+    await expect(page.locator('.workspace-focus-item')).toHaveCount(3)
     await expect(page.locator('.workspace-recommendation')).toHaveCount(4)
 
     const overflow = await page.evaluate(() => ({

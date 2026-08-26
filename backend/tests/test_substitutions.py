@@ -24,7 +24,7 @@ PW = "password123"
 def env2(env):
     """已发布课表的初中。返回 helper 对象,测试逐步叠教师/教学任务/请假。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(
         client,

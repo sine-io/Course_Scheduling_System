@@ -27,7 +27,7 @@ class UnreadCountOut(BaseModel):
     unread: int
 
 
-# 排课管理员看板:某位教师某类通知的确认状态
+# 教务主任看板:某位教师某类通知的确认状态
 class TeacherNotificationStatus(BaseModel):
     id: int
     type: str

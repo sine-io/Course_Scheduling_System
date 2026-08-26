@@ -10,21 +10,20 @@ from collections.abc import Callable
 from app.core.auth import require_roles
 from app.models.user import Role, User
 
-CORE_VIEW_ROLES: tuple[Role, ...] = (Role.scheduler, Role.director)
-CORE_EDIT_ROLES: tuple[Role, ...] = (Role.scheduler,)
-CORE_EDIT_ROLE_NAMES = frozenset({Role.admin.value, Role.scheduler.value})
-BATCH_EXPORT_ROLES: tuple[Role, ...] = (Role.scheduler,)
-TIMETABLE_PUBLISH_ROLE_NAMES = frozenset({Role.admin.value, Role.scheduler.value})
+CORE_VIEW_ROLES: tuple[Role, ...] = (Role.director,)
+CORE_EDIT_ROLES: tuple[Role, ...] = (Role.director,)
+CORE_EDIT_ROLE_NAMES = frozenset({Role.admin.value, Role.director.value})
+BATCH_EXPORT_ROLES: tuple[Role, ...] = (Role.director,)
+TIMETABLE_PUBLISH_ROLE_NAMES = frozenset({Role.admin.value, Role.director.value})
 
-# 日常运行由排课管理员和教务主任共同负责。admin 由 ``require_roles`` 的
-# 超级用户规则统一放行，不重复写进每一组业务角色，避免角色矩阵漂移。
-DAILY_OPERATOR_ROLES: tuple[Role, ...] = (Role.scheduler, Role.director)
+# 日常运行由教务主任负责。admin 由 ``require_roles`` 的超级用户规则统一放行，
+# 不重复写进每一组业务角色，避免角色矩阵漂移。
+DAILY_OPERATOR_ROLES: tuple[Role, ...] = (Role.director,)
 
-# 请假、通知确认和个人统计允许四种固定角色中的任一种；实际能看到的
+# 请假、通知确认和个人统计允许三种固定职责中的任一种；实际能看到的
 # 数据仍由 current_teacher/对象归属校验限定到本人。
 DAILY_USER_ROLES: tuple[Role, ...] = (
     Role.admin,
-    Role.scheduler,
     Role.director,
     Role.teacher,
 )

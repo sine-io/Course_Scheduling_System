@@ -19,7 +19,7 @@ from app.schemas.workspace_overview import (
     WorkspacePreflightOut,
     WorkspaceTimetableOut,
 )
-from app.services import setup_check, timetable_publish
+from app.services import timetable_publish
 from app.services.solver_data import load_problem
 from app.solver import preflight
 from app.solver.preflight import Issue
@@ -108,21 +108,6 @@ def _action(
     )
 
 
-_SETUP_WARNING_TITLES = {
-    "rooms_missing": "补充教室与场地",
-    "teacher_accounts_missing": "绑定教师账号",
-    "special_dates_missing": "登记特殊日期",
-    "bell_times_missing": "完善铃声时间",
-}
-
-_SETUP_WARNING_TARGETS = {
-    "rooms_missing": "basedata",
-    "teacher_accounts_missing": "wizard",
-    "special_dates_missing": "calendar",
-    "bell_times_missing": "semesters",
-}
-
-
 def build_overview(db: Session, semester: Semester) -> WorkspaceOverviewOut:
     """Return a role-neutral overview; route permissions decide who may read it."""
     semester_id = semester.id
@@ -169,22 +154,10 @@ def build_overview(db: Session, semester: Semester) -> WorkspaceOverviewOut:
         Notification.acknowledged_at.is_(None),
     )
 
-    check = setup_check.build_check(db, semester)
     timetable = _timetable_summary(db, _selected_timetable(db, semester_id))
     preflight_summary, preflight_issues = _preflight_summary(db, semester_id)
 
     focus_items: list[WorkspaceActionItemOut] = []
-    if check.blockers:
-        focus_items.append(
-            _action(
-                "setup_blockers",
-                "完成学期准备",
-                check.blockers[0].message,
-                "critical",
-                "wizard",
-                len(check.blockers),
-            )
-        )
     errors = [issue for issue in preflight_issues if issue.level == "error"]
     if errors:
         focus_items.append(
@@ -240,19 +213,10 @@ def build_overview(db: Session, semester: Semester) -> WorkspaceOverviewOut:
                 "versions",
             )
         )
-    focus_items = focus_items[:4]
+    # Keep the first screen scannable; each item leads to its owning workflow.
+    focus_items = focus_items[:3]
 
     recommendations: list[WorkspaceActionItemOut] = []
-    for warning in check.warnings:
-        recommendations.append(
-            _action(
-                f"setup_warning:{warning.code}",
-                _SETUP_WARNING_TITLES.get(warning.code, "完善学期设置"),
-                warning.message,
-                "warning",
-                _SETUP_WARNING_TARGETS.get(warning.code, "wizard"),
-            )
-        )
     for issue in preflight_issues:
         if issue.level != "warning":
             continue

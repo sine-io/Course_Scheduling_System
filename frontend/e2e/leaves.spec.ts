@@ -65,7 +65,7 @@ async function seedPublishedSchool(page: Page, year: number) {
 }
 
 // ── 验收①③:全天假展开 5 节 → 销假级联取消 ──
-test('请假登记:排课管理员代登全天假,展开受影响节次,销假后级联取消', async ({ page }) => {
+test('请假登记:教务主任代登全天假,展开受影响节次,销假后级联取消', async ({ page }) => {
   test.setTimeout(120_000)
   const YEAR = 2049
   await login(page)

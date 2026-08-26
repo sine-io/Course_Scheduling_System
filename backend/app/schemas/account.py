@@ -16,6 +16,7 @@ class AccountOut(BaseModel):
     is_active: bool
     must_change_password: bool
     auth_provider: str
+    is_builtin: bool
 
     @classmethod
     def from_model(cls, user: User) -> "AccountOut":
@@ -27,6 +28,7 @@ class AccountOut(BaseModel):
             is_active=user.is_active,
             must_change_password=user.must_change_password,
             auth_provider=user.auth_provider,
+            is_builtin=user.is_builtin,
         )
 
 

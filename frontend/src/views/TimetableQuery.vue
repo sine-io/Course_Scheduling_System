@@ -231,7 +231,7 @@ const entries = computed<GridEntry[]>(() => {
     <section v-else-if="!data" class="scheduling-state" data-testid="tq-none">
       <Search :size="24" aria-hidden="true" />
       <strong>{{ '当前暂无已发布的课表' }}</strong>
-      <span>{{ '排课管理员发布课表后，可在此按班级、教师或教室/场地查询。' }}</span>
+      <span>{{ '教务主任发布课表后，可在此按班级、教师或教室/场地查询。' }}</span>
     </section>
 
     <template v-else>
@@ -353,7 +353,7 @@ const entries = computed<GridEntry[]>(() => {
           readonly
         />
       </section>
-      <p class="query-readonly-note"><ShieldCheck :size="14" aria-hidden="true" />{{ '课表为只读查看；如有变动请联系排课管理员。' }}</p>
+      <p class="query-readonly-note"><ShieldCheck :size="14" aria-hidden="true" />{{ '课表为只读查看；如有变动请联系教务主任。' }}</p>
     </template>
   </div>
 </template>

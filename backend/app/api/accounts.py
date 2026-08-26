@@ -1,7 +1,7 @@
 """系统管理员账号与固定角色管理。"""
 
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -58,6 +58,13 @@ def create_account(
             code="account_username_exists",
             message="此账号已存在，请使用其他账号名",
         )
+    if Role.admin.value in roles:
+        high_risk_http.reject_code(
+            db,
+            attempt.id,
+            code="system_admin_role_reserved",
+            message="系统管理员是唯一的内置账号，不能通过新增账号授予",
+        )
     try:
         account = create_user(
             db,
@@ -87,17 +94,6 @@ def create_account(
         )
     db.refresh(account)
     return AccountOut.from_model(account)
-
-
-def _active_admin_count(db: Session) -> int:
-    return int(
-        db.scalar(
-            select(func.count(func.distinct(User.id)))
-            .join(UserRole)
-            .where(User.is_active.is_(True), UserRole.role == Role.admin.value)
-        )
-        or 0
-    )
 
 
 @router.patch("/accounts/{account_id}", response_model=AccountOut)
@@ -130,29 +126,24 @@ def update_account(
         )
     high_risk.update_target(db, attempt.id, target_version=account.username)
 
-    requested_roles = (
-        set(_role_values(body.roles)) if body.roles is not None else account.role_names
-    )
-    removes_admin = (
-        Role.admin.value in account.role_names
-        and Role.admin.value not in requested_roles
-    )
-    deactivates = body.is_active is False and account.is_active
-    if account.id == actor.id and (removes_admin or deactivates):
+    if account.is_builtin:
         high_risk_http.reject_code(
             db,
             attempt.id,
-            code="current_admin_protected",
-            message="不能撤销当前登录管理员的管理员角色或停用当前账号",
+            code="builtin_account_protected",
+            message="内置系统管理员不能通过账号权限页面编辑",
         )
-    if (removes_admin or deactivates) and Role.admin.value in account.role_names:
-        if _active_admin_count(db) <= 1:
-            high_risk_http.reject_code(
-                db,
-                attempt.id,
-                code="last_admin_protected",
-                message="系统至少需要保留一个启用的系统管理员账号",
-            )
+
+    requested_roles = (
+        set(_role_values(body.roles)) if body.roles is not None else account.role_names
+    )
+    if Role.admin.value in requested_roles:
+        high_risk_http.reject_code(
+            db,
+            attempt.id,
+            code="system_admin_role_reserved",
+            message="系统管理员是唯一的内置账号，不能授予普通账号",
+        )
 
     before_roles = sorted(account.role_names)
     if body.display_name is not None:

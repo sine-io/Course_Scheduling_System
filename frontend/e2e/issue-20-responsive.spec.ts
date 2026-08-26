@@ -10,9 +10,9 @@ const VIEWPORTS = [
 
 const USER = {
   id: 20,
-  username: 'issue-20-scheduler',
+  username: 'issue-20-director',
   display_name: '设置工作面验收用户',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: false,
 }
 const SEMESTER = {
@@ -56,19 +56,10 @@ async function expectNoRootOverflow(page: Page) {
 async function mockSession(page: Page, currentSemester: () => typeof SEMESTER | null) {
   await page.route('**/api/auth/login', (route) => fulfillJson(route, USER))
   await page.route('**/api/auth/me', (route) => fulfillJson(route, USER))
-  await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-    current_step: 3,
-    resume_step: 3,
-    completed: true,
-    paused: false,
-    semester_id: 44,
-    total_steps: 4,
-    has_semesters: true,
-  }))
   await page.route('**/api/app-config', (route) => fulfillJson(route, {
     school_name: '设置工作面验收学校',
     timezone: 'Asia/Shanghai',
-    role_display_names: { admin: '系统管理员', director: '教务主任', scheduler: '排课管理员', teacher: '教师' },
+    role_display_names: { admin: '系统管理员', director: '教务主任', teacher: '教师' },
     academic_year: {
       storage: 'start_year',
       min: 1900,
@@ -80,6 +71,7 @@ async function mockSession(page: Page, currentSemester: () => typeof SEMESTER | 
   await page.route('**/api/notifications/mine**', (route) => fulfillJson(route, { items: [], unread: 0 }))
   await page.route('**/api/notifications/mine/unread-count**', (route) => fulfillJson(route, { unread: 0 }))
   await page.route('**/api/semesters/44/summary', (route) => fulfillJson(route, {
+    semester_id: 44,
     subjects: 8,
     teachers: 12,
     classes: 6,

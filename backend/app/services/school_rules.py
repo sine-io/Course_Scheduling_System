@@ -20,7 +20,6 @@ ACADEMIC_YEAR_MAX = 2100
 ROLE_DISPLAY_NAMES: dict[str, str] = {
     "admin": "系统管理员",
     "director": "教务主任",
-    "scheduler": "排课管理员",
     "teacher": "教师",
 }
 

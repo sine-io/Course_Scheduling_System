@@ -2,12 +2,21 @@
 
 import re
 
+import pytest
+
 from app.core.config import Settings
 
 
 def _mk(**kw) -> Settings:
     # _env_file=None:不读取任何 .env,测试只看传入值与衍生逻辑
     return Settings(_env_file=None, **kw)
+
+
+@pytest.fixture(autouse=True)
+def isolate_hardening_environment(monkeypatch):
+    """派生逻辑测试不应受开发 Compose 注入的配置影响。"""
+    for name in ("COOKIE_SECURE", "SITE_ADDRESS"):
+        monkeypatch.delenv(name, raising=False)
 
 
 # ── A:SECRET_KEY 防呆 ──────────────────────────────────────

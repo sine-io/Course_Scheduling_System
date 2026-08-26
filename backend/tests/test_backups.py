@@ -118,7 +118,7 @@ def _login(client, db, username, roles):
 
 def test_list_backups_admin_only(env, backup_dir):
     client, db = env
-    _login(client, db, "sch", [Role.scheduler])
+    _login(client, db, "sch", [Role.director])
     assert client.get("/api/backups").status_code == 403
     client.post("/api/auth/logout")
     _login(client, db, "adm", [Role.admin])
@@ -144,9 +144,9 @@ def test_restore_upload_rejects_garbage_before_touching_db(env, backup_dir):
     assert list(backup_dir.iterdir()) == []  # 系统无损:没有文件落地
 
 
-def test_scheduler_cannot_restore(env, backup_dir):
+def test_director_cannot_restore(env, backup_dir):
     client, db = env
-    _login(client, db, "sch", [Role.scheduler])
+    _login(client, db, "sch", [Role.director])
     denied = client.post(
         "/api/backups/some.dump/restore",
         json=_confirmation("11111111-1111-4111-8111-111111111111", "backup:some.dump"),
@@ -158,7 +158,7 @@ def test_scheduler_cannot_restore(env, backup_dir):
     attempts = client.get("/api/audit-logs?action=restore_backup").json()["items"]
     assert len(attempts) == 1
     assert attempts[0]["username"] == "sch"
-    assert attempts[0]["actor_roles"] == ["scheduler"]
+    assert attempts[0]["actor_roles"] == ["director"]
     assert attempts[0]["target_version"] == "some.dump"
     assert attempts[0]["result"] == "rejected"
     assert attempts[0]["reason"] == "high_risk_permission_denied"
@@ -168,7 +168,7 @@ def test_scheduler_cannot_create_backup(env, backup_dir, monkeypatch):
     from app.api import backups as backups_api
 
     client, db = env
-    _login(client, db, "sch", [Role.scheduler])
+    _login(client, db, "sch", [Role.director])
     called = False
 
     def fake_backup(_reason: str):

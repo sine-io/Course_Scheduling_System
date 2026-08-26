@@ -1,18 +1,20 @@
 <script setup lang="ts">
 import {
   AlertTriangle, ClipboardList, DatabaseBackup, Download, Pencil, Plus, RefreshCw,
-  RotateCcw, Save, Trash2, Upload, UserCog,
+  Save, Trash2, Upload, UserCog,
 } from '@lucide/vue'
 import {
   NAlert, NButton, NCheckbox, NInput, NInputNumber, NModal, NPopconfirm, NSwitch, NTag,
   NSpin, NUpload,
   useDialog, useMessage,
 } from 'naive-ui'
-import type { UploadCustomRequestOptions, UploadSettledFileInfo } from 'naive-ui'
+import type { DialogReactive, UploadCustomRequestOptions, UploadSettledFileInfo } from 'naive-ui'
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ACCOUNT_ROLES, createAccount, listAccounts, updateAccount } from '@/api/accounts'
-import type { Account, AccountRole } from '@/api/accounts'
+import {
+  ACCOUNT_ASSIGNABLE_ROLES, createAccount, listAccounts, updateAccount,
+} from '@/api/accounts'
+import type { Account, AccountAssignableRole } from '@/api/accounts'
 import { listAuditLogs } from '@/api/audit'
 import type { AuditLog } from '@/api/audit'
 import {
@@ -29,16 +31,13 @@ import type { HighRiskConfirmation } from '@/api/highRisk'
 import PagedListControls from '@/components/PagedListControls.vue'
 import { useServerPagination } from '@/composables/useServerPagination'
 import { getSmtp, saveSmtp } from '@/api/notifications'
-import { reopenWizard } from '@/api/wizard'
 import { useAuthStore } from '@/stores/auth'
-import { useWizardStore } from '@/stores/wizard'
 import './settings-workspace.css'
 
 const router = useRouter()
 const route = useRoute()
 const message = useMessage()
 const dialog = useDialog()
-const wizard = useWizardStore()
 const auth = useAuthStore()
 
 const isAdmin = computed(() => auth.hasRole('admin'))
@@ -53,7 +52,7 @@ const pageTitle = computed(() => ({
   accounts: '账号权限',
 }[settingsSection.value]))
 const pageDescription = computed(() => ({
-  system: '维护学校信息、通知渠道、排课参数、审计记录和设置向导。',
+  system: '维护学校信息、通知渠道、排课参数和审计记录。',
   backup: '创建、下载和恢复系统数据备份。恢复操作会先保留当前状态。',
   accounts: '维护系统账号、角色、状态和临时登录凭据。',
 }[settingsSection.value]))
@@ -115,20 +114,21 @@ const maxOvertime = ref(8)
 const savingScheduling = ref(false)
 const schoolName = ref('')
 const savingSchool = ref(false)
-const resettingWizard = ref(false)
 let redirectingAfterRestore = false
 
 interface AccountForm {
   username: string
   display_name: string
   temporary_password: string
-  roles: AccountRole[]
+  roles: AccountAssignableRole[]
   is_active: boolean
 }
 
 const accountShow = ref(false)
 const accountSaving = ref(false)
+const accountConfirming = ref(false)
 const accountTarget = ref<Account | null>(null)
+let accountConfirmation: DialogReactive | null = null
 const accountForm = ref<AccountForm>({
   username: '',
   display_name: '',
@@ -136,15 +136,18 @@ const accountForm = ref<AccountForm>({
   roles: ['teacher'],
   is_active: true,
 })
-const roleOptions = ACCOUNT_ROLES.map((role) => ({
+const roleOptions = ACCOUNT_ASSIGNABLE_ROLES.map((role) => ({
   value: role,
   label: {
-    admin: '系统管理员',
     director: '教务主任',
-    scheduler: '排课管理员',
     teacher: '教师',
   }[role],
 }))
+const accountBusy = computed(() => accountSaving.value || accountConfirming.value)
+
+function isBuiltinAccount(account: Account): boolean {
+  return account.is_builtin === true
+}
 
 function humanSize(size: number): string {
   if (size < 1024) return `${size} B`
@@ -175,6 +178,7 @@ const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   delete_teacher: '删除教师',
   delete_timetable: '删除课表版本',
   publish_timetable: '发布课表',
+  recover_builtin_admin: '恢复系统管理员',
   restore_backup: '恢复备份',
   revoke_semester_readiness: '撤回排课准备确认',
   update_account: '更新账号',
@@ -265,6 +269,8 @@ watch(() => route.query[AUDIT_QUERY_KEY], (value) => {
 
 onBeforeUnmount(() => {
   if (auditSearchTimer !== null) window.clearTimeout(auditSearchTimer)
+  accountConfirmation?.destroy()
+  accountConfirmation = null
 })
 
 async function loadAdminSettings() {
@@ -501,6 +507,7 @@ async function onUploadRestore({ file, onFinish, onError }: UploadCustomRequestO
 }
 
 function openCreateAccount() {
+  if (accountBusy.value) return
   accountTarget.value = null
   accountForm.value = {
     username: '',
@@ -513,22 +520,26 @@ function openCreateAccount() {
 }
 
 function openEditAccount(account: Account) {
+  if (isBuiltinAccount(account)) return
   accountTarget.value = account
+  const editableRoles = account.roles.filter(
+    (role): role is AccountAssignableRole => role !== 'admin',
+  )
   accountForm.value = {
     username: account.username,
     display_name: account.display_name,
     temporary_password: '',
-    roles: [...account.roles],
+    roles: editableRoles.length ? editableRoles : ['teacher'],
     is_active: account.is_active,
   }
   accountShow.value = true
 }
 
-function toggleAccountRole(role: AccountRole, checked: boolean) {
+function toggleAccountRole(role: AccountAssignableRole, checked: boolean) {
   const roles = new Set(accountForm.value.roles)
   if (checked) roles.add(role)
   else roles.delete(role)
-  accountForm.value.roles = [...roles] as AccountRole[]
+  accountForm.value.roles = [...roles]
 }
 
 async function persistAccount() {
@@ -569,7 +580,7 @@ async function persistAccount() {
 }
 
 function saveAccount() {
-  if (accountSaving.value) return
+  if (accountBusy.value) return
   if (!accountForm.value.display_name.trim() || !accountForm.value.roles.length) {
     message.warning('请填写显示名称并至少选择一个角色')
     return
@@ -584,13 +595,35 @@ function saveAccount() {
   const impact = accountTarget.value
     ? '将立即改变该账号的角色、启用状态或登录凭据。'
     : `将创建账号并授予：${accountForm.value.roles.map((role) => roleOptions.find((item) => item.value === role)?.label).join('、')}。`
-  dialog.warning({
+  accountConfirming.value = true
+  accountConfirmation = dialog.warning({
     title: '确认账号与角色变更',
     content: `目标：${target}。影响：${impact}`,
     positiveText: '确认提交',
     negativeText: '取消',
+    positiveButtonProps: { type: 'primary' },
     maskClosable: false,
-    onPositiveClick: () => persistAccount(),
+    closeOnEsc: false,
+    onNegativeClick: () => {
+      accountConfirming.value = false
+      accountConfirmation = null
+    },
+    onClose: () => {
+      accountConfirming.value = false
+      accountConfirmation = null
+    },
+    onPositiveClick: async () => {
+      if (accountSaving.value) return false
+      const confirmation = accountConfirmation
+      if (confirmation) confirmation.loading = true
+      try {
+        await persistAccount()
+      } finally {
+        if (confirmation) confirmation.loading = false
+        accountConfirming.value = false
+        accountConfirmation = null
+      }
+    },
   })
 }
 
@@ -641,20 +674,6 @@ async function onSaveSmtp() {
   }
 }
 
-async function onResetWizard() {
-  if (resettingWizard.value) return
-  resettingWizard.value = true
-  try {
-    await reopenWizard()
-    await wizard.fetch()
-    message.success('已打开当前学期的设置检查')
-    await router.push({ name: 'wizard' })
-  } catch (error) {
-    message.error(apiErrorMessage(error, '设置向导重启失败，请重试。'))
-  } finally {
-    resettingWizard.value = false
-  }
-}
 </script>
 
 <template>
@@ -784,7 +803,14 @@ async function onResetWizard() {
             </thead>
             <tbody>
               <tr v-for="account in accounts" :key="account.id" data-testid="account-row">
-                <td><strong>{{ account.username }}</strong></td>
+                <td>
+                  <div class="settings-command-group">
+                    <strong>{{ account.username }}</strong>
+                    <n-tag v-if="isBuiltinAccount(account)" type="info" size="small">
+                      {{ '内置账号' }}
+                    </n-tag>
+                  </div>
+                </td>
                 <td>{{ account.display_name }}</td>
                 <td>
                   <div class="settings-command-group">
@@ -799,7 +825,13 @@ async function onResetWizard() {
                   </n-tag>
                 </td>
                 <td>
-                  <n-button size="small" :data-testid="`account-edit-${account.id}`" @click="openEditAccount(account)">
+                  <n-button
+                    size="small"
+                    :data-testid="`account-edit-${account.id}`"
+                    :disabled="isBuiltinAccount(account)"
+                    :title="isBuiltinAccount(account) ? '内置账号不可编辑' : '编辑账号'"
+                    @click="openEditAccount(account)"
+                  >
                     <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                     {{ '编辑' }}
                   </n-button>
@@ -1037,36 +1069,14 @@ async function onResetWizard() {
           <label><span>{{ '启用账号' }}</span><n-switch v-model:value="accountForm.is_active" data-testid="account-active" /></label>
         </div>
         <div class="settings-modal-actions">
-          <n-button :disabled="accountSaving" @click="accountShow = false">{{ '取消' }}</n-button>
-          <n-button type="primary" :loading="accountSaving" :disabled="accountSaving" data-testid="account-save" @click="saveAccount">
+          <n-button :disabled="accountBusy" @click="accountShow = false">{{ '取消' }}</n-button>
+          <n-button type="primary" :loading="accountSaving" :disabled="accountBusy" data-testid="account-save" @click="saveAccount">
             <template #icon><Save :size="15" aria-hidden="true" /></template>
             {{ '提交变更' }}
           </n-button>
         </div>
       </div>
     </n-modal>
-
-    <section v-if="settingsSection === 'system'" class="settings-panel settings-danger-panel" data-testid="wizard-reset-card">
-      <div class="settings-panel-heading">
-        <div>
-          <p class="settings-eyebrow">{{ '当前学期补全' }}</p>
-          <h2>{{ '设置向导' }}</h2>
-          <p>{{ '检查并补全当前学期，不会复制、创建或删除任何学期数据。' }}</p>
-        </div>
-        <RotateCcw :size="20" aria-hidden="true" />
-      </div>
-      <div class="settings-actions">
-        <n-popconfirm :disabled="resettingWizard" @positive-click="onResetWizard">
-          <template #trigger>
-            <n-button type="warning" data-testid="reset-wizard" :loading="resettingWizard" :disabled="resettingWizard">
-              <template #icon><RotateCcw :size="15" aria-hidden="true" /></template>
-              {{ '检查并补全当前学期' }}
-            </n-button>
-          </template>
-          {{ '打开当前学期的设置检查吗？不会复制、创建或删除任何学期数据。' }}
-        </n-popconfirm>
-      </div>
-    </section>
   </div>
 </template>
 

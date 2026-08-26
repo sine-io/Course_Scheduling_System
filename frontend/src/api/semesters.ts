@@ -96,6 +96,17 @@ export const STATUS_LABELS: Record<SemesterListItem['status'], string> = {
 export const listSemesters = () => apiGet<SemesterListItem[]>('/semesters')
 export const getSemester = (id: number) => apiGet<Semester>(`/semesters/${id}`)
 
+export interface SemesterDataSummary {
+  semester_id: number
+  subjects: number
+  teachers: number
+  classes: number
+  rooms: number
+}
+
+export const getSemesterSummary = (id: number) =>
+  apiGet<SemesterDataSummary>(`/semesters/${id}/summary`)
+
 export interface SemesterContext {
   current_semester: SemesterListItem | null
   revision: number
@@ -111,8 +122,8 @@ export const switchSemesterContext = (semesterId: number, expectedRevision: numb
 export const createSemester = (body: {
   academic_year: number
   term: number
-  start_date?: string | null
-  end_date?: string | null
+  start_date: string
+  end_date: string
 }) => apiPost<Semester>('/semesters', body)
 export const updateSemester = (
   id: number,
@@ -125,8 +136,8 @@ export interface CopyOptions {
   academic_year: number
   term: number
   // 新学期的起止日:少了它,请假展开与今日看板的判定会失准,且页面上看不出哪里不对
-  start_date: string | null
-  end_date: string | null
+  start_date: string
+  end_date: string
   period_tables: boolean
   subjects: boolean
   teachers: boolean

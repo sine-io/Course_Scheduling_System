@@ -1,7 +1,7 @@
 """请假登记与受影响节次(M4-1)。
 
 RBAC:教师只能登记/销自己的假、只看得到自己的假单;
-排课管理员与教务主任可代登、可看全校、可代销。
+教务主任可代登、查看全校并代为销假。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -100,7 +100,7 @@ def _resolve_target_teacher(db: Session, semester_id: int, body_teacher_id: int 
     """代登指定教师;自登则解析登录者绑定的教师基础信息。"""
     if body_teacher_id is not None:
         if not _is_registrar(user):
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "只有排课管理员或教务主任可代为登记")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "只有教务主任可代为登记")
         teacher = leave_service.find_teacher(db, semester_id, body_teacher_id)
         if teacher is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "找不到教师")
@@ -110,7 +110,7 @@ def _resolve_target_teacher(db: Session, semester_id: int, body_teacher_id: int 
     if teacher is None:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "您的账号尚未绑定本学期的教师基础信息,无法登记请假;请洽排课管理员",
+            "您的账号尚未绑定本学期的教师基础信息,无法登记请假;请洽教务主任",
         )
     return teacher
 
@@ -174,7 +174,7 @@ def list_leaves(
     db: Session = Depends(get_db),
     user: User = Depends(daily_user),
 ):
-    """排课管理员看全校;教师只看得到自己的假单(即使指定了别人的 teacher_id)。"""
+    """教务主任看全校;教师只看得到自己的假单(即使指定了别人的 teacher_id)。"""
     _get_semester(db, semester_id)
     stmt = select(LeaveRequest).where(LeaveRequest.semester_id == semester_id)
 

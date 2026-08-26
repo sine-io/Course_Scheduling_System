@@ -60,6 +60,54 @@ export interface CombinedImportCommitResult {
   total_unchanged: number
 }
 
+export interface ReferenceImportAssignment {
+  class_name: string
+  grade: number
+  subject: string
+  component: string
+  periods: number
+  teacher: string | null
+  source_key: string
+  notes: string
+  required_room_type?: string | null
+}
+
+export interface ReferenceImportPreview {
+  fingerprint: string
+  adapter_version: string
+  semester: {
+    id: number
+    academic_year: number
+    term: number
+    start_date: string
+    end_date: string
+  }
+  can_commit: boolean
+  has_changes: boolean
+  counts: Record<string, number>
+  changes: Array<Record<string, unknown>>
+  assignments: ReferenceImportAssignment[]
+  rules: Array<Record<string, unknown>>
+  fixed_entries: Array<Record<string, unknown>>
+  errors: Array<{ code: string, message: string, source?: string }>
+  warnings: string[]
+  source: {
+    word_filename: string
+    xlsx_filename: string
+    word_sha256: string
+    xlsx_sha256: string
+  }
+}
+
+export interface ReferenceImportCommitResult {
+  batch_id: number
+  timetable_id: number | null
+  created: Record<string, number>
+  unchanged: Record<string, number>
+  warnings: string[]
+  idempotent: boolean
+}
+
 export const ENTITY_LABELS: Record<ImportEntity, string> = {
   subjects: '科目',
   teachers: '教师',
@@ -88,7 +136,7 @@ export async function downloadTemplate(entity: ImportEntity): Promise<void> {
   )
 }
 
-/** 下载设置向导使用的四表组合模板。 */
+/** 下载基础数据使用的四表组合模板。 */
 export async function downloadSetupTemplate(): Promise<void> {
   await downloadResponse(
     '/api/import/setup/template',
@@ -132,6 +180,53 @@ export function commitSetupImport(
   confirmChanges: boolean,
 ): Promise<CombinedImportCommitResult> {
   return postSetupWorkbook<CombinedImportCommitResult>('commit', semesterId, file, {
+    fingerprint,
+    confirmChanges,
+  })
+}
+
+async function postReferenceFiles<T>(
+  action: 'preview' | 'commit',
+  semesterId: number,
+  wordFile: File,
+  xlsxFile: File,
+  extra?: { fingerprint: string, confirmChanges: boolean, overrides?: Record<string, unknown> },
+): Promise<T> {
+  const form = new FormData()
+  form.append('word_file', wordFile)
+  form.append('xlsx_file', xlsxFile)
+  if (extra) {
+    form.append('fingerprint', extra.fingerprint)
+    form.append('confirm_changes', String(extra.confirmChanges))
+    if (extra.overrides) form.append('overrides', JSON.stringify(extra.overrides))
+  }
+  const response = await fetch(`/api/import/reference/${action}?semester_id=${semesterId}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  })
+  if (!response.ok) {
+    throw await apiErrorFromResponse(response, action === 'preview' ? '参考文件预览失败' : '参考文件导入失败')
+  }
+  return response.json() as Promise<T>
+}
+
+export function previewReferenceImport(
+  semesterId: number,
+  wordFile: File,
+  xlsxFile: File,
+): Promise<ReferenceImportPreview> {
+  return postReferenceFiles<ReferenceImportPreview>('preview', semesterId, wordFile, xlsxFile)
+}
+
+export function commitReferenceImport(
+  semesterId: number,
+  wordFile: File,
+  xlsxFile: File,
+  fingerprint: string,
+  confirmChanges: boolean,
+): Promise<ReferenceImportCommitResult> {
+  return postReferenceFiles<ReferenceImportCommitResult>('commit', semesterId, wordFile, xlsxFile, {
     fingerprint,
     confirmChanges,
   })

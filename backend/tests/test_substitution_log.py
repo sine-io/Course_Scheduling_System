@@ -1,7 +1,7 @@
 """M4-4:今日调课与代课看板与调课与代课日志。
 
 看板/日志不新增真相,只把「受影响节次 + 处理方式」摊平成可读记录。测试集中在:
-- 看板只列当天、且排除已销假的节次;含待处理让排课管理员看出还有几节没排。
+- 看板只列当天、且排除已销假的节次;含待处理让教务主任看出还有几节没排。
 - 历史查询依教师(缺课或代课均算)、日期区间、请假类型筛选。
 - 展开后的字段正确（处理方式、代课教师、教室、是否已处理）。
 - RBAC:纯教师不得访问行政看板。
@@ -22,9 +22,9 @@ PW = "password123"
 
 @pytest.fixture
 def w(env):
-    """已发布课表的初中,登录排课管理员。返回 _World。"""
+    """已发布课表的初中,登录教务主任。返回 _World。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(
         client,
@@ -78,7 +78,7 @@ def test_board_lists_todays_changes_with_disposition(w):
 
 
 def test_board_includes_pending_periods(w):
-    """待处理节次也上看板,好让排课管理员看出还有几节没排代课。"""
+    """待处理节次也上看板,好让教务主任看出还有几节没排代课。"""
     w.teacher("王师", ["语文"])
     w.place("王师", "语文", "701", 0)
     w.publish()

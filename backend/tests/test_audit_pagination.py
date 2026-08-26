@@ -26,7 +26,7 @@ def _login_admin(client, db) -> None:
 def _add_log(db, index: int, *, created_at: datetime, **overrides) -> AuditLog:
     values = {
         "username": f"operator-{index}",
-        "actor_roles": ["scheduler"],
+        "actor_roles": ["director"],
         "action": "publish_timetable",
         "target_type": "timetable",
         "target_id": index,
@@ -81,7 +81,7 @@ def test_audit_search_matches_all_tokens_across_visible_labels_and_values(env):
         1,
         created_at=timestamp,
         username="alice",
-        actor_roles=["scheduler"],
+        actor_roles=["director"],
         action="delete_subject",
         target_type="subject",
         target_id=23,
@@ -95,7 +95,7 @@ def test_audit_search_matches_all_tokens_across_visible_labels_and_values(env):
 
     by_labels = client.get(
         "/api/audit-logs",
-        params={"q": "alice 排课管理员 删除科目 科目 23 已拒绝"},
+        params={"q": "alice 教务主任 删除科目 科目 23 已拒绝"},
     ).json()
     assert [item["id"] for item in by_labels["items"]] == [wanted.id]
 

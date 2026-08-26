@@ -28,11 +28,11 @@ from app.models.constraint import ConstraintConfig
 from app.models.leave import AffectedPeriod, AffectedStatus, LeaveRequest, LeaveStatus, LeaveType
 from app.models.notification import Notification, NotificationType
 from app.models.period import Period, PeriodTable, PeriodType
+from app.models.reference_import import ReferenceImportBatch, ReferenceSchedulingRule
 from app.models.semester import Semester, SemesterContext, SemesterReadiness, SemesterStatus
 from app.models.substitution import Substitution, SubstitutionType
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
 from app.models.user import Role, User, UserRole
-from app.models.wizard import WizardState
 
 __all__ = [
     "Role",
@@ -45,6 +45,8 @@ __all__ = [
     "PeriodTable",
     "Period",
     "PeriodType",
+    "ReferenceImportBatch",
+    "ReferenceSchedulingRule",
     "Subject",
     "Teacher",
     "TeacherTimeRule",
@@ -55,7 +57,6 @@ __all__ = [
     "ClassTrack",
     "CalendarExceptionKind",
     "SemesterCalendarException",
-    "WizardState",
     "SchedulingUnit",
     "SchedulingUnitMember",
     "SchedulingUnitType",

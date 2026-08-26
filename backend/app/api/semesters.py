@@ -1,6 +1,6 @@
 """学期与作息时间表 API。
 
-权限:读取 = 排课管理员/教务主任;写入 = 排课管理员(admin 统一通过)。
+权限:读取与写入 = 教务主任(admin 统一通过)。
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -28,11 +28,11 @@ from app.schemas.semester import (
     SemesterContextSwitch,
     SemesterCopyRequest,
     SemesterCreate,
+    SemesterDataSummary,
     SemesterListItem,
     SemesterOut,
     SemesterUpdate,
 )
-from app.schemas.wizard import SemesterSummary
 from app.services import high_risk, period_setup, semester_context
 from app.services import period_tables as pt_service
 from app.services.calendar import readiness_issues
@@ -84,7 +84,7 @@ def _context_out(db: Session, user: User) -> SemesterContextOut:
             _semester_list_item(db, current, row.current_semester_id) if current else None
         ),
         revision=row.revision,
-        can_switch=bool(user.role_names & {Role.admin.value, Role.scheduler.value}),
+        can_switch=bool(user.role_names & {Role.admin.value, Role.director.value}),
     )
 
 
@@ -222,20 +222,27 @@ def get_semester(
     return _semester_out(db, _get_semester(db, semester_id))
 
 
-@router.get("/semesters/{semester_id}/summary", response_model=SemesterSummary)
-def semester_summary(
+@router.get("/semesters/{semester_id}/summary", response_model=SemesterDataSummary)
+def semester_data_summary(
     semester_id: int, db: Session = Depends(get_db), _: object = Depends(viewer)
-) -> SemesterSummary:
+) -> SemesterDataSummary:
+    """返回仪表盘使用的基础数据数量，不表达任何设置完成状态。"""
     _get_semester(db, semester_id)
 
-    def _count(model) -> int:
-        return db.scalar(
-            select(func.count()).select_from(model).where(model.semester_id == semester_id)
-        ) or 0
+    def count(model: type[ClassUnit] | type[Room] | type[Subject] | type[Teacher]) -> int:
+        return int(
+            db.scalar(
+                select(func.count()).select_from(model).where(model.semester_id == semester_id)
+            )
+            or 0
+        )
 
-    return SemesterSummary(
-        subjects=_count(Subject), teachers=_count(Teacher),
-        classes=_count(ClassUnit), rooms=_count(Room),
+    return SemesterDataSummary(
+        semester_id=semester_id,
+        subjects=count(Subject),
+        teachers=count(Teacher),
+        classes=count(ClassUnit),
+        rooms=count(Room),
     )
 
 

@@ -21,7 +21,7 @@ PW = "password123"
 @pytest.fixture
 def w(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(
         client,
@@ -116,7 +116,7 @@ def test_batch_zip_has_per_class_files(w):
 # ── 边界 / RBAC ─────────────────────────────────────────────
 def test_export_unpublished_semester_404(env):
     client, db = env
-    make_user(db, "s2", PW, roles=[Role.scheduler])
+    make_user(db, "s2", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s2", "password": PW})
     sid = create_api_semester(
         client,

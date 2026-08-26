@@ -95,7 +95,7 @@ onMounted(async () => {
       </table>
 
       <footer class="foot">
-        <span>排课管理员：____________　教务主任：____________</span>
+        <span>教务主任：____________</span>
         <span class="printed">{{ '打印时间' }}：{{ printedAt }}</span>
       </footer>
     </template>

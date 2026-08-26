@@ -10,9 +10,9 @@ const VIEWPORTS = [
 
 const USER = {
   id: 17,
-  username: 'issue-17-scheduler',
+  username: 'issue-17-director',
   display_name: '排课工作面验收用户',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: false,
 }
 
@@ -134,6 +134,7 @@ interface MockState {
   entries: ReturnType<typeof entry>[]
   nextEntryId: number
   writeRequests: string[]
+  hasDraft: boolean
 }
 
 interface MockOptions {
@@ -149,13 +150,14 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 
 async function mockApplication(
   page: Page,
-  roles = ['scheduler'],
+  roles = ['director'],
   options: MockOptions = {},
 ): Promise<MockState> {
   const state: MockState = {
     entries: [entry(801, 2, 1, true)],
     nextEntryId: 900,
     writeRequests: [],
+    hasDraft: !options.emptyDraft,
   }
 
   await page.route('**/api/**', async (route) => {
@@ -172,7 +174,6 @@ async function mockApplication(
       role_display_names: {
         admin: '系统管理员',
         director: '教务主任',
-        scheduler: '排课管理员',
         teacher: '教师',
       },
       academic_year: {
@@ -184,15 +185,6 @@ async function mockApplication(
       },
     })
     if (path === '/api/auth/me') return fulfillJson(route, { ...USER, roles })
-    if (path === '/api/wizard/state') return fulfillJson(route, {
-      current_step: 3,
-      resume_step: 3,
-      completed: true,
-      paused: false,
-      semester_id: 71,
-      total_steps: 4,
-      has_semesters: true,
-    })
     if (path === '/api/notifications/mine' || path === '/api/notifications/mine/unread-count') {
       return fulfillJson(route, path.endsWith('unread-count') ? { unread: 0 } : { items: [], unread: 0 })
     }
@@ -235,7 +227,17 @@ async function mockApplication(
       name: '草稿A',
       status: 'draft',
       entry_count: state.entries.length,
-    }].filter(() => !options.emptyDraft))
+    }].filter(() => state.hasDraft))
+    if (path === '/api/timetables' && method === 'POST') {
+      state.hasDraft = true
+      return fulfillJson(route, {
+        id: 81,
+        semester_id: 71,
+        name: '草稿A',
+        status: 'draft',
+        entry_count: state.entries.length,
+      }, 201)
+    }
     if (path === '/api/timetables/81' && method === 'GET') return fulfillJson(route, {
       id: 81,
       semester_id: 71,
@@ -422,21 +424,22 @@ for (const viewport of VIEWPORTS) {
   })
 }
 
-test('只读班级工作台保留真实未排课程信息但禁用写入操作', async ({ page }) => {
+test('教务主任在班级工作台可直接写入排课', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const state = await mockApplication(page, ['director'])
 
   await page.goto('/scheduling/workbench')
-  await expect(page.getByTestId('workbench-readonly')).toContainText('仅可查看')
-  await expect(page.getByTestId('workbench-save-status')).toContainText('只读')
+  await expect(page.getByTestId('workbench-readonly')).toHaveCount(0)
   await expect(page.getByTestId('wb-remaining')).toHaveText('剩余 2 节')
-  await expect(page.getByTestId('wb-tray-语文')).toBeDisabled()
-  expect(state.writeRequests.filter((request) => request.includes('/entries'))).toEqual([])
+  await page.getByTestId('wb-tray-语文').click()
+  await page.getByRole('button', { name: '将语文排入星期一第二节' }).click()
+  await expect(page.getByTestId('workbench-save-status')).toContainText('已保存')
+  expect(state.writeRequests).toContain('POST /api/timetables/81/entries')
 })
 
 test('班级未配置教学任务时与全部排完状态明确区分', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
-  await mockApplication(page, ['scheduler'], { emptyAssignments: true })
+  await mockApplication(page, ['director'], { emptyAssignments: true })
 
   await page.goto('/scheduling/assignments')
   await expect(page.getByTestId('assignment-list-empty')).toContainText('暂无教学任务')
@@ -448,7 +451,7 @@ test('班级未配置教学任务时与全部排完状态明确区分', async ({
 
 test('课表保存失败时显示持久的错误状态', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  await mockApplication(page, ['scheduler'], { failPlace: true })
+  await mockApplication(page, ['director'], { failPlace: true })
 
   await page.goto('/scheduling/workbench')
   const trayItem = page.getByTestId('wb-tray-语文')
@@ -461,25 +464,26 @@ test('课表保存失败时显示持久的错误状态', async ({ page }) => {
   await expectNoRootOverflow(page)
 })
 
-test('教务主任看到只读工作台时不创建草稿或显示写入控件', async ({ page }) => {
+test('教务主任进入无草稿工作台时创建默认草稿并显示写入控件', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const state = await mockApplication(page, ['director'], { emptyDraft: true })
 
   await page.goto('/scheduling/workbench')
   await expect(page.getByTestId('workbench-page')).toBeVisible()
-  await expect(page.getByTestId('workbench-readonly')).toContainText('仅可查看')
-  await expect(page.getByTestId('workbench-no-draft')).toContainText('还没有课表草稿')
-  expect(state.writeRequests.filter((request) => request === 'POST /api/timetables')).toEqual([])
+  await expect(page.getByTestId('wb-remaining')).toHaveText('剩余 2 节')
+  await expect(page.getByTestId('workbench-readonly')).toHaveCount(0)
+  await expect(page.getByTestId('workbench-no-draft')).toHaveCount(0)
+  expect(state.writeRequests).toContain('POST /api/timetables')
 
   await page.goto('/scheduling/assignments')
   await expect(page.getByTestId('assignments-page')).toBeVisible()
-  await expect(page.getByTestId('assignments-readonly')).toBeVisible()
-  await expect(page.getByTestId('assignment-add')).toHaveCount(0)
+  await expect(page.getByTestId('assignments-readonly')).toHaveCount(0)
+  await expect(page.getByTestId('assignment-add')).toBeVisible()
 })
 
 test('教学任务读取失败时显示可重试状态', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
-  await mockApplication(page, ['scheduler'], { failAssignments: true })
+  await mockApplication(page, ['director'], { failAssignments: true })
 
   await page.goto('/scheduling/assignments')
   await expect(page.getByTestId('assignments-error')).toContainText('教学任务服务暂时不可用')

@@ -117,8 +117,15 @@ async function expectModalWithinViewport(
   expect(box!.y + box!.height).toBeLessThanOrEqual(viewport.height + 1)
 }
 
-function tab(page: Page, label: string) {
-  return page.locator('.n-tabs-tab', { hasText: label })
+const manualSectionTestIds = {
+  '科目': 'manual-section-subjects',
+  '教师': 'manual-section-teachers',
+  '班级': 'manual-section-classes',
+  '教室/场地': 'manual-section-rooms',
+} as const
+
+function manualSection(page: Page, label: keyof typeof manualSectionTestIds) {
+  return page.getByTestId(manualSectionTestIds[label])
 }
 
 async function mockSession(
@@ -135,22 +142,12 @@ async function mockSession(
     must_change_password: false,
   }
   await page.route('**/api/auth/me', (route) => fulfillJson(route, user))
-  await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-    current_step: 3,
-    resume_step: 3,
-    completed: true,
-    paused: false,
-    semester_id: 44,
-    total_steps: 4,
-    has_semesters: true,
-  }))
   await page.route('**/api/app-config', (route) => fulfillJson(route, {
     school_name: '基础数据验收学校',
     timezone: 'Asia/Shanghai',
     role_display_names: {
       admin: '系统管理员',
       director: '教务主任',
-      scheduler: '排课管理员',
       teacher: '教师',
     },
     academic_year: {
@@ -166,7 +163,7 @@ async function mockSession(
   await page.route('**/api/semester-context', (route) => fulfillJson(route, {
     current_semester: currentSemester ? { ...currentSemester, is_current: true } : null,
     revision: 1,
-    can_switch: roles.some((role) => role === 'admin' || role === 'scheduler'),
+    can_switch: roles.some((role) => role === 'admin' || role === 'director'),
   }))
 
   await page.route('**/api/semesters', (route) => fulfillJson(route, [SEMESTER]))
@@ -271,6 +268,32 @@ async function mockSession(
   })
 }
 
+test('基础数据直接展示手工录入并移除旧切换入口', async ({ page }) => {
+  const state: MockState = { uploadAttempts: 0, savedRules: null }
+  await mockSession(page, ['director'], state)
+
+  await page.goto('/basedata')
+
+  await expect(page.getByTestId('manual-entry')).toBeVisible()
+  const panelBox = await page.getByTestId('basedata-workspace').boundingBox()
+  const guideBox = await page.locator('.manual-entry-guide').boundingBox()
+  expect(panelBox).not.toBeNull()
+  expect(guideBox).not.toBeNull()
+  expect(guideBox!.y - panelBox!.y).toBeGreaterThanOrEqual(20)
+  await expect(page.getByTestId('manual-section-subjects')).toHaveClass(/active/)
+  await expect(page.locator('.manual-entry .n-tabs')).toHaveCount(0)
+  await expect(page.getByText('少量数据', { exact: true })).toHaveCount(0)
+  await expect(page.getByTestId('entry-mode')).toHaveCount(0)
+  await expect(page.getByTestId('combined-import-panel')).toHaveCount(0)
+  await expect(page.getByText('批量导入', { exact: true })).toHaveCount(0)
+
+  await page.getByTestId('manual-section-subjects').focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByTestId('manual-section-teachers')).toBeFocused()
+  await expect(page.getByTestId('manual-section-teachers')).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByTestId('teachers-table')).toBeVisible()
+})
+
 test('教室/场地保留原有校验、失败重试和完整 CRUD 语义', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const state: MockState = {
@@ -282,7 +305,7 @@ test('教室/场地保留原有校验、失败重试和完整 CRUD 语义', asyn
   await mockSession(page, ['admin'], state)
 
   await page.goto('/basedata')
-  await tab(page, '教室/场地').click()
+  await manualSection(page, '教室/场地').click()
   await page.getByTestId('room-add').click()
   const modal = page.locator('.n-modal').filter({ hasText: '新增教室/场地' })
 
@@ -327,7 +350,7 @@ test('教室/场地保留原有校验、失败重试和完整 CRUD 语义', asyn
 
 test('基础数据在学期请求期间显示加载状态', async ({ page }) => {
   const state: MockState = { uploadAttempts: 0, savedRules: null }
-  await mockSession(page, ['scheduler'], state)
+  await mockSession(page, ['director'], state)
   let release!: () => void
   const pending = new Promise<void>((resolve) => { release = resolve })
   await page.route('**/api/semesters', async (route) => {
@@ -344,7 +367,7 @@ test('基础数据在学期请求期间显示加载状态', async ({ page }) => 
 
 test('基础数据在没有学期时显示明确空状态', async ({ page }) => {
   const state: MockState = { uploadAttempts: 0, savedRules: null }
-  await mockSession(page, ['scheduler'], state, null)
+  await mockSession(page, ['director'], state, null)
   await page.route('**/api/semesters', (route) => fulfillJson(route, []))
 
   await page.goto('/basedata')
@@ -354,7 +377,7 @@ test('基础数据在没有学期时显示明确空状态', async ({ page }) => 
 
 test('基础数据学期请求失败后可以重试', async ({ page }) => {
   const state: MockState = { uploadAttempts: 0, savedRules: null }
-  await mockSession(page, ['scheduler'], state)
+  await mockSession(page, ['director'], state)
   let attempts = 0
   let failing = true
   await page.route('**/api/semesters', (route) => {
@@ -377,20 +400,24 @@ for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     const state: MockState = { uploadAttempts: 0, savedRules: null }
-    await mockSession(page, ['scheduler'], state)
+    await mockSession(page, ['director'], state)
 
     await page.goto('/basedata')
     await expect(page.getByTestId('basedata-workspace')).toBeVisible()
     await expect(page.getByLabel('选择工作学期')).toBeVisible()
-    await expect(page.getByTestId('teachers-table')).toContainText('陈老师')
+    await expect(page.getByTestId('manual-entry')).toBeVisible()
+    await expect(page.getByTestId('subjects-table')).toContainText('数学')
     await expectNoRootOverflow(page)
 
-    if (viewport.width <= 768) await expectInternalOverflow(page, 'teachers-table-scroll')
+    if (viewport.width <= 768) await expectInternalOverflow(page, 'subjects-table-scroll')
     await page.screenshot({
       path: testInfo.outputPath(`basedata-${viewport.width}x${viewport.height}.png`),
       fullPage: true,
     })
 
+    await manualSection(page, '教师').click()
+    await expect(page.getByTestId('teachers-table')).toContainText('陈老师')
+    if (viewport.width <= 768) await expectInternalOverflow(page, 'teachers-table-scroll')
     await page.getByTestId('teacher-add').click()
     const teacherModal = page.locator('.n-modal').filter({ hasText: '新增教师' })
     await expect(teacherModal.getByLabel('姓名')).toBeVisible()
@@ -422,7 +449,7 @@ for (const viewport of VIEWPORTS) {
       ])
     }
 
-    await tab(page, '班级').click()
+    await manualSection(page, '班级').click()
     await expect(page.getByTestId('classes-table')).toContainText('七年级1班')
     if (viewport.width <= 768) await expectInternalOverflow(page, 'classes-table-scroll')
     await page.getByTestId('class-add').click()
@@ -437,7 +464,7 @@ for (const viewport of VIEWPORTS) {
     await classModal.getByRole('button', { name: '取消' }).click()
     await expectNoRootOverflow(page)
 
-    await tab(page, '科目').click()
+    await manualSection(page, '科目').click()
     await expect(page.getByTestId('subjects-table')).toContainText('数学')
     if (viewport.width <= 768) await expectInternalOverflow(page, 'subjects-table-scroll')
     await page.getByTestId('subject-add').click()
@@ -453,7 +480,7 @@ for (const viewport of VIEWPORTS) {
     await subjectModal.getByRole('button', { name: '取消' }).click()
     await expectNoRootOverflow(page)
 
-    await tab(page, '教室/场地').click()
+    await manualSection(page, '教室/场地').click()
     await expect(page.getByTestId('rooms-table')).toContainText('物理实验室')
     if (viewport.width <= 768) await expectInternalOverflow(page, 'rooms-table-scroll')
     await page.getByTestId('room-add').click()
@@ -466,98 +493,50 @@ for (const viewport of VIEWPORTS) {
     await roomModal.getByRole('button', { name: '取消' }).click()
     await expectNoRootOverflow(page)
 
-    await tab(page, '批量导入').click()
-    await expect(page.getByTestId('combined-import-panel')).toBeVisible()
-    await expect(page.getByTestId('combined-download')).toBeVisible()
-    await expect(page.getByTestId('combined-preview')).toBeDisabled()
-    await page.locator('.n-radio-button', { hasText: '按表导入' }).click()
-    await expect(page.getByRole('radiogroup', { name: '选择导入数据类型' })).toBeVisible()
-    await expect(page.getByTestId('import-download')).toBeVisible()
-    await expect(page.getByTestId('import-upload')).toBeDisabled()
+    await expect(page.getByTestId('entry-mode')).toHaveCount(0)
+    await expect(page.getByTestId('combined-import-panel')).toHaveCount(0)
+    await expect(page.getByText('批量导入', { exact: true })).toHaveCount(0)
     await expectNoRootOverflow(page)
-
-    if (viewport.width === 1280) {
-      const [download] = await Promise.all([
-        page.waitForEvent('download'),
-        page.getByTestId('import-download').click(),
-      ])
-      expect(download.suggestedFilename()).toBe('subjects_template.xlsx')
-
-      await page.locator('input[type="file"]').setInputFiles({
-        name: 'subjects.xlsx',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        buffer: Buffer.from('mock workbook'),
-      })
-      await page.getByTestId('import-upload').click()
-      await expect(page.getByTestId('import-result-errors')).toContainText('第 4 行：科目名称不能为空')
-      await expect(page.getByTestId('import-upload')).toContainText('修正文件后重试')
-
-      const importWorkspace = page.getByTestId('import-workspace')
-      const importEntity = (label: string) => importWorkspace.locator('.n-radio-button', { hasText: label })
-      await importEntity('教师').click()
-      const createAccounts = page.getByRole('checkbox', { name: /同时创建教师登录账号/ })
-      await expect(createAccounts).toHaveCount(0)
-      await importEntity('科目').click()
-      await expect(page.getByTestId('import-result-errors')).toBeVisible()
-      await importEntity('教师').click()
-      await expect(createAccounts).toHaveCount(0)
-      await expect(page.getByText('subjects.xlsx')).toBeVisible()
-      await importEntity('科目').click()
-
-      await page.getByTestId('import-upload').click()
-      await expect(page.getByTestId('import-success')).toContainText('成功导入 1 条数据')
-      expect(state.uploadAttempts).toBe(2)
-    }
+    expect(state.uploadAttempts).toBe(0)
   })
 }
 
-test('教务主任仅能查看基础数据且不会触发写请求', async ({ page }) => {
+test('教务主任可维护基础数据但不显示管理员专属操作', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   const state: MockState = { uploadAttempts: 0, savedRules: null }
   await mockSession(page, ['director'], state)
-  const writeRequests: string[] = []
-  page.on('request', (request) => {
-    if (!['GET', 'HEAD'].includes(request.method())) {
-      writeRequests.push(`${request.method()} ${new URL(request.url()).pathname}`)
-    }
-  })
 
   await page.goto('/basedata')
-  await expect(page.getByTestId('basedata-readonly')).toContainText('仅可查看基础数据')
+  await expect(page.getByTestId('basedata-readonly')).toHaveCount(0)
+  await expect(page.getByTestId('subjects-table')).toContainText('数学')
+  await expect(page.getByTestId('subject-add')).toBeVisible()
+  await expect(page.getByTestId('subject-edit-3')).toBeVisible()
+  await expect(page.getByTestId('subject-delete-3')).toHaveCount(0)
+
+  await manualSection(page, '教师').click()
   await expect(page.getByTestId('teachers-table')).toContainText('陈老师')
-  await expect(page.getByTestId('teacher-add')).toHaveCount(0)
-  await expect(page.getByTestId('teacher-edit-7')).toHaveCount(0)
+  await expect(page.getByTestId('teacher-add')).toBeVisible()
+  await expect(page.getByTestId('teacher-edit-7')).toBeVisible()
+  await expect(page.getByTestId('teacher-delete-7')).toHaveCount(0)
+  await page.getByTestId('teacher-edit-7').click()
+  await expect(page.getByTestId('teacher-save')).toBeEnabled()
+  await expect(page.getByTestId('teacher-account')).toHaveCount(0)
+  await page.keyboard.press('Escape')
   await page.getByTestId('teacher-rules-7').click()
-  const readOnlyRule = page.getByRole('button', { name: /周一，早自习/ })
-  await expect(readOnlyRule).toBeDisabled()
-  await expect(page.getByTestId('time-rules-save')).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /周一，早自习/ })).toBeEnabled()
+  await expect(page.getByTestId('time-rules-save')).toBeVisible()
   await page.keyboard.press('Escape')
 
-  await tab(page, '班级').click()
-  await expect(page.getByTestId('class-add')).toHaveCount(0)
-  await tab(page, '科目').click()
-  await expect(page.getByTestId('subject-add')).toHaveCount(0)
-  await tab(page, '教室/场地').click()
-  await expect(page.getByTestId('room-add')).toHaveCount(0)
-  await tab(page, '批量导入').click()
-  await expect(page.getByTestId('import-readonly')).toContainText('没有基础数据写入权限')
-  await expect(page.getByTestId('combined-import-panel')).toBeVisible()
-  await expect(page.getByTestId('combined-download')).toBeVisible()
-  await expect(page.getByTestId('combined-file')).toHaveCount(0)
-  await expect(page.getByTestId('combined-preview')).toHaveCount(0)
-  await page.locator('.n-radio-button', { hasText: '按表导入' }).click()
-  await expect(page.getByRole('radiogroup', { name: '选择导入数据类型' })).toBeVisible()
-  await expect(page.getByTestId('import-download')).toBeVisible()
-  await expect(page.getByTestId('import-file')).toHaveCount(0)
-  await expect(page.getByTestId('import-upload')).toHaveCount(0)
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByTestId('import-download').click(),
-  ])
-  expect(download.suggestedFilename()).toBe('subjects_template.xlsx')
+  await manualSection(page, '班级').click()
+  await expect(page.getByTestId('class-add')).toBeVisible()
+  await manualSection(page, '科目').click()
+  await manualSection(page, '教室/场地').click()
+  await expect(page.getByTestId('room-add')).toBeVisible()
+  await expect(page.getByTestId('entry-mode')).toHaveCount(0)
+  await expect(page.getByTestId('combined-import-panel')).toHaveCount(0)
+  await expect(page.getByText('批量导入', { exact: true })).toHaveCount(0)
   await expectNoRootOverflow(page)
 
-  expect(writeRequests).toEqual([])
   expect(state.uploadAttempts).toBe(0)
   expect(state.savedRules).toBeNull()
 })

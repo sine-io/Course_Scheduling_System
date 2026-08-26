@@ -16,9 +16,17 @@ PW = "password123"
 @pytest.fixture
 def scheduler_env(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
+    sem = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
+    ).json()
     return client, sem["id"]
 
 
@@ -27,7 +35,15 @@ def admin_env(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "admin", "password": PW})
-    sem = client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).json()
+    sem = client.post(
+        "/api/semesters",
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            "start_date": "2026-09-01",
+            "end_date": "2027-01-20",
+        },
+    ).json()
     return client, sem["id"]
 
 
@@ -100,7 +116,7 @@ def test_import_teachers_with_accounts(admin_env):
     client.post(f"/api/subjects?semester_id={sid}", json={"name": "数学"})
     client.post(f"/api/subjects?semester_id={sid}", json={"name": "物理"})
     rows = [
-        ["王小明", "1234", "数学、物理", 20, "排课管理员", 4, "否", "wang001"],
+        ["王小明", "1234", "数学、物理", 20, "教务主任", 4, "否", "wang001"],
         ["李小华", "5678", "数学", 18, "", "", "是", "lee001"],
     ]
     r = upload(client, "teachers", sid, rows, create_accounts=True)

@@ -60,7 +60,7 @@ cd frontend && npm install && npm run test
 
 ### E2E(Playwright)
 
-对运行中的 Docker 全栈环境驱动真实浏览器。先执行 `sudo docker compose up -d`，再创建测试账号（可重复执行），并将设置向导标记为已完成：
+对运行中的 Docker 全栈环境驱动真实浏览器。先执行 `sudo docker compose up -d`，再创建测试账号（可重复执行）：
 
 ```bash
 sudo docker compose exec -T api python -m app.scripts.seed_e2e
@@ -68,7 +68,7 @@ sudo docker compose exec -T api python -m app.scripts.seed_e2e
 cd frontend
 npx playwright install chromium   # 首次
 npm run e2e            # 无头模式运行 Chromium E2E 回归测试
-npm run e2e:acceptance # 上手引导与 RBAC 完整验收入口（CI 直接调用）
+npm run e2e:acceptance # 完整 Chromium 验收入口（CI 直接调用）
 npm run e2e:headed     # 显示浏览器并放慢执行，可在屏幕上观察
 npm run e2e:perf       # 60 班压测(执行久,非回归,CI 不跑)
 npm run e2e:manual     # 操作手册截图生成器(需另备示范数据测试站,CI 不跑)

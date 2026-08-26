@@ -19,7 +19,7 @@ from app.models.basedata import Teacher
 
 
 class NotificationType(enum.StrEnum):
-    leave_registered = "leave_registered"                # 请假已登记(排课管理员代登时通知教师)
+    leave_registered = "leave_registered"                # 请假已登记(教务主任代登时通知教师)
     leave_cancelled = "leave_cancelled"                  # 销假
     substitution_assigned = "substitution_assigned"      # 被指派代课(M4-2)
     substitution_cancelled = "substitution_cancelled"    # 原定代课取消(销假级联)

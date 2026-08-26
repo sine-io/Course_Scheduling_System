@@ -143,7 +143,7 @@ class Room(Base):
 class ClassUnit(Base):
     __tablename__ = "class_units"
     # 同学期班名唯一(M6-5):冲突信息、课表、导出全都以班名指称班级,
-    # 同学期两个「301」会让排课管理员在页面上分不出是哪一班。
+    # 同学期两个「301」会让教务主任在页面上分不出是哪一班。
     __table_args__ = (
         UniqueConstraint("semester_id", "name", name="uq_class_units_semester_name"),
     )

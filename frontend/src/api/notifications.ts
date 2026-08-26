@@ -1,4 +1,4 @@
-// 通知:教师端铃铛/确认,排课管理员看板/再次提醒(M4-3)。
+// 通知:教师端铃铛/确认,教务主任看板/再次提醒(M4-3)。
 
 import { apiGet, apiPost, apiPut } from '@/api/client'
 

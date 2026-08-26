@@ -25,11 +25,10 @@ function makeRouter() {
       history: createMemoryHistory(),
       routes: [
         { path: '/', name: 'dashboard', component: Dashboard },
-        { path: '/wizard', name: 'wizard', component: { template: '<div />' } },
         { path: '/scheduling/workbench', name: 'workbench', component: { template: '<div />' } },
         { path: '/scheduling/assignments', name: 'assignments', component: { template: '<div />' } },
-        { path: '/settings/semesters', name: 'settings-semesters', component: { template: '<div />' } },
-        { path: '/settings/calendar', name: 'settings-calendar', component: { template: '<div />' } },
+        { path: '/settings/semesters', name: 'semesters', component: { template: '<div />' } },
+        { path: '/settings/calendar', name: 'calendar', component: { template: '<div />' } },
         { path: '/basedata', name: 'basedata', component: { template: '<div />' } },
         { path: '/scheduling/versions', name: 'versions', component: { template: '<div />' } },
         { path: '/daily-board', name: 'daily-board', component: { template: '<div />' } },
@@ -40,7 +39,7 @@ function makeRouter() {
   })
 }
 
-function makePinia(roles: string[] = ['scheduler']) {
+function makePinia(roles: string[] = ['director']) {
   const pinia = createPinia()
   const auth = useAuthStore(pinia)
   auth.user = {
@@ -74,56 +73,20 @@ describe('Dashboard', () => {
     await flushPromises()
   })
 
-  it('无学期时显示空状态与前往向导', async () => {
+  it('无学期时显示空状态与创建学期入口', async () => {
     const wrapper = mount(Dashboard, {
       global: { plugins: [makePinia(), makeRouter()] },
     })
     await flushPromises()
     expect(wrapper.text()).toContain('仪表盘')
     expect(wrapper.text()).toContain('尚未创建任何学期数据')
-    expect(wrapper.get('a[href="/wizard"]').text()).toContain('前往设置向导')
+    expect(wrapper.get('a[href="/settings/semesters"]').text()).toContain('创建第一个学期')
     expect(wrapper.get('[data-testid="dash-shortcut-workbench"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="dash-shortcut-assignments"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="dash-shortcut-daily-board"]')).toBeTruthy()
   })
 
-  it('当前学期设置未完成时显示首个未完成步骤与继续入口', async () => {
-    const semester = {
-      id: 8, academic_year: 2042, term: 1, label: '2042-2043学年第一学期',
-      status: 'preparing', readiness: 'draft', start_date: '2042-09-01', end_date: '2043-01-20',
-    }
-    vi.mocked(fetch).mockImplementation((url) => {
-      const path = String(url)
-      if (path.includes('/semester-context')) {
-        return Promise.resolve(jsonResponse({
-          current_semester: semester, revision: 1, can_switch: false,
-        })) as never
-      }
-      if (path.includes('/wizard/state')) {
-        return Promise.resolve(jsonResponse({
-          current_step: 2, resume_step: 1, completed: false, paused: true,
-          semester_id: semester.id, total_steps: 4, has_semesters: true,
-        })) as never
-      }
-      if (path.includes('/summary')) {
-        return Promise.resolve(jsonResponse({ subjects: 0, teachers: 1, classes: 1, rooms: 0 })) as never
-      }
-      return Promise.resolve(jsonResponse({
-        date: '2042-09-02', weekday: 2, school_name: '测试学校',
-        semester_label: semester.label, entries: [],
-      })) as never
-    })
-
-    const wrapper = mount(Dashboard, {
-      global: { plugins: [makePinia(), makeRouter()] },
-    })
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="dash-setup-resume"]').text()).toContain('下一步：基础数据')
-    expect(wrapper.get('[data-testid="dash-setup-resume"] a[href="/wizard"]').text()).toContain('继续设置')
-  })
-
-  it('教务主任首页不请求已移除的首次成功状态', async () => {
+  it('教务主任首页不请求已移除的设置状态接口', async () => {
     const wrapper = mount(Dashboard, {
       global: { plugins: [makePinia(['director']), makeRouter()] },
     })
@@ -131,7 +94,7 @@ describe('Dashboard', () => {
 
     const requests = vi.mocked(fetch).mock.calls.map(([url]) => String(url))
     expect(requests.some((url) => url.includes('/onboarding/'))).toBe(false)
-    expect(wrapper.find('a[href="/wizard"]').exists()).toBe(false)
+    expect(wrapper.find('a[href="/settings/semesters"]').exists()).toBe(true)
   })
 
   it('教师仪表盘不请求受限摘要和全校今日看板', async () => {
@@ -203,7 +166,9 @@ describe('Dashboard', () => {
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url).endsWith('/semesters')) return Promise.resolve(jsonResponse(semesters)) as never
       if (String(url).includes('/summary')) {
-        return Promise.resolve(jsonResponse({ subjects: 12, teachers: 34, classes: 18, rooms: 7 })) as never
+        return Promise.resolve(jsonResponse({
+          semester_id: 8, subjects: 12, teachers: 34, classes: 18, rooms: 7,
+        })) as never
       }
       return Promise.resolve(jsonResponse(board)) as never
     })
@@ -249,7 +214,9 @@ describe('Dashboard', () => {
     await flushPromises()
 
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/daily-board'))).toBe(true)
-    summaryRequest.resolve(jsonResponse({ subjects: 1, teachers: 2, classes: 3, rooms: 4 }))
+    summaryRequest.resolve(jsonResponse({
+      semester_id: 8, subjects: 1, teachers: 2, classes: 3, rooms: 4,
+    }))
     await flushPromises()
   })
 
@@ -269,7 +236,9 @@ describe('Dashboard', () => {
       if (String(url).includes('/summary')) {
         summaryAttempts += 1
         if (summaryAttempts > 1) {
-          return Promise.resolve(jsonResponse({ subjects: 12, teachers: 34, classes: 18, rooms: 7 })) as never
+          return Promise.resolve(jsonResponse({
+            semester_id: 1, subjects: 12, teachers: 34, classes: 18, rooms: 7,
+          })) as never
         }
         return Promise.resolve(jsonResponse({ detail: '摘要服务暂时不可用' }, 503)) as never
       }
@@ -302,7 +271,9 @@ describe('Dashboard', () => {
         }])) as never
       }
       if (String(url).includes('/summary')) {
-        return Promise.resolve(jsonResponse({ subjects: 1, teachers: 2, classes: 3, rooms: 4 })) as never
+        return Promise.resolve(jsonResponse({
+          semester_id: 1, subjects: 1, teachers: 2, classes: 3, rooms: 4,
+        })) as never
       }
       return Promise.resolve(jsonResponse({ detail: '看板暂时不可用' }, 503)) as never
     })

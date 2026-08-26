@@ -8,7 +8,6 @@ import {
   hasAnyRole,
 } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
-import { useWizardStore } from '@/stores/wizard'
 
 const ALL_DAILY_ROLES = [...DAILY_USER_ROLES]
 const CORE_VIEW_ROLE_LIST = [...CORE_VIEW_ROLES]
@@ -25,12 +24,6 @@ const routes = [
     path: '/change-password',
     name: 'change-password',
     component: () => import('@/views/ChangePassword.vue'),
-  },
-  {
-    path: '/wizard',
-    name: 'wizard',
-    component: () => import('@/views/wizard/Wizard.vue'),
-    meta: { allowedRoles: ['admin', 'scheduler', 'director'] },
   },
   {
     // 独立 A4 通知单打印页,不套用侧边栏版面(干净一页供打印)
@@ -77,6 +70,12 @@ const routes = [
         path: 'scheduling/assignments',
         name: 'assignments',
         component: () => import('@/views/scheduling/Assignments.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
+      },
+      {
+        path: 'scheduling/settings',
+        name: 'scheduling-settings',
+        component: () => import('@/views/scheduling/SchedulingSettings.vue'),
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
@@ -218,7 +217,12 @@ router.beforeEach(async (to) => {
   const allowedRoles = to.meta.allowedRoles as string[] | undefined
   const canManage = canViewCore(auth.user?.roles)
   // 未声明教师角色的页面不对纯教师账号开放；页面权限只维护在路由元数据中。
-  if (!canManage && auth.hasRole('teacher') && !allowedRoles?.includes('teacher')) {
+  if (
+    !canManage
+    && !AUTH_PAGES.has(to.name as string)
+    && auth.hasRole('teacher')
+    && !allowedRoles?.includes('teacher')
+  ) {
     return { name: 'timetable-query' }
   }
 
@@ -229,14 +233,5 @@ router.beforeEach(async (to) => {
     return { name: fallback }
   }
 
-  // 首次登录引导:排课管理员/管理员在尚未完成初始设置时自动进入向导；暂停后可使用其他页面。
-  const canSetup = auth.hasRole('scheduler') || auth.hasRole('admin')
-  if (canSetup && to.name !== 'wizard' && !AUTH_PAGES.has(to.name as string)) {
-    const wizard = useWizardStore()
-    if (!wizard.loaded) await wizard.fetch()
-    if (wizard.state && !wizard.state.completed && !wizard.state.paused) {
-      return { name: 'wizard' }
-    }
-  }
   return true
 })

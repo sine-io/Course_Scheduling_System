@@ -67,6 +67,12 @@ class SchedulingUnitMember(Base):
 
 class CourseAssignment(Base):
     __tablename__ = "course_assignments"
+    __table_args__ = (
+        UniqueConstraint(
+            "semester_id", "reference_source_key",
+            name="uq_course_assignments_reference_source",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # semester_id 为去规范化字段,方便以学期为范围查询(随排课单位同属一学期)
@@ -86,6 +92,10 @@ class CourseAssignment(Base):
         ForeignKey("rooms.id", ondelete="SET NULL"), nullable=True, index=True
     )
     lock_room: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 参考文件适配器生成的稳定来源键。空值保留给手工创建的教学任务。
+    reference_source_key: Mapped[str | None] = mapped_column(
+        String(160), nullable=True, index=True
+    )
 
     scheduling_unit: Mapped[SchedulingUnit] = relationship(back_populates="assignments")
     subject: Mapped[Subject] = relationship(lazy="selectin")

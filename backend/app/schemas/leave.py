@@ -26,7 +26,7 @@ class AffectedPeriodOut(BaseModel):
 class LeaveRequestIn(BaseModel):
     """时间为空 = 该端点全天。单日 + 起止时间 = 半天假。"""
 
-    teacher_id: int | None = None  # 排课管理员代登时指定;教师自登留空
+    teacher_id: int | None = None  # 教务主任代登时指定;教师自登留空
     leave_type: str
     start_date: date
     start_time: time | None = None

@@ -7,9 +7,10 @@ from tests.api_helpers import create_api_semester
 from tests.conftest import make_user
 
 PW = "password123"
+VALID_DATES = {"start_date": "2026-09-01", "end_date": "2027-01-20"}
 
 
-def login(client, db, roles=(Role.scheduler,), username="s"):
+def login(client, db, roles=(Role.director,), username="s"):
     make_user(db, username, PW, roles=list(roles))
     response = client.post("/api/auth/login", json={"username": username, "password": PW})
     assert response.status_code == 200
@@ -30,7 +31,7 @@ def test_create_semester_starts_from_a_neutral_empty_state(env):
 
     response = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1},
+        json={"academic_year": 2026, "term": 1, **VALID_DATES},
     )
 
     assert response.status_code == 201
@@ -40,6 +41,18 @@ def test_create_semester_starts_from_a_neutral_empty_state(env):
     subjects = client.get(f"/api/subjects?semester_id={body['id']}").json()
     assert subjects == []
     assert client.get(f"/api/semesters/{body['id']}/calendar-exceptions").json() == []
+
+
+def test_create_semester_requires_dates(env):
+    client, db = env
+    login(client, db)
+
+    response = client.post(
+        "/api/semesters",
+        json={"academic_year": 2026, "term": 1},
+    )
+
+    assert response.status_code == 422
 
 
 def test_create_semester_rejects_reversed_dates(env):
@@ -65,12 +78,17 @@ def test_template_fields_are_rejected_by_creation_contracts(env):
 
     semester_response = client.post(
         "/api/semesters",
-        json={"academic_year": 2026, "term": 1, "template_key": "junior_high_draft"},
+        json={
+            "academic_year": 2026,
+            "term": 1,
+            **VALID_DATES,
+            "template_key": "junior_high_draft",
+        },
     )
     assert semester_response.status_code == 422
 
     semester = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters", json={"academic_year": 2026, "term": 1, **VALID_DATES}
     ).json()
     table_response = client.post(
         f"/api/semesters/{semester['id']}/period-tables",
@@ -83,7 +101,7 @@ def test_create_period_table_starts_empty_and_keeps_explicit_shape(env):
     client, db = env
     login(client, db)
     semester = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters", json={"academic_year": 2026, "term": 1, **VALID_DATES}
     ).json()
 
     response = client.post(
@@ -105,7 +123,7 @@ def test_create_period_table_starts_empty_and_keeps_explicit_shape(env):
 def test_create_duplicate_semester_conflict(env):
     client, db = env
     login(client, db)
-    payload = {"academic_year": 2026, "term": 1}
+    payload = {"academic_year": 2026, "term": 1, **VALID_DATES}
     assert client.post("/api/semesters", json=payload).status_code == 201
     assert client.post("/api/semesters", json=payload).status_code == 409
 
@@ -114,7 +132,10 @@ def test_academic_year_outside_supported_range_is_rejected(env):
     client, db = env
     login(client, db)
     for year in (1899, 2101):
-        response = client.post("/api/semesters", json={"academic_year": year, "term": 1})
+        response = client.post(
+            "/api/semesters",
+            json={"academic_year": year, "term": 1, **VALID_DATES},
+        )
         assert response.status_code == 422
 
 
@@ -173,7 +194,7 @@ def test_update_semester_status(env):
     client, db = env
     login(client, db)
     semester = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters", json={"academic_year": 2026, "term": 1, **VALID_DATES}
     ).json()
     response = client.patch(f"/api/semesters/{semester['id']}", json={"status": "active"})
     assert response.status_code == 200
@@ -200,7 +221,10 @@ def test_teacher_cannot_create_semester(env):
     client, db = env
     login(client, db, roles=(Role.teacher,), username="t")
     assert (
-        client.post("/api/semesters", json={"academic_year": 2026, "term": 1}).status_code
+        client.post(
+            "/api/semesters",
+            json={"academic_year": 2026, "term": 1, **VALID_DATES},
+        ).status_code
         == 403
     )
 
@@ -209,7 +233,7 @@ def test_replace_periods_rejects_duplicate_cell(env):
     client, db = env
     login(client, db)
     semester = client.post(
-        "/api/semesters", json={"academic_year": 2026, "term": 1}
+        "/api/semesters", json={"academic_year": 2026, "term": 1, **VALID_DATES}
     ).json()
     table = client.post(
         f"/api/semesters/{semester['id']}/period-tables", json={"name": "空白作息时间表"}

@@ -1,6 +1,6 @@
 # 部署与运维手册
 
-给**学校信息管理者/排课管理员**的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。
+给**学校信息管理者/教务主任**的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。
 
 > `worker` 专跑自动排课(一次可跑好几分钟),`worker-ops` 跑导出、备份、恢复、发送邮件与定时任务。分开的用意是:**排课那几分钟里,你按「导出课表」仍然是立即响应的**。
 

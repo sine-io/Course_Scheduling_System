@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   CalendarDays,
-  ChevronRight,
   CircleHelp,
   LogOut,
   Menu,
@@ -39,10 +38,12 @@ const roleLabels = computed(() => (auth.user?.roles ?? []).map((role) => auth.ro
 const userRoles = computed(() => auth.user?.roles ?? [])
 const schoolName = computed(() => appConfig.config.school_name)
 const userInitial = computed(() => auth.user?.display_name.trim().charAt(0) || '用')
-const semesterOptions = computed(() => semesterContext.semesters.map((semester) => ({
-  label: semester.label,
-  value: semester.id,
-})))
+const semesterOptions = computed(() => semesterContext.semesters
+  .filter((semester) => semester.status !== 'archived')
+  .map((semester) => ({
+    label: semester.label,
+    value: semester.id,
+  })))
 const catalogGroups = computed(() => navigationGroupEntries(userRoles.value))
 
 const routeNavKey = computed(() => String(route.name ?? ''))
@@ -54,16 +55,6 @@ function isActive(item: NavigationEntry): boolean {
     route.query,
   )
 }
-
-const activeItem = computed(() => {
-  const all = catalogGroups.value.flatMap((group) => group.items)
-  return all.find((item) => isActive(item))
-    ?? undefined
-})
-const activeGroup = computed(() => (
-  catalogGroups.value.find((group) => group.items.some((item) => isActive(item)))
-))
-const currentModule = computed(() => activeItem.value?.label || String(route.name ?? '工作台'))
 
 function onNavClick() {
   closeDrawer(isMobile.value)
@@ -157,8 +148,17 @@ async function onLogout() {
 }
 
 async function onSemesterChange(event: Event) {
-  const value = Number((event.target as HTMLSelectElement).value)
+  const select = event.target as HTMLSelectElement
+  const value = Number(select.value)
   if (!Number.isInteger(value) || value <= 0) return
+  const target = semesterOptions.value.find((option) => option.value === value)
+  const accepted = window.confirm(
+    `切换为“${target?.label ?? '所选学期'}”会改变全校用户的当前工作学期，并重新加载当前页面。确定继续吗？`,
+  )
+  if (!accepted) {
+    select.value = String(semesterContext.currentSemesterId ?? '')
+    return
+  }
   try {
     await semesterContext.switchTo(value)
   } catch {
@@ -309,25 +309,7 @@ onBeforeUnmount(() => {
           <Menu :size="19" :stroke-width="1.9" aria-hidden="true" />
         </button>
 
-        <div class="app-breadcrumb" data-testid="shell-breadcrumb" aria-label="当前位置">
-          <span class="app-breadcrumb-root">教务排课</span>
-          <ChevronRight class="app-breadcrumb-separator" :size="14" aria-hidden="true" />
-          <span v-if="activeGroup" class="app-breadcrumb-group">{{ activeGroup.label }}</span>
-          <ChevronRight v-if="activeGroup" class="app-breadcrumb-separator" :size="14" aria-hidden="true" />
-          <strong>{{ currentModule }}</strong>
-        </div>
-
         <div class="app-topbar-actions">
-          <div
-            class="app-school-context"
-            data-testid="shell-school-context"
-            :title="schoolName"
-            :aria-label="`当前学校：${schoolName}`"
-          >
-            <Users :size="16" :stroke-width="1.9" aria-hidden="true" />
-            <span class="app-school-context-copy">{{ schoolName }}</span>
-          </div>
-
           <div
             v-if="semesterContext.loaded"
             class="app-semester-context"
@@ -658,44 +640,6 @@ onBeforeUnmount(() => {
 .app-icon-button.app-menu-button,
 .app-icon-button.app-drawer-close { display: none; }
 
-.app-breadcrumb {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--app-space-1);
-  overflow: hidden;
-  color: var(--app-text-muted);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.app-breadcrumb strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--app-text);
-  font-size: 14px;
-  text-overflow: ellipsis;
-}
-
-.app-breadcrumb-separator { flex: 0 0 auto; color: var(--app-text-faint); }
-
-.app-school-context {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 190px;
-  align-items: center;
-  gap: var(--app-space-1);
-  color: var(--app-text-muted);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.app-school-context-copy {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .app-topbar-actions {
   display: flex;
   min-width: 0;
@@ -850,8 +794,6 @@ onBeforeUnmount(() => {
   .app-nav-icon { width: 38px; height: 32px; }
   .app-sidebar-footer { justify-content: center; padding: var(--app-space-2); }
   .app-topbar { padding: 0 var(--app-space-4); }
-  .app-school-context { max-width: 34px; }
-  .app-school-context-copy,
   .app-semester-caption,
   .app-semester-status { display: none; }
 }
@@ -886,14 +828,8 @@ onBeforeUnmount(() => {
   .app-topbar { gap: var(--app-space-2); padding: 0 var(--app-space-3); }
   .app-icon-button.app-menu-button { display: inline-flex; }
   .app-content { padding: var(--app-space-4) var(--app-space-3) var(--app-space-6); }
-  .app-breadcrumb { flex: 1; }
-  .app-breadcrumb-root,
-  .app-breadcrumb-group,
-  .app-breadcrumb-group + .app-breadcrumb-separator { display: none; }
   .app-profile-copy { max-width: 76px; }
   .app-profile-copy small { font-size: 10px; }
-  .app-school-context { max-width: 34px; }
-  .app-school-context-copy,
   .app-semester-caption,
   .app-semester-status { display: none; }
   .app-semester-context { max-width: 170px; }
@@ -909,7 +845,6 @@ onBeforeUnmount(() => {
   .app-semester-context { max-width: 132px; padding: 0 var(--app-space-1); }
   .app-semester-select,
   .app-semester-label { max-width: 85px; }
-  .app-school-context,
   .app-help-link { display: none; }
   .app-sidebar-help {
     display: grid;

@@ -19,7 +19,7 @@ test('科目管理:勾选主科后列表显示标签,重新加载仍保留', asy
   await page.goto('/basedata')
   await page.locator('.n-base-selection').first().click()
   await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
-  await page.locator('.n-tabs-tab', { hasText: '科目' }).click()
+  await page.getByTestId('manual-section-subjects').click()
 
   // 新增一般科目(不勾主科)
   await page.getByRole('button', { name: '新增科目' }).click()
@@ -42,7 +42,7 @@ test('科目管理:勾选主科后列表显示标签,重新加载仍保留', asy
   await page.reload()
   await page.locator('.n-base-selection').first().click()
   await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
-  await page.locator('.n-tabs-tab', { hasText: '科目' }).click()
+  await page.getByTestId('manual-section-subjects').click()
   await expect(page.getByTestId('sub-major-语文')).toBeVisible()
 
   const subjects = await (await page.request.get(`/api/subjects?semester_id=${sem.id}`)).json()

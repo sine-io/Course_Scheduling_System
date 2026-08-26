@@ -62,14 +62,14 @@ const publicationCheck = {
   checked_at: '2042-08-15T00:00:00Z',
 }
 
-async function mountVersions(role: 'scheduler' | 'director' = 'scheduler') {
+async function mountVersions(role: 'director' | 'teacher' = 'director') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore(pinia)
   auth.user = {
     id: 1,
-    username: 'scheduler',
-    display_name: '排课管理员',
+    username: 'director',
+    display_name: role === 'director' ? '教务主任' : '教师',
     roles: [role],
     must_change_password: false,
   }
@@ -147,8 +147,8 @@ describe('Versions publication confirmation', () => {
     })
   })
 
-  it('keeps a director completeness check read-only', async () => {
-    const wrapper = await mountVersions('director')
+  it('keeps a teacher completeness check read-only', async () => {
+    const wrapper = await mountVersions('teacher')
 
     await wrapper.get('[data-testid="v-check"]').trigger('click')
     await flushPromises()

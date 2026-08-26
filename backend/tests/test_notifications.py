@@ -1,4 +1,4 @@
-"""M4-3:通知发送、确认收到、排课管理员看板、SMTP 设置。
+"""M4-3:通知发送、确认收到、教务主任看板、SMTP 设置。
 
 站内通知永远送达;Email 走 RQ,SMTP 未设置时整个流程照常(仅站内)。
 Email 部分以「假队列」拦截 enqueue,验「该不该寄、寄什么」,不真的连 SMTP。
@@ -31,7 +31,7 @@ def outbox(monkeypatch):
 @pytest.fixture
 def school(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(
         client,
@@ -133,7 +133,7 @@ def test_cannot_acknowledge_someone_elses_notification(school):
     assert client.post(f"/api/notifications/{nid}/acknowledge").status_code == 403
 
 
-# ── 验收②:排课管理员看板 + 再次提醒 ──────────────────────────────
+# ── 验收②:教务主任看板 + 再次提醒 ──────────────────────────────
 def test_board_shows_acknowledgement_status(school):
     client, db, sid = school
     wang, chen = _publish_wang(client, sid)
@@ -211,7 +211,7 @@ def test_smtp_settings_roundtrip_hides_password(env):
 
 
 def test_smtp_settings_require_admin(school):
-    client, _db, _sid = school  # 已登录排课管理员
+    client, _db, _sid = school  # 已登录教务主任
     assert client.get("/api/settings/smtp").status_code == 403
 
 
@@ -240,7 +240,7 @@ def _Teacher():
 
 
 def _prep_teacher_with_email(client, db) -> int:
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sid = create_api_semester(
         client, academic_year=2027, with_periods=False

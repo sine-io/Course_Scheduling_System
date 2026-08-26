@@ -1,11 +1,27 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import { useAuthStore } from '@/stores/auth'
-import { useWizardStore } from '@/stores/wizard'
 import { router } from './index'
 
 describe('router role boundaries', () => {
-  it('allows a director to inspect the wizard but redirects them away from system settings', async () => {
+  it('allows a pure teacher who must change their password to reach the change-password page', async () => {
+    setActivePinia(createPinia())
+    const auth = useAuthStore()
+    auth.user = {
+      id: 6,
+      username: 'new-teacher',
+      display_name: '新教师',
+      roles: ['teacher'],
+      must_change_password: true,
+    }
+    auth.loaded = true
+
+    await router.push('/change-password')
+
+    expect(router.currentRoute.value.name).toBe('change-password')
+  })
+
+  it('allows a director to use core pages but redirects them away from system settings', async () => {
     setActivePinia(createPinia())
     const auth = useAuthStore()
     auth.user = {
@@ -16,11 +32,6 @@ describe('router role boundaries', () => {
       must_change_password: false,
     }
     auth.loaded = true
-    useWizardStore().loaded = true
-
-    await router.push('/wizard')
-    expect(router.currentRoute.value.name).toBe('wizard')
-
     await router.push('/settings/system')
     expect(router.currentRoute.value.name).toBe('dashboard')
 
@@ -42,7 +53,6 @@ describe('router role boundaries', () => {
       must_change_password: false,
     }
     auth.loaded = true
-    useWizardStore().loaded = true
 
     await router.push('/')
     expect(router.currentRoute.value.name).toBe('dashboard')
@@ -63,18 +73,17 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('timetable-query')
   })
 
-  it('keeps a scheduler-teacher union in the daily management view', async () => {
+  it('keeps a director-teacher union in the daily management view', async () => {
     setActivePinia(createPinia())
     const auth = useAuthStore()
     auth.user = {
       id: 3,
-      username: 'scheduler-teacher',
+      username: 'director-teacher',
       display_name: '兼任教师',
-      roles: ['scheduler', 'teacher'],
+      roles: ['director', 'teacher'],
       must_change_password: false,
     }
     auth.loaded = true
-    useWizardStore().loaded = true
 
     await router.push('/substitutions')
     expect(router.currentRoute.value.name).toBe('substitutions')
@@ -82,29 +91,17 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('leaves')
   })
 
-  it('respects an explicit save-and-exit pause without marking setup complete', async () => {
+  it('does not force a director away from the dashboard when setup is incomplete', async () => {
     setActivePinia(createPinia())
     const auth = useAuthStore()
     auth.user = {
       id: 5,
-      username: 'scheduler',
-      display_name: '排课管理员',
-      roles: ['scheduler'],
+      username: 'director',
+      display_name: '教务主任',
+      roles: ['director'],
       must_change_password: false,
     }
     auth.loaded = true
-    const wizard = useWizardStore()
-    wizard.loaded = true
-    wizard.state = {
-      current_step: 1,
-      resume_step: 1,
-      completed: false,
-      paused: true,
-      semester_id: 8,
-      total_steps: 4,
-      has_semesters: true,
-    }
-
     await router.push('/')
 
     expect(router.currentRoute.value.name).toBe('dashboard')
@@ -121,7 +118,6 @@ describe('router role boundaries', () => {
       must_change_password: false,
     }
     auth.loaded = true
-    useWizardStore().loaded = true
 
     await router.push('/notification-board')
     expect(router.currentRoute.value.name).toBe('notifications')

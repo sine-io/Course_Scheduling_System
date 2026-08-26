@@ -169,7 +169,7 @@ def _restore(
     # 恢复前先关掉本请求的 session。pg_restore --clean 会中止数据库上的所有连接,包含
     # 验证身份时建立的连接;而 FastAPI 的 yield 依赖是在**响应发送后**才收尾,届时
     # db.close() 会通过已经失效的连接发送 ROLLBACK,在日志中输出一段 AdminShutdown
-    # traceback——响应与数据都是对的,但刚按下「恢复」的排课管理员看到那段红字,只会以为
+    # traceback——响应与数据都是对的,但刚按下「恢复」的教务主任看到那段红字,只会以为
     # 恢复失败了。恢复期间本来就用不到这个数据库会话(审计记录通过新连接写入)。
     # 关闭前先把后续要用的字段取成标量值,避免 user 成为 detached instance。
     actor_id, actor_name = user.id, user.username

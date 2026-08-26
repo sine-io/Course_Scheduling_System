@@ -19,7 +19,7 @@ class PeriodIn(BaseModel):
 
 
 class PeriodSetupPatternIn(BaseModel):
-    """向导中一行节次的定义；同一行可覆盖一个或多个工作日。"""
+    """作息配置器中一行节次的定义；同一行可覆盖一个或多个工作日。"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -125,8 +125,8 @@ class SemesterCreate(BaseModel):
 
     academic_year: int = Field(ge=1900, le=2100)
     term: int = Field(ge=1, le=2)
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: date
+    end_date: date
 
     @model_validator(mode="after")
     def _dates_in_order(self) -> "SemesterCreate":
@@ -147,8 +147,8 @@ class SemesterCopyRequest(BaseModel):
     term: int = Field(ge=1, le=2)
     # 新学期的起止日:不能沿用来源学期(那是上学期的日期)。少了它,请假展开、今日看板、
     # 代课的「已上过」判定全部失准,而且页面上看不出哪里不对(M6-4)。
-    start_date: date | None = None
-    end_date: date | None = None
+    start_date: date
+    end_date: date
     period_tables: bool = True
     subjects: bool = True
     teachers: bool = True
@@ -179,6 +179,16 @@ class SemesterListItem(BaseModel):
 
 class SemesterOut(SemesterListItem):
     period_tables: list[PeriodTableOut] = []
+
+
+class SemesterDataSummary(BaseModel):
+    """当前学期基础数据的只读数量摘要。"""
+
+    semester_id: int
+    subjects: int
+    teachers: int
+    classes: int
+    rooms: int
 
 
 class SemesterContextOut(BaseModel):

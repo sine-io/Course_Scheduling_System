@@ -103,7 +103,7 @@ test.describe('代课课时统计', () => {
     for (const y of YEARS) await deleteSemesterByYearTerm(page, y, 1)
   })
 
-  test('排课管理员看月结汇总与明细,可导出 Excel;教师只看自己', async ({ page }) => {
+  test('教务主任看月结汇总与明细,可导出 Excel;教师只看自己', async ({ page }) => {
     test.setTimeout(180_000)
     await login(page)
     await deleteSemesterByYearTerm(page, 2057, 1)
@@ -112,7 +112,7 @@ test.describe('代课课时统计', () => {
     await seed(page, sem.id, chenId)
     await ensureTeacherPassword(page)
 
-    // ── 排课管理员:请假当月的汇总 + 明细 ──
+    // ── 教务主任:请假当月的汇总 + 明细 ──
     await login(page)
     await page.goto(`/substitution-stats?semester_id=${sem.id}${STATS_QUERY}`)
     const sumRow = page.getByTestId('stats-summary-row').filter({ hasText: '陈老师' }).first()

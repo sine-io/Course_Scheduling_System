@@ -103,7 +103,7 @@ describe('Notifications', () => {
   })
 
   it('shows the confirmation board as an operator-only view on the same page', async () => {
-    const { fetchMock, wrapper } = await mountNotifications('scheduler', '/notifications?view=board')
+    const { fetchMock, wrapper } = await mountNotifications('director', '/notifications?view=board')
 
     expect(wrapper.find('[data-testid="notifications-tab-board"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="notification-board-page"]').exists()).toBe(true)

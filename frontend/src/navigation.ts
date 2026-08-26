@@ -25,7 +25,7 @@ import {
   DAILY_USER_ROLES,
 } from '@/permissions'
 
-export type NavigationRole = 'admin' | 'scheduler' | 'director' | 'teacher'
+export type NavigationRole = 'admin' | 'director' | 'teacher'
 export type NavigationKey =
   | 'workspace-home'
   | 'dashboard'
@@ -33,6 +33,7 @@ export type NavigationKey =
   | 'calendar'
   | 'basedata'
   | 'assignments'
+  | 'scheduling-settings'
   | 'auto-schedule'
   | 'workbench'
   | 'versions'
@@ -94,9 +95,10 @@ export const NAVIGATION_CATALOG: readonly NavigationEntry[] = [
   entry('basedata', '基础数据', '维护教师、班级、科目和教室/场地。', Users, '学期准备', CORE_VIEW_ROLES, { name: 'basedata' }),
 
   entry('assignments', '教学任务', '维护每周课时、教师和班级的教学安排。', ClipboardList, '排课主流程', CORE_VIEW_ROLES, { name: 'assignments' }),
-  entry('auto-schedule', '自动排课', '查看前置检查结果，并由排课管理员运行自动排课。', WandSparkles, '排课主流程', CORE_VIEW_ROLES, { name: 'auto-schedule' }),
+  entry('auto-schedule', '自动排课', '查看前置检查结果并运行自动排课。', WandSparkles, '排课主流程', CORE_VIEW_ROLES, { name: 'auto-schedule' }),
   entry('workbench', '排课工作台', '查看或编辑课表草稿。', BookOpen, '排课主流程', CORE_VIEW_ROLES, { name: 'workbench' }),
   entry('versions', '版本与发布', '检查课表版本、完整性和发布记录。', History, '排课主流程', CORE_VIEW_ROLES, { name: 'versions' }),
+  entry('scheduling-settings', '排课规则', '维护排课所需的课时和约束参数。', Settings2, '排课主流程', CORE_VIEW_ROLES, { name: 'scheduling-settings' }),
   entry('timetable-query', '课表查询', '查询已发布的班级、教师和教室课表。', Table2, '排课主流程', DAILY_USER_ROLES, { name: 'timetable-query' }),
 
   entry('leaves', '请假登记', '登记本人或全校教师请假并查看受影响节次。', ClipboardClock, '日常运行', DAILY_USER_ROLES, { name: 'leaves' }),

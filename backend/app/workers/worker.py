@@ -5,7 +5,7 @@
     python -m app.workers.worker           # default:自动排课(可占住数分钟)
     python -m app.workers.worker ops       # ops:导出 / 备份 / 恢复 / 发送邮件 + 定时任务
 
-分开的理由是快慢任务不该互相堵住:合在一条队列时,排课一开跑,排课管理员按导出就排在后面
+分开的理由是快慢任务不该互相堵住:合在一条队列时,排课一开跑,教务主任按导出就排在后面
 等到超时失败。**排课永远只走 default**,ops worker 因此不会加载求解引擎,内存预算低得多。
 
 调度器(`with_scheduler=True`)只挂在 ops worker:定时任务(每日备份、心跳)都排进 ops,

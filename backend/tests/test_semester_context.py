@@ -12,7 +12,7 @@ from tests.conftest import make_user
 PW = "password123"
 
 
-def login(client, db, roles=(Role.scheduler,), username="context-user"):
+def login(client, db, roles=(Role.director,), username="context-user"):
     make_user(db, username, PW, roles=list(roles))
     response = client.post("/api/auth/login", json={"username": username, "password": PW})
     assert response.status_code == 200
@@ -26,7 +26,7 @@ def context(client):
 
 def test_first_semester_becomes_current_and_context_is_visible_to_every_role(env):
     client, db = env
-    login(client, db, username="scheduler")
+    login(client, db, username="director")
 
     first = create_api_semester(client, academic_year=2026)
     second = create_api_semester(client, academic_year=2027, with_periods=False)
@@ -38,10 +38,10 @@ def test_first_semester_becomes_current_and_context_is_visible_to_every_role(env
     assert context(client)["current_semester"]["id"] == first["id"]
 
     client.post("/api/auth/logout")
-    login(client, db, roles=(Role.director,), username="director")
+    login(client, db, roles=(Role.director,), username="director-view")
     director_context = context(client)
     assert director_context["current_semester"]["id"] == first["id"]
-    assert director_context["can_switch"] is False
+    assert director_context["can_switch"] is True
 
     client.post("/api/auth/logout")
     login(client, db, roles=(Role.teacher,), username="teacher")
@@ -50,7 +50,7 @@ def test_first_semester_becomes_current_and_context_is_visible_to_every_role(env
     assert teacher_context["can_switch"] is False
 
 
-def test_scheduler_switches_current_semester_and_stale_switch_is_rejected(env):
+def test_director_switches_current_semester_and_stale_switch_is_rejected(env):
     client, db = env
     login(client, db)
     first = create_api_semester(client, academic_year=2026)
@@ -77,7 +77,7 @@ def test_scheduler_switches_current_semester_and_stale_switch_is_rejected(env):
 
 def test_admin_can_switch_but_teacher_cannot(env):
     client, db = env
-    login(client, db, username="scheduler")
+    login(client, db, username="director")
     first = create_api_semester(client, academic_year=2026)
     second = create_api_semester(client, academic_year=2027, with_periods=False)
     revision = context(client)["revision"]
@@ -101,9 +101,9 @@ def test_admin_can_switch_but_teacher_cannot(env):
     assert switched.json()["current_semester"]["id"] == second["id"]
 
 
-def test_director_cannot_switch_and_archived_semester_is_read_only(env):
+def test_director_switches_and_archived_semester_is_read_only(env):
     client, db = env
-    login(client, db, roles=(Role.scheduler,), username="scheduler")
+    login(client, db, roles=(Role.director,), username="director")
     first = create_api_semester(client, academic_year=2026)
     second = create_api_semester(client, academic_year=2027, with_periods=False)
     revision = context(client)["revision"]
@@ -116,16 +116,17 @@ def test_director_cannot_switch_and_archived_semester_is_read_only(env):
         json={"semester_id": second["id"], "expected_revision": revision},
     ).status_code == 200
 
-    client.post("/api/auth/logout")
-    login(client, db, roles=(Role.director,), username="director")
-    denied = client.put(
+    switched_again = client.put(
+        "/api/semester-context",
+        json={"semester_id": first["id"], "expected_revision": revision + 1},
+    )
+    assert switched_again.status_code == 409
+    assert switched_again.json()["detail"]["code"] == "semester_read_only"
+
+    assert client.put(
         "/api/semester-context",
         json={"semester_id": second["id"], "expected_revision": revision + 1},
-    )
-    assert denied.status_code == 403
-
-    client.post("/api/auth/logout")
-    login(client, db, username="scheduler-again")
+    ).status_code == 200
     response = client.post(f"/api/subjects?semester_id={first['id']}", json={"name": "历史科目"})
     assert response.status_code == 409
     assert response.json()["detail"]["code"] == "semester_read_only"
@@ -309,7 +310,12 @@ def test_historical_and_archived_semesters_can_be_copied_without_becoming_curren
 
     historical_copy = client.post(
         f"/api/semesters/{first['id']}/copy",
-        json={"academic_year": 2028, "term": 1},
+        json={
+            "academic_year": 2028,
+            "term": 1,
+            "start_date": "2028-09-01",
+            "end_date": "2029-01-20",
+        },
     )
     assert historical_copy.status_code == 201, historical_copy.text
     assert context(client)["current_semester"]["id"] == second["id"]
@@ -335,7 +341,12 @@ def test_historical_and_archived_semesters_can_be_copied_without_becoming_curren
 
     archived_copy = client.post(
         f"/api/semesters/{first['id']}/copy",
-        json={"academic_year": 2029, "term": 1},
+        json={
+            "academic_year": 2029,
+            "term": 1,
+            "start_date": "2029-09-01",
+            "end_date": "2030-01-20",
+        },
     )
     assert archived_copy.status_code == 201, archived_copy.text
     assert context(client)["current_semester"]["id"] == second["id"]

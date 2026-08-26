@@ -22,7 +22,6 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   role_display_names: {
     admin: '系统管理员',
     director: '教务主任',
-    scheduler: '排课管理员',
     teacher: '教师',
   },
   academic_year: {

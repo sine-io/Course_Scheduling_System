@@ -11,9 +11,9 @@ PW = "password123"
 
 @pytest.fixture
 def populated(env):
-    """已登录排课管理员 + 一个含完整基础数据的来源学期。返回 (client, source_id)。"""
+    """已登录教务主任 + 一个含完整基础数据的来源学期。返回 (client, source_id)。"""
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
     sem = create_api_semester(client)
     sid = sem["id"]
@@ -42,7 +42,13 @@ def populated(env):
 
 
 def _copy(client, sid, **kwargs):
-    body = {"academic_year": 2027, "term": 1, **kwargs}
+    body = {
+        "academic_year": 2027,
+        "term": 1,
+        "start_date": "2027-09-01",
+        "end_date": "2028-01-20",
+        **kwargs,
+    }
     return client.post(f"/api/semesters/{sid}/copy", json=body)
 
 

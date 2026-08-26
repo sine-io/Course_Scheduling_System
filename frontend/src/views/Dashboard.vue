@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import {
   ArrowUpRight, Bell, BookOpen, CalendarDays, ClipboardClock, ClipboardList, DoorOpen,
-  GraduationCap, History, RefreshCw, Table2, Users,
+  GraduationCap, RefreshCw, Table2, Users,
 } from '@lucide/vue'
 import { NButton, NEmpty, NSpin, NStatistic, NTag } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { STATUS_LABELS } from '@/api/semesters'
-import type { SemesterListItem } from '@/api/semesters'
+import { getSemesterSummary, STATUS_LABELS } from '@/api/semesters'
+import type { SemesterDataSummary, SemesterListItem } from '@/api/semesters'
 import { getDailyBoard } from '@/api/substitutionLog'
 import type { DailyBoard } from '@/api/substitutionLog'
-import { getSemesterSummary, getWizardState } from '@/api/wizard'
-import type { SemesterSummary, WizardState } from '@/api/wizard'
 import { canEditCore, canOperateDaily, canViewCore } from '@/permissions'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
@@ -19,9 +17,8 @@ import { useSemesterContextStore } from '@/stores/semesterContext'
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 const semester = ref<SemesterListItem | null>(null)
-const summary = ref<SemesterSummary | null>(null)
+const summary = ref<SemesterDataSummary | null>(null)
 const board = ref<DailyBoard | null>(null)
-const wizardState = ref<WizardState | null>(null)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const summaryError = ref<string | null>(null)
@@ -49,13 +46,6 @@ const dashboardShortcuts = computed(() => {
       { key: 'notifications', label: '通知', description: '阅读通知并确认本人收到的消息。', route: { name: 'notifications' }, icon: Bell },
     ]
   }
-  if (auth.hasRole('director') && !auth.hasRole('scheduler') && !auth.hasRole('admin')) {
-    return [
-      { key: 'timetable-query', label: '课表查询', description: '查询已发布的班级、教师和教室课表。', route: { name: 'timetable-query' }, icon: Table2 },
-      { key: 'daily-board', label: '今日看板', description: '查看调课与代课安排。', route: { name: 'daily-board' }, icon: CalendarDays },
-      { key: 'versions', label: '版本与发布', description: '检查课表版本、完整性和发布记录。', route: { name: 'versions' }, icon: History },
-    ]
-  }
   return [
     { key: 'workbench', label: '排课工作台', description: '继续处理排课草稿。', route: { name: 'workbench' }, icon: BookOpen },
     { key: 'assignments', label: '教学任务', description: '维护课程与课时。', route: { name: 'assignments' }, icon: ClipboardList },
@@ -69,17 +59,6 @@ const boardDateLabel = computed(() => (
 const pendingCount = computed(() => (
   board.value ? board.value.entries.filter((entry) => !entry.disposed).length : 0
 ))
-const shouldResumeWizard = computed(() => (
-  !!semester.value
-  && canManageCore.value
-  && !!wizardState.value
-  && !wizardState.value.completed
-))
-const resumeStepLabel = computed(() => {
-  const labels = ['学校与学期', '基础数据', '作息安排', '完成检查']
-  const index = wizardState.value?.resume_step ?? 0
-  return labels[Math.max(0, Math.min(index, labels.length - 1))]
-})
 
 const semesterStatusLabel = computed(() => (
   semester.value ? STATUS_LABELS[semester.value.status] : ''
@@ -101,18 +80,16 @@ async function loadDashboard() {
   semester.value = null
   summary.value = null
   board.value = null
-  wizardState.value = null
 
   try {
     await semesterContext.load()
     semester.value = semesterContext.currentSemester
     if (!semester.value) return
-    const [summaryResult, boardResult, wizardResult] = await Promise.allSettled([
+    const [summaryResult, boardResult] = await Promise.allSettled([
       canViewSummary.value ? getSemesterSummary(semester.value.id) : Promise.resolve(null),
       canOperateDaily(auth.user?.roles)
         ? getDailyBoard(semester.value.id)
         : Promise.resolve(null),
-      canManageCore.value ? getWizardState() : Promise.resolve(null),
     ])
 
     if (summaryResult.status === 'fulfilled' && summaryResult.value) {
@@ -127,23 +104,11 @@ async function loadDashboard() {
       boardError.value = '无法读取今日调课与代课。'
     }
 
-    if (wizardResult.status === 'fulfilled' && isWizardState(wizardResult.value)) {
-      wizardState.value = wizardResult.value
-    }
   } catch {
     loadError.value = '无法读取仪表盘数据，请稍后重试。'
   } finally {
     loading.value = false
   }
-}
-
-function isWizardState(value: unknown): value is WizardState {
-  return !!value
-    && typeof value === 'object'
-    && 'completed' in value
-    && typeof value.completed === 'boolean'
-    && 'resume_step' in value
-    && typeof value.resume_step === 'number'
 }
 
 async function retrySummary() {
@@ -154,7 +119,6 @@ async function retrySummary() {
   try {
     summary.value = await getSemesterSummary(semester.value.id)
   } catch {
-    summary.value = null
     summaryError.value = '无法读取学期摘要，请稍后重试。'
   } finally {
     summaryLoading.value = false
@@ -178,19 +142,6 @@ onMounted(loadDashboard)
         <ArrowUpRight :size="15" aria-hidden="true" />
       </RouterLink>
     </header>
-
-    <section v-if="shouldResumeWizard" class="dashboard-setup-banner" data-testid="dash-setup-resume">
-      <div>
-        <p class="dashboard-eyebrow">{{ '当前学期设置' }}</p>
-        <strong>{{ `基础设置尚未完成 · 下一步：${resumeStepLabel}` }}</strong>
-        <span>{{ '可以从上次保存的位置继续，已完成的数据不会被重复创建。' }}</span>
-      </div>
-      <RouterLink class="dashboard-setup-link" :to="{ name: 'wizard' }">
-        <RefreshCw :size="15" aria-hidden="true" />
-        {{ '继续设置' }}
-        <ArrowUpRight :size="14" aria-hidden="true" />
-      </RouterLink>
-    </section>
 
     <section v-if="loading" class="dashboard-state" data-testid="dash-loading" role="status" aria-live="polite">
       <n-spin size="small" />
@@ -271,10 +222,10 @@ onMounted(loadDashboard)
       </section>
 
       <section v-else class="dashboard-panel dashboard-empty-panel">
-        <n-empty :description="'尚未创建任何学期数据'">
+        <n-empty :description="canManageCore ? '尚未创建任何学期数据' : '尚未建立当前工作学期，请联系教务主任'">
           <template v-if="canManageCore" #extra>
-            <RouterLink class="dashboard-primary-link" :to="{ name: 'wizard' }">
-              {{ '前往设置向导' }}
+            <RouterLink class="dashboard-primary-link" :to="{ name: 'semesters' }">
+              {{ '创建第一个学期' }}
             </RouterLink>
           </template>
         </n-empty>
@@ -377,13 +328,6 @@ onMounted(loadDashboard)
 .dashboard-primary-link { display: inline-flex; min-height: 36px; align-items: center; justify-content: center; gap: 7px; border-radius: var(--app-radius-sm); font-size: 13px; font-weight: 650; text-decoration: none; }
 .dashboard-header-link { padding: 0 11px; border: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-text); }
 .dashboard-header-link:hover { border-color: var(--app-primary-border); background: var(--app-primary-soft); }
-.dashboard-setup-banner { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border: 1px solid var(--app-primary-border); border-left: 4px solid var(--app-primary); border-radius: var(--app-radius-sm); background: var(--app-primary-soft); }
-.dashboard-setup-banner > div { display: grid; min-width: 0; gap: 3px; }
-.dashboard-setup-banner .dashboard-eyebrow { margin-bottom: 1px; }
-.dashboard-setup-banner strong { overflow-wrap: anywhere; font-size: 14px; }
-.dashboard-setup-banner span { color: var(--app-text-muted); font-size: 12px; line-height: 1.5; }
-.dashboard-setup-link { display: inline-flex; min-height: 34px; flex: 0 0 auto; align-items: center; gap: 6px; padding: 0 11px; border: 1px solid var(--app-primary); border-radius: var(--app-radius-sm); background: var(--app-surface); color: var(--app-primary-strong); font-size: 13px; font-weight: 650; text-decoration: none; }
-.dashboard-setup-link:hover { background: var(--app-primary); color: var(--app-on-primary); }
 .dashboard-panel,
 .dashboard-shortcuts { min-width: 0; border: 1px solid var(--app-border); border-radius: var(--app-radius-md); background: var(--app-surface); box-shadow: var(--app-shadow-sm); }
 .dashboard-panel { padding: 22px; }
@@ -439,8 +383,6 @@ onMounted(loadDashboard)
 @media (max-width: 520px) {
   .dashboard-header { align-items: flex-start; flex-direction: column; }
   .dashboard-header h1 { font-size: 25px; }
-  .dashboard-setup-banner { align-items: flex-start; flex-direction: column; }
-  .dashboard-setup-link { align-self: flex-start; }
   .dashboard-panel { padding: 18px 16px; }
   .dashboard-summary-grid { gap: 8px; }
   .dashboard-metric { align-items: flex-start; flex-direction: column; gap: 7px; padding: 11px; }

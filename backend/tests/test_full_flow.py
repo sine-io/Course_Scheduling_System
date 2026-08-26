@@ -71,7 +71,7 @@ def _pick_teacher_and_weekday(db, published):
 def test_full_pipeline_per_track(name, builder, db):
     fx = builder(db)
     sid = fx.semester_id
-    scheduler = make_user(db, f"sched_{name}", roles=[Role.scheduler])
+    scheduler = make_user(db, f"sched_{name}", roles=[Role.director])
 
     # 学期起止(请假登记需要);fixture 模板未设。
     fx.semester.start_date = _SEM_START

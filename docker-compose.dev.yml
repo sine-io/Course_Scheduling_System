@@ -26,6 +26,8 @@ services:
     environment:
       # 开发时打开互动式 API 文档，由前端开发服务器代理 /api；正式部署默认关闭
       API_DOCS_ENABLED: "true"
+      # 开发前端通过 HTTP 访问；不要继承正式 HTTPS 环境的 Secure cookie 配置。
+      COOKIE_SECURE: ${DEV_COOKIE_SECURE:-false}
     volumes:
       - ./backend:/app
       - backups:/backups

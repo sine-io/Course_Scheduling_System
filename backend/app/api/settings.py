@@ -1,4 +1,4 @@
-"""全局系统设置：SMTP 发送邮件、学校设置和排课规则。管理员专用。"""
+"""系统设置与学校级排课规则。"""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -15,6 +15,7 @@ from app.services import settings as app_settings
 router = APIRouter(tags=["settings"])
 
 admin_only = require_roles(Role.admin)
+scheduling_manager = require_roles(Role.director)
 
 
 class SchoolSettings(BaseModel):
@@ -84,13 +85,15 @@ def put_school(
 
 
 @router.get("/settings/scheduling", response_model=SchedulingSettings)
-def get_scheduling(db: Session = Depends(get_db), _: User = Depends(admin_only)):
+def get_scheduling(db: Session = Depends(get_db), _: User = Depends(scheduling_manager)):
     return SchedulingSettings(max_overtime=app_settings.max_overtime(db))
 
 
 @router.put("/settings/scheduling", response_model=SchedulingSettings)
 def put_scheduling(
-    body: SchedulingSettings, db: Session = Depends(get_db), user: User = Depends(admin_only)
+    body: SchedulingSettings,
+    db: Session = Depends(get_db),
+    user: User = Depends(scheduling_manager),
 ):
     app_settings.save_max_overtime(db, body.max_overtime)
     db.add(AuditLog(

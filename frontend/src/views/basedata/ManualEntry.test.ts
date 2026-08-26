@@ -30,25 +30,41 @@ const subject = {
 async function mountEntry(
   canEdit = true,
   initialSection: 'subjects' | 'teachers' | 'classes' | 'rooms' = 'subjects',
+  canDelete = false,
+  canManageAccounts = false,
+  showReadonlyNotice = true,
 ) {
   const Host = {
     render: () => h(NMessageProvider, null, {
-      default: () => h(ManualEntry, { semesterId: 8, canEdit, initialSection }),
+      default: () => h(ManualEntry, {
+        semesterId: 8,
+        canEdit,
+        canDelete,
+        canManageAccounts,
+        initialSection,
+        showReadonlyNotice,
+      }),
     }),
   }
   const wrapper = mount(Host, {
     global: {
       stubs: {
         SubjectsTab: {
-          props: ['canEdit'],
-          template: '<div data-testid="subjects-child">{{ String(canEdit) }}</div>',
+          props: ['canEdit', 'canDelete'],
+          template: '<div data-testid="subjects-child">{{ String(canEdit) }} / {{ String(canDelete) }}</div>',
         },
         TeachersTab: {
-          props: ['canEdit', 'canManageAccounts'],
-          template: '<div data-testid="teachers-child">{{ String(canEdit) }} / {{ String(canManageAccounts) }}</div>',
+          props: ['canEdit', 'canDelete', 'canManageAccounts'],
+          template: '<div data-testid="teachers-child">{{ String(canEdit) }} / {{ String(canDelete) }} / {{ String(canManageAccounts) }}</div>',
         },
-        ClassesTab: { template: '<div data-testid="classes-child" />' },
-        RoomsTab: { template: '<div data-testid="rooms-child" />' },
+        ClassesTab: {
+          props: ['canDelete'],
+          template: '<div data-testid="classes-child">{{ String(canDelete) }}</div>',
+        },
+        RoomsTab: {
+          props: ['canDelete'],
+          template: '<div data-testid="rooms-child">{{ String(canDelete) }}</div>',
+        },
       },
     },
   })
@@ -73,6 +89,8 @@ describe('ManualEntry', () => {
   it('按引用顺序显示真实完成状态，教室为可选项', async () => {
     const wrapper = await mountEntry()
 
+    expect(wrapper.find('.n-tabs').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('少量数据')
     expect(wrapper.get('[data-testid="manual-section-subjects"]').text()).toContain('0 条 · 待补充')
     expect(wrapper.get('[data-testid="manual-section-teachers"]').text()).toContain('0 条 · 待补充')
     expect(wrapper.get('[data-testid="manual-section-classes"]').text()).toContain('0 条 · 待补充')
@@ -81,10 +99,24 @@ describe('ManualEntry', () => {
     expect(mocks.createSubject).not.toHaveBeenCalled()
   })
 
-  it('支持以指定页签作为初始录入位置', async () => {
+  it('支持以指定分类作为初始录入位置', async () => {
     const wrapper = await mountEntry(true, 'rooms')
 
     expect(wrapper.get('[data-testid="manual-section-rooms"]').classes()).toContain('active')
+    expect(wrapper.get('[data-testid="manual-section-rooms"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="manual-section-panel"]').attributes('aria-labelledby'))
+      .toBe(wrapper.get('[data-testid="manual-section-rooms"]').attributes('id'))
+  })
+
+  it('上方分类支持方向键切换当前内容', async () => {
+    const wrapper = await mountEntry()
+
+    await wrapper.get('[data-testid="manual-section-subjects"]').trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="manual-section-teachers"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="teachers-child"]')).toBeTruthy()
+    expect(wrapper.find('[data-testid="subjects-child"]').exists()).toBe(false)
   })
 
   it('逐项展示常用科目，确认前不写入，确认后只新增所选项', async () => {
@@ -111,7 +143,7 @@ describe('ManualEntry', () => {
     await wrapper.get('[data-testid="manual-section-teachers"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="manual-teachers-dependency"]').text()).toContain('先添加至少一个科目')
-    expect(wrapper.get('[data-testid="teachers-child"]').text()).toContain('true / false')
+    expect(wrapper.get('[data-testid="teachers-child"]').text()).toContain('true / false / false')
 
     await wrapper.get('[data-testid="manual-go-subjects"]').trigger('click')
     await flushPromises()
@@ -131,13 +163,61 @@ describe('ManualEntry', () => {
     expect(wrapper.get('[data-testid="manual-common-语文"]').classes()).toContain('n-checkbox--disabled')
   })
 
+  it('规范科目名称会匹配常用科目的用户侧别名', async () => {
+    mocks.listSubjects.mockResolvedValue([
+      { ...subject, id: 2, name: '生物学', domain: '自然科学' },
+      { ...subject, id: 3, name: '信息科技', domain: '技术' },
+      { ...subject, id: 4, name: '体育与健康', domain: '艺术与健康' },
+    ])
+    const wrapper = await mountEntry()
+
+    for (const name of ['生物', '信息技术', '体育']) {
+      const checkbox = wrapper.get(`[data-testid="manual-common-${name}"]`)
+      expect(checkbox.text()).toContain('已存在')
+      expect(checkbox.classes()).toContain('n-checkbox--disabled')
+    }
+  })
+
+  it('常用科目的别名新增时写入规范名称', async () => {
+    const wrapper = await mountEntry()
+
+    await wrapper.get('[data-testid="manual-common-生物"]').trigger('click')
+    await wrapper.get('[data-testid="manual-common-信息技术"]').trigger('click')
+    await wrapper.get('[data-testid="manual-common-体育"]').trigger('click')
+    await wrapper.get('[data-testid="manual-common-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.createSubject).toHaveBeenCalledWith(8, expect.objectContaining({ name: '生物学' }))
+    expect(mocks.createSubject).toHaveBeenCalledWith(8, expect.objectContaining({ name: '信息科技' }))
+    expect(mocks.createSubject).toHaveBeenCalledWith(8, expect.objectContaining({ name: '体育与健康' }))
+  })
+
   it('只读角色可以查看状态，但不能确认写入', async () => {
     const wrapper = await mountEntry(false)
 
     expect(wrapper.get('[data-testid="manual-readonly"]').text()).toContain('只能查看')
-    expect(wrapper.get('[data-testid="subjects-child"]').text()).toBe('false')
+    expect(wrapper.get('[data-testid="subjects-child"]').text()).toBe('false / false')
     expect(wrapper.get('[data-testid="manual-common-confirm"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="manual-common-语文"]').trigger('click')
     expect(mocks.createSubject).not.toHaveBeenCalled()
+  })
+
+  it('维护页可以向各分类透传管理员删除与账号绑定权限', async () => {
+    const wrapper = await mountEntry(true, 'subjects', true, true, false)
+
+    expect(wrapper.find('[data-testid="manual-readonly"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="subjects-child"]').text()).toBe('true / true')
+
+    await wrapper.get('[data-testid="manual-section-teachers"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="teachers-child"]').text()).toBe('true / true / true')
+
+    await wrapper.get('[data-testid="manual-section-classes"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="classes-child"]').text()).toBe('true')
+
+    await wrapper.get('[data-testid="manual-section-rooms"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="rooms-child"]').text()).toBe('true')
   })
 })

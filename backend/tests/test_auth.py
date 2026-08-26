@@ -54,7 +54,7 @@ def test_me_requires_auth(env):
 
 def test_me_authenticated(env):
     client, db = env
-    make_user(db, "scheduler1", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler1", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "scheduler1", "password": PW})
     resp = client.get("/api/auth/me")
     assert resp.status_code == 200
@@ -77,7 +77,7 @@ def test_protected_requires_auth(env):
 
 def test_must_change_password_blocks_then_allows(env):
     client, db = env
-    make_user(db, "newbie", PW, roles=[Role.scheduler], must_change_password=True)
+    make_user(db, "newbie", PW, roles=[Role.director], must_change_password=True)
     login = client.post("/api/auth/login", json={"username": "newbie", "password": PW})
     assert login.status_code == 200
     assert login.json()["must_change_password"] is True
@@ -95,7 +95,7 @@ def test_must_change_password_blocks_then_allows(env):
 
 def test_change_password_revokes_old_sessions(env):
     client, db = env
-    make_user(db, "u", PW, roles=[Role.scheduler])
+    make_user(db, "u", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "u", "password": PW})
     old_cookie = client.cookies.get("session")
     assert old_cookie is not None
@@ -134,23 +134,23 @@ def test_change_password_wrong_old(env):
     assert resp.status_code == 400
 
 
-def test_rbac_teacher_forbidden_on_scheduler(env):
+def test_rbac_teacher_forbidden_on_director_endpoint(env):
     client, db = env
     make_user(db, "t", PW, roles=[Role.teacher])
     client.post("/api/auth/login", json={"username": "t", "password": PW})
-    assert client.get("/api/_scheduler").status_code == 403
+    assert client.get("/api/_director").status_code == 403
 
 
-def test_rbac_scheduler_allowed(env):
+def test_rbac_director_allowed(env):
     client, db = env
-    make_user(db, "s", PW, roles=[Role.scheduler])
+    make_user(db, "s", PW, roles=[Role.director])
     client.post("/api/auth/login", json={"username": "s", "password": PW})
-    assert client.get("/api/_scheduler").status_code == 200
+    assert client.get("/api/_director").status_code == 200
 
 
 def test_rbac_admin_bypasses_role_check(env):
     client, db = env
     make_user(db, "admin", PW, roles=[Role.admin])
     client.post("/api/auth/login", json={"username": "admin", "password": PW})
-    # admin 未持有 scheduler 角色,但为超级用户 → 允许
-    assert client.get("/api/_scheduler").status_code == 200
+    # admin 未持有 director 角色,但为超级用户 → 允许
+    assert client.get("/api/_director").status_code == 200

@@ -41,7 +41,7 @@ def _bind_teacher(_client, db, teacher_id: int, name: str, username: str) -> Non
 def daily_world(env):
     """当前学期中有一条已发布课表、两位教师和一条代课通知。"""
     client, db = env
-    make_user(db, "scheduler", PW, roles=[Role.scheduler])
+    make_user(db, "scheduler", PW, roles=[Role.director])
     _login(client, "scheduler")
     sid = create_api_semester(
         client,
@@ -98,7 +98,7 @@ def daily_world(env):
     }
 
 
-def test_director_can_run_daily_operations_but_not_core_or_admin_actions(daily_world):
+def test_director_can_run_daily_and_core_operations_but_not_admin_actions(daily_world):
     client, db = daily_world["client"], daily_world["db"]
     sid = daily_world["sid"]
     _switch(client, db, "director", [Role.director])
@@ -140,15 +140,15 @@ def test_director_can_run_daily_operations_but_not_core_or_admin_actions(daily_w
     assert reminder.status_code == 200, reminder.text
 
     assert client.post(
-        f"/api/subjects?semester_id={sid}", json={"name": "主任不应修改"}
-    ).status_code == 403
+        f"/api/subjects?semester_id={sid}", json={"name": "主任维护科目"}
+    ).status_code == 201
     assert client.post(
         f"/api/timetables?semester_id={sid}", json={"name": "主任草稿"}
-    ).status_code == 403
+    ).status_code == 201
     assert client.post(
         f"/api/timetables/{daily_world['world'].tt}/publish"
-    ).status_code == 403
-    assert client.get(f"/api/export/school.xlsx?semester_id={sid}").status_code == 403
+    ).status_code != 403
+    assert client.get(f"/api/export/school.xlsx?semester_id={sid}").status_code != 403
     assert client.get("/api/settings/smtp").status_code == 403
 
 
@@ -208,7 +208,7 @@ def test_scheduler_teacher_union_keeps_daily_personal_and_operator_actions(daily
     client, db = daily_world["client"], daily_world["db"]
     sid = daily_world["sid"]
     _switch(client, db, "scheduler")
-    user = make_user(db, "scheduler-teacher", PW, roles=[Role.scheduler, Role.teacher])
+    user = make_user(db, "scheduler-teacher", PW, roles=[Role.director, Role.teacher])
     third = client.post(
         f"/api/teachers?semester_id={sid}", json={"name": "兼任教师", "base_periods": 20}
     )

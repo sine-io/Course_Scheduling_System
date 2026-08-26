@@ -88,8 +88,8 @@ def create_api_semester(
     body: dict[str, object] = {
         "academic_year": academic_year,
         "term": term,
-        "start_date": start_date or (str(SEM_START) if ready else None),
-        "end_date": end_date or (str(SEM_END) if ready else None),
+        "start_date": start_date or str(SEM_START),
+        "end_date": end_date or str(SEM_END),
     }
     response = client.post("/api/semesters", json=body)
     assert response.status_code == 201, response.text

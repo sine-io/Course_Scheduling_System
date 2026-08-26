@@ -48,13 +48,13 @@ describe('Login', () => {
     }))
     auth.user = {
       id: 1,
-      username: 'scheduler',
-      display_name: '排课管理员',
-      roles: ['scheduler'],
+      username: 'director',
+      display_name: '教务主任',
+      roles: ['director'],
       must_change_password: false,
     }
 
-    await wrapper.get('input[placeholder="请输入账号"]').setValue('scheduler')
+    await wrapper.get('input[placeholder="请输入账号"]').setValue('director')
     await wrapper.get('input[placeholder="请输入密码"]').setValue('secret123')
     await wrapper.get('form').trigger('submit')
 
@@ -72,7 +72,7 @@ describe('Login', () => {
     const { auth, wrapper } = await mountLogin()
     vi.spyOn(auth, 'login').mockRejectedValue({ detail: '账号或密码错误' })
 
-    await wrapper.get('input[placeholder="请输入账号"]').setValue('scheduler')
+    await wrapper.get('input[placeholder="请输入账号"]').setValue('director')
     await wrapper.get('input[placeholder="请输入密码"]').setValue('wrong')
     await wrapper.get('form').trigger('submit')
     await flushPromises()

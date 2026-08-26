@@ -43,7 +43,7 @@ class Candidate:
 class Recommendation:
     affected_period_id: int
     candidates: list[Candidate] = field(default_factory=list)
-    # 全校无人可代时,给排课管理员明确的下一步(合班/自习),而不是空列表
+    # 全校无人可代时,给教务主任明确的下一步(合班/自习),而不是空列表
     no_candidate_hint: str = ""
 
 

@@ -3,9 +3,9 @@ import { request } from '@playwright/test'
 import type { APIRequestContext, APIResponse, Page } from '@playwright/test'
 import { SEM_END, SEM_START } from './dates'
 
-// 专用于 E2E 的排课管理员账号（由验收前置步骤通过 sudo docker exec 创建，不删除）。
-export const E2E_USER = 'e2e_scheduler'
-export const E2E_PASS = 'e2etest1234'
+// 专用于 E2E 的教务主任账号（由验收前置步骤通过 sudo docker exec 创建，不删除）。
+export const E2E_USER = 'e2e_director'
+export const E2E_PASS = 'e2edirector1234'
 export const E2E_DIRECTOR_USER = 'e2e_director'
 export const E2E_DIRECTOR_PASS = 'e2edirector1234'
 export const E2E_TEACHER_USER = 'e2e_teacher'
@@ -21,8 +21,8 @@ export async function createAdminApiContext(page: Page): Promise<APIRequestConte
   return createAuthenticatedApiContext(page, E2E_ADMIN_USER, E2E_ADMIN_PASS, '管理员')
 }
 
-export async function createSchedulerApiContext(page: Page): Promise<APIRequestContext> {
-  return createAuthenticatedApiContext(page, E2E_USER, E2E_PASS, '排课管理员')
+export async function createDirectorApiContext(page: Page): Promise<APIRequestContext> {
+  return createAuthenticatedApiContext(page, E2E_USER, E2E_PASS, '教务主任')
 }
 
 async function createAuthenticatedApiContext(

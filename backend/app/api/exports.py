@@ -1,7 +1,7 @@
 """课表导出:班级、教师和教室/场地 Excel/PDF/PNG、全校总表、批量 zip(M5-1)。
 
 Excel 在 api 同步生成(openpyxl 轻量);PDF/PNG 派到 worker(WeasyPrint + 中文字体)
-再取回。单一对象导出开放给所有登录者(课表本就全校可查);全校总表/批量限排课管理员以上。
+再取回。单一对象导出开放给所有登录者(课表本就全校可查);全校总表/批量限教务主任以上。
 """
 
 from urllib.parse import quote

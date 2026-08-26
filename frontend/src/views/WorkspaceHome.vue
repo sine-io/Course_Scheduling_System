@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   CircleAlert,
   ClipboardCheck,
+  ClipboardClock,
   ClipboardList,
   Clock3,
   History,
@@ -69,7 +70,7 @@ const displayName = computed(() => (
 const hasCurrentSemester = computed(() => semesterContext.currentSemesterId !== null)
 const focusCount = computed(() => overview.value?.focus_items.length ?? 0)
 
-const schedulerFeatures: FeatureEntry[] = [
+const managementFeatures: FeatureEntry[] = [
   {
     key: 'assignments',
     label: '教学任务',
@@ -99,6 +100,13 @@ const schedulerFeatures: FeatureEntry[] = [
     icon: History,
   },
   {
+    key: 'scheduling-settings',
+    label: '排课规则',
+    description: '维护排课所需的课时和约束参数',
+    route: { name: 'scheduling-settings' },
+    icon: ListChecks,
+  },
+  {
     key: 'daily-board',
     label: '今日看板',
     description: '掌握今日调课与代课变动',
@@ -107,7 +115,7 @@ const schedulerFeatures: FeatureEntry[] = [
   },
 ]
 
-const directorFeatures: FeatureEntry[] = [
+const teacherFeatures: FeatureEntry[] = [
   {
     key: 'timetable-query',
     label: '课表查询',
@@ -116,41 +124,33 @@ const directorFeatures: FeatureEntry[] = [
     icon: Table2,
   },
   {
-    key: 'daily-board',
-    label: '今日看板',
-    description: '掌握今日调课与代课变动',
-    route: { name: 'daily-board' },
-    icon: CalendarDays,
-  },
-  {
-    key: 'versions',
-    label: '版本与发布',
-    description: '查看课表完整性与发布记录',
-    route: { name: 'versions' },
-    icon: History,
+    key: 'leaves',
+    label: '请假登记',
+    description: '登记并查看本人的请假记录',
+    route: { name: 'leaves' },
+    icon: ClipboardClock,
   },
   {
     key: 'substitution-stats',
-    label: '代课课时统计',
-    description: '查看全校代课汇总与明细',
+    label: '我的代课课时',
+    description: '查看本人的代课明细与计费课时',
     route: { name: 'substitution-stats' },
     icon: ChartNoAxesColumnIncreasing,
   },
   {
     key: 'notifications',
     label: '通知',
-    description: '查看全校通知与确认状态',
-    route: { name: 'notifications', query: { view: 'board' } },
+    description: '阅读并确认本人收到的通知',
+    route: { name: 'notifications' },
     icon: Bell,
   },
 ]
 
 const featureEntries = computed(() => (
-  canConfigureSemester.value ? schedulerFeatures : directorFeatures
+  canConfigureSemester.value ? managementFeatures : teacherFeatures
 ))
 
 const actionRoutes: Record<string, RouteLocationRaw> = {
-  wizard: { name: 'wizard' },
   auto_schedule: { name: 'auto-schedule' },
   substitutions: { name: 'substitutions' },
   workbench: { name: 'workbench' },
@@ -159,10 +159,10 @@ const actionRoutes: Record<string, RouteLocationRaw> = {
   basedata: { name: 'basedata' },
   calendar: { name: 'calendar' },
   semesters: { name: 'semesters' },
+  'account-permissions': { name: 'account-permissions' },
 }
 
 const actionIcons: Record<string, Component> = {
-  setup_blockers: ClipboardCheck,
   preflight_errors: CircleAlert,
   today_pending_periods: CalendarClock,
   remaining_periods: Clock3,
@@ -170,12 +170,23 @@ const actionIcons: Record<string, Component> = {
   no_timetable: History,
 }
 
-function routeForAction(item: WorkspaceActionItem): RouteLocationRaw {
+function routeForAction(item: WorkspaceActionItem): RouteLocationRaw | null {
+  if (item.target === 'basedata' && item.code === 'setup_warning:rooms_missing') {
+    return { name: 'basedata', query: { tab: 'rooms' } }
+  }
   return actionRoutes[item.target] ?? { name: 'dashboard' }
 }
 
 function iconForAction(item: WorkspaceActionItem): Component {
   return actionIcons[item.code] ?? Sparkles
+}
+
+function actionDescription(item: WorkspaceActionItem): string {
+  return item.description
+}
+
+function actionLabel(item: WorkspaceActionItem): string {
+  return routeForAction(item) ? '查看并处理' : '请系统管理员处理'
 }
 
 function parseSchoolDate(iso: string): Date {
@@ -388,11 +399,11 @@ onMounted(() => loadOverview())
     >
       <CalendarDays :size="28" aria-hidden="true" />
       <strong>尚未建立当前工作学期</strong>
-      <span v-if="canConfigureSemester">完成学校与学期设置后，首页总览会显示真实运行数据。</span>
-      <span v-else>当前尚无可供查看的工作学期，请联系排课管理员完成设置。</span>
-      <RouterLink v-if="canConfigureSemester" class="workspace-home-primary-button" :to="{ name: 'wizard' }">
-        <ClipboardCheck :size="15" aria-hidden="true" />
-        前往设置向导
+      <span v-if="canConfigureSemester">创建当前工作学期后，首页总览会显示真实运行数据。</span>
+      <span v-else>当前尚无可供查看的工作学期，请联系教务主任完成设置。</span>
+      <RouterLink v-if="canConfigureSemester" class="workspace-home-primary-button" :to="{ name: 'semesters' }">
+        <CalendarDays :size="15" aria-hidden="true" />
+        创建第一个学期
       </RouterLink>
     </section>
 
@@ -496,10 +507,12 @@ onMounted(() => loadOverview())
             </span>
           </header>
           <div v-if="overview.focus_items.length" class="workspace-focus-list">
-            <RouterLink
+            <component
+              :is="routeForAction(item) ? RouterLink : 'div'"
               v-for="item in overview.focus_items"
               :key="item.code"
-              :to="routeForAction(item)"
+              :to="routeForAction(item) ?? undefined"
+              :aria-disabled="routeForAction(item) ? undefined : 'true'"
               class="workspace-focus-item"
               :class="`is-${item.tone}`"
             >
@@ -508,11 +521,11 @@ onMounted(() => loadOverview())
               </span>
               <span class="workspace-focus-copy">
                 <strong>{{ item.title }}</strong>
-                <small>{{ item.description }}</small>
+                <small>{{ actionDescription(item) }}</small>
               </span>
               <span v-if="item.count !== null" class="workspace-item-count">{{ item.count }}</span>
-              <ArrowUpRight v-else :size="14" aria-hidden="true" />
-            </RouterLink>
+              <ArrowUpRight v-else-if="routeForAction(item)" :size="14" aria-hidden="true" />
+            </component>
           </div>
           <div v-else class="workspace-positive-state">
             <CheckCircle2 :size="24" aria-hidden="true" />
@@ -575,10 +588,12 @@ onMounted(() => loadOverview())
           </span>
         </header>
         <div v-if="overview.recommendations.length" class="workspace-recommendation-grid">
-          <RouterLink
+          <component
+            :is="routeForAction(item) ? RouterLink : 'div'"
             v-for="item in overview.recommendations"
             :key="item.code"
-            :to="routeForAction(item)"
+            :to="routeForAction(item) ?? undefined"
+            :aria-disabled="routeForAction(item) ? undefined : 'true'"
             class="workspace-recommendation"
           >
             <span class="workspace-recommendation-kicker">
@@ -586,12 +601,12 @@ onMounted(() => loadOverview())
               运行提醒
             </span>
             <strong>{{ item.title }}</strong>
-            <p>{{ item.description }}</p>
+            <p>{{ actionDescription(item) }}</p>
             <span class="workspace-recommendation-action">
-              查看并处理
-              <ArrowUpRight :size="13" aria-hidden="true" />
+              {{ actionLabel(item) }}
+              <ArrowUpRight v-if="routeForAction(item)" :size="13" aria-hidden="true" />
             </span>
-          </RouterLink>
+          </component>
         </div>
         <div v-else class="workspace-positive-state workspace-recommendation-empty">
           <CheckCircle2 :size="24" aria-hidden="true" />

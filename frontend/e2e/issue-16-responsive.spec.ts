@@ -22,9 +22,9 @@ const SEMESTER = {
 
 const USER = {
   id: 16,
-  username: 'issue-16-scheduler',
+  username: 'issue-16-director',
   display_name: '调课验收用户',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: false,
 }
 
@@ -107,7 +107,6 @@ async function mockApplication(page: Page, options: MockOptions = {}) {
       role_display_names: {
         admin: '系统管理员',
         director: '教务主任',
-        scheduler: '排课管理员',
         teacher: '教师',
       },
       academic_year: {
@@ -121,15 +120,6 @@ async function mockApplication(page: Page, options: MockOptions = {}) {
     if (path === '/api/auth/me') return fulfillJson(route, {
       ...USER,
       roles: options.roles ?? USER.roles,
-    })
-    if (path === '/api/wizard/state') return fulfillJson(route, {
-      current_step: 3,
-      resume_step: 3,
-      completed: true,
-      paused: false,
-      semester_id: SEMESTER.id,
-      total_steps: 4,
-      has_semesters: !options.noSemesters,
     })
     if (path === '/api/notifications/mine' || path === '/api/notifications/mine/unread-count') {
       return fulfillJson(route, path.endsWith('unread-count') ? { unread: 0 } : { items: [], unread: 0 })

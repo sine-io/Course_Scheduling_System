@@ -14,7 +14,7 @@ redis_conn = Redis.from_url(settings.redis_url)
 
 # 两条队列,两个 worker 进程(M6-2)。分开的理由是「快慢任务不该互相堵住」:
 #   default → 自动排课。60 班可跑数分钟,期间这个 worker 完全占住。
-#   ops     → 导出 / 备份 / 恢复 / 发送邮件。都是秒级,但正是排课那几分钟里排课管理员最常按的。
+#   ops     → 导出 / 备份 / 恢复 / 发送邮件。都是秒级,但正是排课那几分钟里教务主任最常按的。
 # 合在一条队列时,排课一开跑,导出就排在后面等到超时失败(M5 复审 A)。
 default_queue = Queue("default", connection=redis_conn)
 ops_queue = Queue("ops", connection=redis_conn)

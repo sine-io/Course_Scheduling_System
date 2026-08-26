@@ -91,15 +91,17 @@ function makeRouter() {
     history: createMemoryHistory(),
     routes: [
       { path: '/', name: 'dashboard', component: page },
-      { path: '/wizard', name: 'wizard', component: page },
       { path: '/basedata', name: 'basedata', component: page },
       { path: '/settings/calendar', name: 'calendar', component: page },
       { path: '/settings/semesters', name: 'semesters', component: page },
+      { path: '/settings/accounts', name: 'account-permissions', component: page },
       { path: '/scheduling/assignments', name: 'assignments', component: page },
       { path: '/scheduling/auto', name: 'auto-schedule', component: page },
       { path: '/scheduling/workbench', name: 'workbench', component: page },
       { path: '/scheduling/versions', name: 'versions', component: page },
+      { path: '/scheduling/settings', name: 'scheduling-settings', component: page },
       { path: '/timetable-query', name: 'timetable-query', component: page },
+      { path: '/leaves', name: 'leaves', component: page },
       { path: '/substitutions', name: 'substitutions', component: page },
       { path: '/daily-board', name: 'daily-board', component: page },
       { path: '/substitution-stats', name: 'substitution-stats', component: page },
@@ -122,7 +124,7 @@ function makePinia(roles: string[]) {
   return pinia
 }
 
-async function mountPage(roles: string[] = ['scheduler']) {
+async function mountPage(roles: string[] = ['director']) {
   const router = makeRouter()
   await router.push('/')
   await router.isReady()
@@ -155,40 +157,44 @@ afterEach(() => {
 })
 
 describe('WorkspaceHome', () => {
-  it('renders real metrics, scheduler features, and actionable overview links', async () => {
+  it('renders real metrics, director features, and actionable overview links', async () => {
     const wrapper = await mountPage()
 
     expect(wrapper.get('h1').text()).toBe('首页总览')
-    expect(wrapper.get('[data-testid="overview-hero"]').text()).toContain('下午好，张老师')
+    expect(wrapper.get('[data-testid="overview-hero"]').text()).toContain('下午好，林主任')
     expect(wrapper.findAll('.workspace-metric')).toHaveLength(6)
     expect(wrapper.get('[data-testid="overview-metric-completion"]').text()).toContain('75%')
     expect(wrapper.get('[data-testid="overview-metric-preflight"]').text()).toContain('5')
     expect(wrapper.findAll('.workspace-metric a')).toHaveLength(0)
     expect(wrapper.findAll('.workspace-metric button')).toHaveLength(0)
 
-    expect(wrapper.findAll('.workspace-feature-link')).toHaveLength(5)
+    expect(wrapper.findAll('.workspace-feature-link')).toHaveLength(6)
     expect(wrapper.get('[data-testid="overview-feature-assignments"]').attributes('href'))
       .toBe('/scheduling/assignments')
     expect(wrapper.get('[data-testid="overview-feature-auto-schedule"]').attributes('href'))
       .toBe('/scheduling/auto')
+    expect(wrapper.get('[data-testid="overview-feature-scheduling-settings"]').attributes('href'))
+      .toBe('/scheduling/settings')
     expect(wrapper.find('[data-testid="overview-feature-timetable-query"]').exists()).toBe(false)
     expect(wrapper.get('.workspace-focus-item').attributes('href')).toBe('/substitutions')
-    expect(wrapper.get('.workspace-recommendation').attributes('href')).toBe('/basedata')
+    expect(wrapper.get('.workspace-recommendation').attributes('href')).toBe('/basedata?tab=rooms')
     expect(wrapper.text()).not.toContain('AI 今日摘要')
     expect(wrapper.text()).not.toContain('让 AI 帮我处理')
   })
 
-  it('shows the director feature set without edit-first scheduling entries', async () => {
-    const wrapper = await mountPage(['director'])
+  it('shows the teacher feature set without edit-first scheduling entries', async () => {
+    const wrapper = await mountPage(['teacher'])
 
     expect(wrapper.get('[data-testid="overview-feature-timetable-query"]').attributes('href'))
       .toBe('/timetable-query')
     expect(wrapper.get('[data-testid="overview-feature-substitution-stats"]').attributes('href'))
       .toBe('/substitution-stats')
     expect(wrapper.get('[data-testid="overview-feature-notifications"]').attributes('href'))
-      .toContain('/notifications?view=board')
+      .toBe('/notifications')
+    expect(wrapper.get('[data-testid="overview-feature-leaves"]').attributes('href'))
+      .toBe('/leaves')
     expect(wrapper.find('[data-testid="overview-feature-assignments"]').exists()).toBe(false)
-    expect(wrapper.findAll('.workspace-feature-link')).toHaveLength(5)
+    expect(wrapper.findAll('.workspace-feature-link')).toHaveLength(4)
   })
 
   it('scrolls to focus items and refreshes the aggregate on demand', async () => {
@@ -245,7 +251,7 @@ describe('WorkspaceHome', () => {
     expect(wrapper.find('[data-testid="overview-focus-button"]').exists()).toBe(false)
   })
 
-  it('links administrators to setup when no current semester exists', async () => {
+  it('links administrators to semester creation when no current semester exists', async () => {
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url).includes('/semester-context')) {
         return Promise.resolve(jsonResponse({
@@ -260,12 +266,12 @@ describe('WorkspaceHome', () => {
     const wrapper = await mountPage(['admin'])
 
     expect(wrapper.get('[data-testid="overview-no-semester"]').text()).toContain('尚未建立当前工作学期')
-    expect(wrapper.get('a[href="/wizard"]').text()).toContain('前往设置向导')
+    expect(wrapper.get('a[href="/settings/semesters"]').text()).toContain('创建第一个学期')
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/workspace-overview')))
       .toBe(false)
   })
 
-  it('gives directors an explanation without a setup action when no semester exists', async () => {
+  it('gives teachers an explanation without a setup action when no semester exists', async () => {
     vi.mocked(fetch).mockImplementation((url) => {
       if (String(url).includes('/semester-context')) {
         return Promise.resolve(jsonResponse({
@@ -277,9 +283,9 @@ describe('WorkspaceHome', () => {
       return Promise.resolve(jsonResponse([])) as never
     })
 
-    const wrapper = await mountPage(['director'])
+    const wrapper = await mountPage(['teacher'])
 
-    expect(wrapper.get('[data-testid="overview-no-semester"]').text()).toContain('联系排课管理员')
-    expect(wrapper.find('a[href="/wizard"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="overview-no-semester"]').text()).toContain('联系教务主任')
+    expect(wrapper.find('a[href="/settings/semesters"]').exists()).toBe(false)
   })
 })

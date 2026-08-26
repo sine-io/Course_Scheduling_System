@@ -14,7 +14,7 @@ PW = "password123"
 @pytest.fixture
 def setup_env(env):
     client, db = env
-    make_user(db, "schedule", PW, roles=[Role.scheduler])
+    make_user(db, "schedule", PW, roles=[Role.director])
     assert client.post(
         "/api/auth/login", json={"username": "schedule", "password": PW}
     ).status_code == 200

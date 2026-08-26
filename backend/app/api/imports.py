@@ -1,5 +1,7 @@
 """Excel 导入 API:模板下载、上传导入。"""
 
+import json
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -20,7 +22,7 @@ from app.core.db import get_db
 from app.core.permissions import can_edit_core, core_editor, core_viewer
 from app.models.user import User
 from app.schemas.high_risk import HighRiskConfirmation
-from app.services import combined_import, high_risk, importer, semester_context
+from app.services import combined_import, high_risk, importer, reference_import, semester_context
 
 router = APIRouter(tags=["import"])
 
@@ -77,6 +79,108 @@ async def _read_setup_workbook(file: UploadFile) -> bytes:
     if not content:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "上传文件不能为空")
     return content
+
+
+async def _read_reference_file(file: UploadFile, label: str) -> bytes:
+    content = await file.read()
+    if not content:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{label}不能为空")
+    return content
+
+
+def _reference_decisions(value: str | None) -> dict:
+    if not value:
+        return {}
+    try:
+        result = json.loads(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "覆盖映射必须是有效 JSON") from exc
+    if not isinstance(result, dict):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "覆盖映射必须是 JSON 对象")
+    return result
+
+
+@router.post("/import/reference/preview")
+async def preview_reference_import(
+    semester_id: int = Query(...),
+    word_file: UploadFile = File(...),
+    xlsx_file: UploadFile = File(...),
+    overrides: str | None = Form(None),
+    db: Session = Depends(get_db),
+    _: object = Depends(viewer),
+) -> dict:
+    """解析排课规则 Word 与教师安排 Excel，零写入返回归一化预览。"""
+    _require_setup_semester(db, semester_id)
+    word_bytes = await _read_reference_file(word_file, "Word 规则文件")
+    xlsx_bytes = await _read_reference_file(xlsx_file, "Excel 教师安排文件")
+    try:
+        plan = reference_import.build_plan(
+            db,
+            semester_id,
+            word_bytes,
+            xlsx_bytes,
+            word_filename=word_file.filename or "排课规则.docx",
+            xlsx_filename=xlsx_file.filename or "教师安排8.24.xlsx",
+            decisions=_reference_decisions(overrides),
+        )
+    except reference_import.InvalidReferenceFile as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return plan.as_dict()
+
+
+@router.post("/import/reference/commit")
+async def commit_reference_import(
+    semester_id: int = Query(...),
+    word_file: UploadFile = File(...),
+    xlsx_file: UploadFile = File(...),
+    fingerprint: str = Form(...),
+    confirm_changes: bool = Form(False),
+    overrides: str | None = Form(None),
+    db: Session = Depends(get_db),
+    _: object = Depends(core_editor),
+) -> dict:
+    """重新解析并校验预览指纹，以一个事务提交参考文件草稿。"""
+    _require_setup_semester(db, semester_id)
+    word_bytes = await _read_reference_file(word_file, "Word 规则文件")
+    xlsx_bytes = await _read_reference_file(xlsx_file, "Excel 教师安排文件")
+    try:
+        plan = reference_import.build_plan(
+            db,
+            semester_id,
+            word_bytes,
+            xlsx_bytes,
+            word_filename=word_file.filename or "排课规则.docx",
+            xlsx_filename=xlsx_file.filename or "教师安排8.24.xlsx",
+            decisions=_reference_decisions(overrides),
+        )
+    except reference_import.InvalidReferenceFile as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    if plan.fingerprint != fingerprint:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "reference_import_preview_stale", "message": "基础数据已发生变化，请重新预览后再提交"},
+        )
+    if plan.errors:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "reference_import_conflicts", "message": "参考文件预览仍有冲突，请先处理错误", "errors": plan.errors},
+        )
+    if plan.changes:
+        if not confirm_changes:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                {"code": "reference_import_changes_unconfirmed", "message": "参考文件包含新建或固定课位，请确认后再提交"},
+            )
+    try:
+        result = reference_import.apply_plan(db, plan)
+        db.commit()
+        return result
+    except (ValueError, SQLAlchemyError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {"code": "reference_import_write_conflict", "message": str(exc) or "提交时数据发生冲突，请重新预览后再试"},
+        ) from exc
 
 
 @router.post("/import/setup/preview")

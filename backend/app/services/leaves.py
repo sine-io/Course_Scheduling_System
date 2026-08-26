@@ -67,7 +67,7 @@ def _overlaps(period: Period, window: tuple[time | None, time | None]) -> bool:
     if begin is None and finish is None:
         return True  # 全天假
     if period.start_time is None or period.end_time is None:
-        # 作息时间表没填起止时间就无法判定半天假。宁可多列一节让排课管理员删掉,
+        # 作息时间表没填起止时间就无法判定半天假。宁可多列一节让教务主任删掉,
         # 也不要漏掉一节没人代课——漏掉的那节会直接变成没有老师的教室。
         return True
     if finish is not None and period.start_time >= finish:
@@ -259,7 +259,7 @@ def create(
     db.flush()
 
     if notify_teacher:
-        # 排课管理员代登:当事人要知道有人替他请了假
+        # 教务主任代登:当事人要知道有人替他请了假
         notifications.notify(
             db,
             semester_id=semester.id,

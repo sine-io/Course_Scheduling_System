@@ -158,7 +158,7 @@
   <aside class="side" id="side">
 <a class="brand" href="../index.html"><span class="mark">学校排课系统</span><span class="sub">文档</span></a>
 <div class="grp">用户文档</div><nav>
-<a href="../index.html">排课管理员操作手册</a>
+<a href="../index.html">教务主任操作手册</a>
 </nav>
 <div class="grp">部署与运维手册</div><nav>
 <a class="doc" href="README.html">总览:从哪开始</a>
@@ -201,7 +201,10 @@
       <hr />
       <h2 id="账号与登录">账号与登录</h2>
       <p><strong>Q:忘记管理员密码怎么办?</strong>
-      若你还记得 <code>.env</code> 的初始 <code>ADMIN_PASSWORD</code>,那是<strong>首次登录</strong>用的;登录后改过的密码存在数据库。若连改过的都忘了,目前需由具数据库访问权者重设。最务实的做法是<strong>恢复一份记得密码的旧备份</strong>(见<a href="backup.html">备份指南</a>),或联系维护者。请妥善保管管理员密码。</p>
+      若你还记得 <code>.env</code> 的初始 <code>ADMIN_PASSWORD</code>,那是<strong>首次登录</strong>用的;登录后改过的密码存在数据库。若连改过的都忘了,在部署主机执行下面的恢复命令,按提示输入新密码:</p>
+      <pre><code class="language-bash">sudo docker compose exec -it api python -m app.scripts.recover_admin
+      </code></pre>
+      <p>命令只恢复唯一的内置系统管理员,会解除登录锁定、让已有会话失效,并要求下一次登录修改密码;操作会写入审计。请妥善保管管理员密码。</p>
       <p><strong>Q:恢复备份后大家被登出了。</strong>
       这是预期行为。恢复会替换整个数据库(含账号),为安全起见系统会强制所有人以恢复时点的账号和密码重新登录。</p>
       <p><strong>Q:老师收不到调课与代课 Email。</strong>

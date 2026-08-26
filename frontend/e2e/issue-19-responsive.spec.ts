@@ -13,7 +13,7 @@ const FORCED_PASSWORD_USER = {
   id: 7,
   username: 'responsive-user',
   display_name: '响应式验收用户',
-  roles: ['scheduler'],
+  roles: ['director'],
   must_change_password: true,
 }
 const DASHBOARD_USER = {
@@ -41,18 +41,10 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 
 async function mockSurfaceData(
   page: Page,
-  surface: 'change-password' | 'wizard' | 'dashboard',
+  surface: 'change-password' | 'dashboard',
 ) {
   if (surface === 'change-password') {
     await page.route('**/api/auth/login', (route) => fulfillJson(route, FORCED_PASSWORD_USER))
-    return
-  }
-
-  if (surface === 'wizard') {
-    await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-      current_step: 0, resume_step: 0, completed: false, paused: false,
-      semester_id: null, total_steps: 4, has_semesters: false,
-    }))
     return
   }
 
@@ -71,17 +63,13 @@ async function mockSurfaceData(
       school_name: '响应式验收学校',
       timezone: 'Asia/Shanghai',
       role_display_names: {
-        admin: '系统管理员', director: '教务主任', scheduler: '排课管理员', teacher: '教师',
+        admin: '系统管理员', director: '教务主任', teacher: '教师',
       },
       academic_year: {
         storage: 'start_year', min: 1900, max: 2100,
         label_format: '{year}-{next_year}学年{term_label}',
         term_labels: { '1': '第一学期', '2': '第二学期' },
       },
-    }))
-    await page.route('**/api/wizard/state', (route) => fulfillJson(route, {
-      current_step: 3, resume_step: 3, completed: true, paused: false,
-      semester_id: 12, total_steps: 4, has_semesters: true,
     }))
     await page.route('**/api/semester-context', (route) => fulfillJson(route, {
       current_semester: { ...DASHBOARD_SEMESTER, is_current: true },
@@ -90,7 +78,11 @@ async function mockSurfaceData(
     }))
     await page.route('**/api/semesters', (route) => fulfillJson(route, [DASHBOARD_SEMESTER]))
     await page.route('**/api/semesters/12/summary', (route) => fulfillJson(route, {
-      subjects: 13, teachers: 42, classes: 18, rooms: 9,
+      semester_id: 12,
+      subjects: 13,
+      teachers: 42,
+      classes: 18,
+      rooms: 9,
     }))
     await page.route('**/api/daily-board**', (route) => fulfillJson(route, {
       date: '2042-09-02', weekday: 2, school_name: '响应式验收学校',
@@ -172,25 +164,6 @@ for (const viewport of VIEWPORTS) {
       { name: '新密码输入框', locator: page.getByPlaceholder('请输入新密码') },
       { name: '确认密码输入框', locator: page.getByPlaceholder('请再次输入新密码') },
       { name: '确认修改按钮', locator: page.getByTestId('cp-submit') },
-    ])
-  })
-
-  test(`设置向导 ${viewport.width}x${viewport.height} 保持四步控件可见`, async ({ page }) => {
-    await page.setViewportSize(viewport)
-    await page.emulateMedia({ reducedMotion: 'reduce' })
-    await mockSurfaceData(page, 'wizard')
-    await login(page)
-
-    await expect(page).toHaveURL(/\/wizard$/)
-    await expect(page.getByRole('heading', { name: '设置向导' })).toBeVisible()
-    await expect(page.getByTestId('wizard-step-title')).toHaveText('学校与学期')
-    await expect(page.getByTestId('wizard-next')).toBeVisible()
-    await expectNoRootOverflow(page)
-    await expectVisibleFlow(page, [
-      { name: '向导标题', locator: page.getByRole('heading', { name: '设置向导' }) },
-      { name: '设置步骤', locator: page.getByRole('navigation', { name: '设置步骤' }) },
-      { name: '当前步骤标题', locator: page.getByTestId('wizard-step-title') },
-      { name: '下一步按钮', locator: page.getByTestId('wizard-next') },
     ])
   })
 

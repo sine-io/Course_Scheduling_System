@@ -27,6 +27,11 @@ interface Row {
   cells: Record<number, PeriodType>
 }
 
+interface NormalizedTime {
+  value: string | null
+  seconds: number | null
+}
+
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref<string | null>(null)
@@ -36,7 +41,7 @@ const numWeekdays = ref(5)
 const rows = ref<Row[]>([])
 
 const canManageSemesters = computed(() => (
-  !auth.user || auth.hasRole('admin') || auth.hasRole('scheduler')
+  !auth.user || auth.hasRole('admin') || auth.hasRole('director')
 ))
 const canEdit = computed(() => (
   canManageSemesters.value
@@ -130,28 +135,70 @@ function applyRowType(row: Row, type: PeriodType) {
   for (const weekday of weekdays.value) row.cells[weekday] = type
 }
 
+function normalizeTime(value: string | null): NormalizedTime | null {
+  const input = value?.trim().replaceAll('：', ':') ?? ''
+  if (!input) return { value: null, seconds: null }
+  const match = /^(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?$/.exec(input)
+  if (!match) return null
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  const second = match[3] === undefined ? 0 : Number(match[3])
+  if (hour > 23 || minute > 59 || second > 59) return null
+  const normalized = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  return {
+    value: match[3] === undefined ? normalized : `${normalized}:${String(second).padStart(2, '0')}`,
+    seconds: hour * 3600 + minute * 60 + second,
+  }
+}
+
 async function save() {
   if (!canEdit.value || saving.value) return
   if (rows.value.some((row) => !row.name.trim())) {
     message.warning('请填写每个节次的名称')
     return
   }
+  const normalizedRows: Array<{ row: Row, start: NormalizedTime, end: NormalizedTime }> = []
+  for (const row of rows.value) {
+    const start = normalizeTime(row.start_time)
+    const end = normalizeTime(row.end_time)
+    if (!start) {
+      message.warning(`${row.name.trim()}的开始时间格式不正确，请使用 24 小时制，例如 08:00`)
+      return
+    }
+    if (!end) {
+      message.warning(`${row.name.trim()}的结束时间格式不正确，请使用 24 小时制，例如 08:40`)
+      return
+    }
+    if ((start.value === null) !== (end.value === null)) {
+      message.warning(`${row.name.trim()}的开始和结束时间需要同时填写`)
+      return
+    }
+    if (start.seconds !== null && end.seconds !== null && end.seconds <= start.seconds) {
+      message.warning(`${row.name.trim()}的结束时间必须晚于开始时间`)
+      return
+    }
+    normalizedRows.push({ row, start, end })
+  }
   saving.value = true
   try {
     const periods: Period[] = []
-    for (const row of rows.value) {
+    for (const { row, start, end } of normalizedRows) {
       for (const weekday of weekdays.value) {
         periods.push({
           weekday,
           period_no: row.period_no,
           name: row.name.trim(),
-          start_time: row.start_time || null,
-          end_time: row.end_time || null,
+          start_time: start.value,
+          end_time: end.value,
           type: row.cells[weekday],
         })
       }
     }
     await replacePeriods(tableId, periods)
+    for (const { row, start, end } of normalizedRows) {
+      row.start_time = start.value
+      row.end_time = end.value
+    }
     message.success('作息时间表已保存')
   } catch (error) {
     message.error(apiErrorMessage(error, '保存失败，请重试。'))

@@ -9,14 +9,49 @@
   gap: var(--app-space-2);
 }
 
-.basedata-tabs-panel {
+.basedata-manual-panel {
+  display: grid;
   min-width: 0;
-  padding: 0 var(--app-space-5) var(--app-space-5);
+  gap: var(--app-space-4);
+  padding: var(--app-space-5);
 }
 
-.basedata-tabs-panel > .n-tabs {
+.reference-import-workspace {
+  display: grid;
   min-width: 0;
+  gap: var(--app-space-4);
 }
+
+.reference-import-heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--app-space-4);
+}
+
+.reference-import-heading h2 { margin: 0; font-size: 20px; }
+.reference-import-heading p:last-child { margin: 6px 0 0; color: var(--app-text-muted); font-size: 13px; }
+
+.reference-import-files {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--app-space-3);
+}
+
+.reference-import-files label {
+  display: grid;
+  gap: 7px;
+  padding: var(--app-space-4);
+  border: 1px dashed var(--app-border-strong);
+  background: var(--app-surface-muted);
+}
+
+.reference-import-files label span { color: var(--app-text); font-size: 13px; font-weight: 650; }
+.reference-import-files input { min-width: 0; }
+.reference-import-files small { color: var(--app-text-muted); overflow-wrap: anywhere; }
+
+.reference-import-counts { display: flex; flex-wrap: wrap; gap: var(--app-space-2); }
 
 .basedata-tab-content {
   display: grid;
@@ -148,34 +183,6 @@
   padding-top: var(--app-space-2);
 }
 
-.basedata-import-step {
-  display: grid;
-  min-width: 0;
-  gap: var(--app-space-3);
-  padding: var(--app-space-4) 0;
-  border-top: 1px solid var(--app-border);
-}
-
-.basedata-import-step:first-of-type { padding-top: 0; border-top: 0; }
-
-.basedata-import { max-width: 760px; }
-
-.basedata-import-entities {
-  display: flex;
-  min-width: 0;
-  flex-wrap: wrap;
-}
-
-.basedata-import-step-heading {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--app-space-2);
-}
-
-.basedata-import-step-heading strong { font-size: 13px; }
-.basedata-import-step-heading svg { color: var(--app-primary-strong); }
-
 .basedata-rule-scroll {
   width: 100%;
   min-width: 0;
@@ -261,9 +268,11 @@
 }
 
 @media (max-width: 560px) {
-  .basedata-tabs-panel { padding: 0 var(--app-space-4) var(--app-space-4); }
+  .basedata-manual-panel { padding: var(--app-space-4); }
   .basedata-page-header h1 { font-size: 25px; }
   .basedata-form-row { grid-template-columns: minmax(0, 1fr); }
   .basedata-modal-actions { justify-content: stretch; }
   .basedata-modal-actions .n-button { flex: 1 1 140px; }
+  .reference-import-files { grid-template-columns: minmax(0, 1fr); }
+  .reference-import-heading { flex-direction: column; }
 }
