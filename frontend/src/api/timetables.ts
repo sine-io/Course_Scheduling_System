@@ -24,6 +24,7 @@ export interface ScheduleEntry {
 export interface TimetableBrief {
   id: number
   semester_id: number
+  rule_revision_id?: number | null
   name: string
   status: string
   publication_state: string
@@ -32,6 +33,7 @@ export interface TimetableBrief {
 export interface Timetable {
   id: number
   semester_id: number
+  rule_revision_id?: number | null
   name: string
   status: string
   entries: ScheduleEntry[]

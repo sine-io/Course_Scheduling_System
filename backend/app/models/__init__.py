@@ -29,6 +29,12 @@ from app.models.leave import AffectedPeriod, AffectedStatus, LeaveRequest, Leave
 from app.models.notification import Notification, NotificationType
 from app.models.period import Period, PeriodTable, PeriodType
 from app.models.reference_import import ReferenceImportBatch, ReferenceSchedulingRule
+from app.models.scheduling_rule import (
+    RuleRevisionStatus,
+    SchedulingRule,
+    SchedulingRuleRevision,
+    SchedulingRuleSet,
+)
 from app.models.semester import Semester, SemesterContext, SemesterReadiness, SemesterStatus
 from app.models.substitution import Substitution, SubstitutionType
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
@@ -47,6 +53,10 @@ __all__ = [
     "PeriodType",
     "ReferenceImportBatch",
     "ReferenceSchedulingRule",
+    "SchedulingRuleSet",
+    "SchedulingRuleRevision",
+    "SchedulingRule",
+    "RuleRevisionStatus",
     "Subject",
     "Teacher",
     "TeacherTimeRule",

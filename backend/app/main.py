@@ -21,6 +21,7 @@ from app.api import (
     imports,
     leaves,
     notifications,
+    scheduling_rules,
     semesters,
     solver,
     substitution_log,
@@ -103,6 +104,7 @@ app.include_router(basedata.router, prefix="/api")
 app.include_router(assignments.router, prefix="/api")
 app.include_router(timetables.router, prefix="/api")
 app.include_router(solver.router, prefix="/api")
+app.include_router(scheduling_rules.router, prefix="/api")
 app.include_router(exports.router, prefix="/api")
 app.include_router(leaves.router, prefix="/api")
 app.include_router(substitutions.router, prefix="/api")

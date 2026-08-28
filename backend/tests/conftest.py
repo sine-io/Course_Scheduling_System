@@ -26,6 +26,7 @@ from app.api import (
     imports,
     leaves,
     notifications,
+    scheduling_rules,
     semesters,
     solver,
     substitution_log,
@@ -89,6 +90,7 @@ def env():
     application.include_router(assignments.router, prefix="/api")
     application.include_router(timetables.router, prefix="/api")
     application.include_router(solver.router, prefix="/api")
+    application.include_router(scheduling_rules.router, prefix="/api")
     application.include_router(exports.router, prefix="/api")
     application.include_router(audit.router, prefix="/api")
     application.include_router(imports.router, prefix="/api")

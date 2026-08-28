@@ -272,6 +272,56 @@ def test_preflight_errors_block_start(sched):
     assert not calls, "pre-flight 不过就不该浪费 worker 的时间"
 
 
+def test_auto_schedule_preflight_uses_source_timetable_rule_revision(sched, monkeypatch):
+    client, db, sid, _tid, store, calls = sched
+    _seed_courses(client, sid, periods=1)
+    rule = {
+        "name": "版本一周一禁排",
+        "template": "global_blackout",
+        "target": {"entity_type": "school", "ids": []},
+        "timing": {"weekdays": [1], "period_nos": [2], "period_table_ids": []},
+        "operator": "forbid",
+        "strength": "hard",
+        "priority": "high",
+        "source_text": "版本一",
+        "enabled": True,
+    }
+    created = client.post(f"/api/scheduling-rules?semester_id={sid}", json=rule)
+    assert created.status_code == 201, created.text
+    v1 = client.post(f"/api/scheduling-rules/activate?semester_id={sid}", json={})
+    assert v1.status_code == 200, v1.text
+    v1_id = v1.json()["active_revision"]["id"]
+    source = client.post(f"/api/timetables?semester_id={sid}", json={"name": "版本一课表"}).json()
+    assert source["rule_revision_id"] == v1_id
+
+    rule["timing"]["weekdays"] = [2]
+    updated = client.put(
+        f"/api/scheduling-rules/{created.json()['rule_key']}?semester_id={sid}",
+        json=rule,
+    )
+    assert updated.status_code == 200, updated.text
+    v2 = client.post(f"/api/scheduling-rules/activate?semester_id={sid}", json={})
+    assert v2.status_code == 200, v2.text
+    assert v2.json()["active_revision"]["id"] != v1_id
+
+    captured: dict[str, int | None] = {}
+
+    def capture_preflight(problem):
+        captured["revision_id"] = problem.rule_revision_id
+        return solver_api.preflight.PreflightReport(issues=())
+
+    monkeypatch.setattr(solver_api.preflight, "run", capture_preflight)
+
+    def capture_enqueue(*args, **kwargs):
+        calls.append(("captured", args, kwargs))
+
+    monkeypatch.setattr(job_queue, "enqueue_solve", capture_enqueue)
+    response = _start(client, source["id"])
+    assert response.status_code == 202, response.text
+    assert captured["revision_id"] == v1_id
+    assert store.get(response.json()["job_id"]).status == JobStatus.queued.value
+
+
 def test_published_timetable_cannot_be_source(sched):
     client, db, sid, tid, store, _calls = sched
     _seed_courses(client, sid, periods=1)

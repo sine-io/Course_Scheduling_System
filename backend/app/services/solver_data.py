@@ -5,6 +5,7 @@
 这里是两者唯一的交界。
 """
 
+from dataclasses import replace
 from datetime import time
 
 from sqlalchemy import select
@@ -93,9 +94,7 @@ def save_config(db: Session, semester_id: int, config: SolverConfig) -> None:
 
 
 def _load_tables(db: Session, semester_id: int) -> dict[int, PeriodTableSpec]:
-    tables = db.scalars(
-        select(PeriodTable).where(PeriodTable.semester_id == semester_id)
-    ).all()
+    tables = db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester_id)).all()
     out: dict[int, PeriodTableSpec] = {}
     for t in tables:
         periods = db.scalars(
@@ -124,9 +123,7 @@ def _load_tables(db: Session, semester_id: int) -> dict[int, PeriodTableSpec]:
     return out
 
 
-def load_problem(
-    db: Session, semester_id: int, timetable: Timetable | None = None
-) -> Problem:
+def load_problem(db: Session, semester_id: int, timetable: Timetable | None = None) -> Problem:
     """把一个学期的排课数据读成纯 dataclass 的问题描述。
 
     timetable 给定时,其单元格一并带入 fixed_entries:locked 者为 H9 硬约束,
@@ -149,8 +146,11 @@ def load_problem(
         if table_id is None:
             continue
         classes[c.id] = ClassSpec(
-            id=c.id, name=c.name, grade=c.grade,
-            period_table_id=table_id, student_count=c.student_count,
+            id=c.id,
+            name=c.name,
+            grade=c.grade,
+            period_table_id=table_id,
+            student_count=c.student_count,
             homeroom_teacher_id=c.homeroom_teacher_id,
         )
 
@@ -159,8 +159,10 @@ def load_problem(
     rules_by_teacher: dict[int, dict[str, set[tuple[int, int]]]] = {}
     for teacher_id, weekday, period_no, rule_type in db.execute(
         select(
-            TeacherTimeRule.teacher_id, TeacherTimeRule.weekday,
-            TeacherTimeRule.period_no, TeacherTimeRule.rule_type,
+            TeacherTimeRule.teacher_id,
+            TeacherTimeRule.weekday,
+            TeacherTimeRule.period_no,
+            TeacherTimeRule.rule_type,
         )
         .join(Teacher, Teacher.id == TeacherTimeRule.teacher_id)
         .where(Teacher.semester_id == semester_id)
@@ -174,8 +176,11 @@ def load_problem(
     ):
         rules = rules_by_teacher.get(t.id, {})
         teachers[t.id] = TeacherSpec(
-            id=t.id, name=t.name, base_periods=t.base_periods,
-            admin_reduction=t.admin_reduction, is_external=t.is_external,
+            id=t.id,
+            name=t.name,
+            base_periods=t.base_periods,
+            admin_reduction=t.admin_reduction,
+            is_external=t.is_external,
             unavailable=frozenset(rules.get(TeacherRuleType.unavailable.value, set())),
             avoid=frozenset(rules.get(TeacherRuleType.avoid.value, set())),
             prefer=frozenset(rules.get(TeacherRuleType.prefer.value, set())),
@@ -183,12 +188,13 @@ def load_problem(
 
     rooms = {
         r.id: RoomSpec(
-            id=r.id, name=r.name, room_type=r.room_type, capacity=r.capacity,
+            id=r.id,
+            name=r.name,
+            room_type=r.room_type,
+            capacity=r.capacity,
             subject_ids=frozenset(s.id for s in r.subjects),
         )
-        for r in db.scalars(
-            select(Room).where(Room.semester_id == semester_id).order_by(Room.id)
-        )
+        for r in db.scalars(select(Room).where(Room.semester_id == semester_id).order_by(Room.id))
     }
 
     members: dict[int, list[int]] = {}
@@ -202,12 +208,12 @@ def load_problem(
 
     units = {
         u.id: UnitSpec(
-            id=u.id, unit_type=u.unit_type, name=u.name,
+            id=u.id,
+            unit_type=u.unit_type,
+            name=u.name,
             class_ids=tuple(cid for cid in members.get(u.id, []) if cid in classes),
         )
-        for u in db.scalars(
-            select(SchedulingUnit).where(SchedulingUnit.semester_id == semester_id)
-        )
+        for u in db.scalars(select(SchedulingUnit).where(SchedulingUnit.semester_id == semester_id))
     }
 
     teachers_by_a: dict[int, list[int]] = {}
@@ -229,11 +235,14 @@ def load_problem(
 
     assignments = tuple(
         AssignmentSpec(
-            id=a.id, unit_id=a.scheduling_unit_id,
-            subject_id=a.subject_id, subject_name=a.subject.name,
+            id=a.id,
+            unit_id=a.scheduling_unit_id,
+            subject_id=a.subject_id,
+            subject_name=a.subject.name,
             periods_per_week=a.periods_per_week,
             teacher_ids=tuple(teachers_by_a.get(a.id, [])),
-            room_id=a.room_id, required_room_type=a.required_room_type,
+            room_id=a.room_id,
+            required_room_type=a.required_room_type,
             lock_room=a.lock_room,
             blocks=tuple(blocks_by_a.get(a.id, [])),
             subject_is_major=a.subject.is_major,
@@ -249,9 +258,12 @@ def load_problem(
     if timetable is not None:
         fixed = tuple(
             FixedEntry(
-                assignment_id=e.course_assignment_id, weekday=e.weekday,
-                period_no=e.period_no, span=e.span,
-                room_id=e.room_id, locked=e.locked,
+                assignment_id=e.course_assignment_id,
+                weekday=e.weekday,
+                period_no=e.period_no,
+                span=e.span,
+                room_id=e.room_id,
+                locked=e.locked,
             )
             for e in db.scalars(
                 select(ScheduleEntry)
@@ -260,7 +272,7 @@ def load_problem(
             )
         )
 
-    return Problem(
+    problem = Problem(
         semester_id=semester_id,
         semester_label=semester.label,
         tables=tables,
@@ -270,4 +282,22 @@ def load_problem(
         units=units,
         assignments=assignments,
         fixed_entries=fixed,
+    )
+    # 新求解读取当前激活版本；传入课表则重用其创建时固定的版本。
+    # NULL 表示该课表创建时没有规则版本，因此不会随之后的激活版本变化。
+    # ORM 到纯 RuleConstraints 的转换仍发生在 services 边界内。
+    from app.services.scheduling_rules import compile_active_rules
+
+    requested_revision_id = timetable.rule_revision_id if timetable is not None else None
+    constraints = compile_active_rules(
+        db,
+        semester_id,
+        problem,
+        revision_id=requested_revision_id,
+        use_active=timetable is None,
+    )
+    return replace(
+        problem,
+        rule_revision_id=constraints.revision_id,
+        rule_constraints=constraints,
     )

@@ -45,6 +45,7 @@ from app.schemas.timetable import (
 from app.services import conflict_checker as cc
 from app.services import high_risk, semester_context
 from app.services import timetable_publish as pub
+from app.services.scheduling_rules import active_revision_id
 from app.services.school_rules import (
     SemesterNotReadyError,
     assert_semester_ready,
@@ -198,6 +199,7 @@ def list_timetables(
         )
         out.append(TimetableBrief(
             id=tt.id, semester_id=tt.semester_id, name=tt.name, status=tt.status,
+            rule_revision_id=tt.rule_revision_id,
             publication_state=pub.publication_state(db, tt), entry_count=n or 0,
         ))
     return out
@@ -211,12 +213,17 @@ def create_timetable(
     _: object = Depends(editor),
 ):
     _require_writable(db, semester_id)
-    tt = Timetable(semester_id=semester_id, name=body.name)
+    tt = Timetable(
+        semester_id=semester_id,
+        name=body.name,
+        rule_revision_id=active_revision_id(db, semester_id),
+    )
     db.add(tt)
     db.commit()
     db.refresh(tt)
     return TimetableOut(
-        id=tt.id, semester_id=tt.semester_id, name=tt.name, status=tt.status, entries=[]
+        id=tt.id, semester_id=tt.semester_id, rule_revision_id=tt.rule_revision_id,
+        name=tt.name, status=tt.status, entries=[]
     )
 
 
@@ -230,7 +237,8 @@ def get_timetable(
     ).all()
     entries = sorted(rows, key=lambda e: (e.weekday, e.period_no))
     return TimetableOut(
-        id=tt.id, semester_id=tt.semester_id, name=tt.name, status=tt.status,
+        id=tt.id, semester_id=tt.semester_id, rule_revision_id=tt.rule_revision_id,
+        name=tt.name, status=tt.status,
         entries=[_serialize_entry(e) for e in entries],
     )
 

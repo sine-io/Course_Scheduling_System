@@ -209,7 +209,9 @@ def start_auto_schedule(
             status.HTTP_400_BAD_REQUEST, "放宽硬约束只在部分排课模式下有效"
         )
 
-    problem = load_problem(db, tt.semester_id)
+    # The preflight must inspect the same pinned rule revision that the worker
+    # will use, otherwise a newly activated revision can disagree with the job.
+    problem = load_problem(db, tt.semester_id, tt)
     report = preflight.run(problem)
     blocking = preflight.blocking_errors(report, allow_partial=body.allow_partial)
     if blocking:

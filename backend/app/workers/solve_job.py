@@ -161,7 +161,8 @@ def execute(
 
     new = write_result(db, source, result.entries, user_id, username, result.objective,
                        partial=allow_partial, unplaced=result.unplaced_periods,
-                       unscheduled=result.unscheduled)
+                       unscheduled=result.unscheduled,
+                       rule_revision_id=problem.rule_revision_id)
     rep = soft_report.evaluate(problem, result.entries, config)
     db.commit()
 
@@ -288,6 +289,7 @@ def write_result(
     partial: bool = False,
     unplaced: int = 0,
     unscheduled: tuple[UnscheduledCourse, ...] = (),
+    rule_revision_id: int | None = None,
 ) -> Timetable:
     """把求解结果写成新草稿。来源草稿不动。调用方负责 commit。
 
@@ -298,6 +300,7 @@ def write_result(
     name = _unique_name(db, source.semester_id, f"{source.name} {suffix}")
     new = Timetable(
         semester_id=source.semester_id, name=name, status=TimetableStatus.draft.value,
+        rule_revision_id=rule_revision_id,
         unscheduled=[_serialize_unscheduled(u) for u in unscheduled] or None,
     )
     db.add(new)

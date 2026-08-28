@@ -41,6 +41,11 @@ class Timetable(Base):
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
+    rule_revision_id: Mapped[int | None] = mapped_column(
+        ForeignKey("scheduling_rule_revisions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(String(20), default=TimetableStatus.draft.value)
     publication_check_fingerprint: Mapped[str | None] = mapped_column(

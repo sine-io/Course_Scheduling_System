@@ -71,7 +71,7 @@ class TeacherSpec:
     # 时段规则。(weekday, period_no) 以其任教班级的作息时间表解读
     # ——多套作息时间表的学校语义会浮动,见 tasks.md Backlog。
     unavailable: frozenset[tuple[int, int]]  # 硬约束 H4
-    avoid: frozenset[tuple[int, int]] = frozenset()   # 软约束 S1:尽量避开
+    avoid: frozenset[tuple[int, int]] = frozenset()  # 软约束 S1:尽量避开
     prefer: frozenset[tuple[int, int]] = frozenset()  # 软约束 S1:偏好
 
     @property
@@ -160,6 +160,36 @@ SolvedEntry = FixedEntry
 
 
 @dataclass(frozen=True, slots=True)
+class CompiledSoftRule:
+    """编译后的软规则。
+
+    `penalty_cells` 记录命中规则的教学任务和节次；`penalize_occupied=False`
+    表示偏好这些节次(未占用才产生惩罚)。
+    """
+
+    rule_key: str
+    name: str
+    assignment_ids: frozenset[int]
+    penalty_cells: Mapping[int, frozenset[tuple[int, int]]]
+    weight: int
+    penalize_occupied: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class RuleConstraints:
+    """规则编译器交给求解器的纯数据。
+
+    `hard_allowed_starts` 为空表示该教学任务没有“只能从这些格开始”的限制；
+    它只用于固定课位。时段窗口会编译为占用格禁排，避免连堂越过窗口边界。
+    """
+
+    revision_id: int | None = None
+    hard_forbidden: Mapping[int, frozenset[tuple[int, int]]] = field(default_factory=dict)
+    hard_allowed_starts: Mapping[int, frozenset[tuple[int, int]]] = field(default_factory=dict)
+    soft_rules: tuple[CompiledSoftRule, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class Problem:
     semester_id: int
     semester_label: str
@@ -170,6 +200,8 @@ class Problem:
     units: Mapping[int, UnitSpec]
     assignments: tuple[AssignmentSpec, ...]
     fixed_entries: tuple[FixedEntry, ...] = ()
+    rule_revision_id: int | None = None
+    rule_constraints: RuleConstraints = field(default_factory=RuleConstraints)
 
     # ── 导航 ────────────────────────
     def classes_of(self, a: AssignmentSpec) -> tuple[ClassSpec, ...]:
@@ -255,8 +287,8 @@ MORNING_END_MIN = 12 * 60  # 「上午」= 起始时间早于中午(S5)
 class SolverConfig:
     """权重与可调参数。权重 0 = 关闭该项软约束(硬约束不可关)。"""
 
-    daily_subject_cap: int = 2       # H10 同班同科目每日单节上限
-    teacher_daily_max: int = 6       # S3
+    daily_subject_cap: int = 2  # H10 同班同科目每日单节上限
+    teacher_daily_max: int = 6  # S3
     teacher_consecutive_max: int = 3  # S6
     weights: Mapping[str, int] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))
 

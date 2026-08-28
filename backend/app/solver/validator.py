@@ -66,6 +66,7 @@ def validate(
     _h2_teacher(problem, occurrences, v)
     _h3_room(problem, occurrences, v)
     _h4_unavailable(problem, occurrences, v)
+    _configured_rules(problem, occurrences, entries, v)
     _h7_group_sync(problem, entries, by_id, v)
     _h8_weekly_periods(problem, entries, by_id, v)
     _h9_locked(problem, entries, v)
@@ -103,11 +104,13 @@ def _expand(
                     if e.span > 1
                     else "不是一般上课节次"
                 )
-                v.append(Violation(
-                    code,
-                    f"「{a.subject_name}」{_wd(e.weekday)}第 {e.period_no + k} 格{reason}",
-                    {"assignment_id": a.id, "weekday": e.weekday, "period_no": e.period_no + k},
-                ))
+                v.append(
+                    Violation(
+                        code,
+                        f"「{a.subject_name}」{_wd(e.weekday)}第 {e.period_no + k} 格{reason}",
+                        {"assignment_id": a.id, "weekday": e.weekday, "period_no": e.period_no + k},
+                    )
+                )
                 continue
             out.append(_Occurrence(e, a, table.id, slot))
     return out
@@ -123,12 +126,17 @@ def _h1_class(problem: Problem, occ: list[_Occurrence], v: list[Violation]) -> N
             courses = seen.setdefault(key, set())
             courses.add(key_course)
             if len(courses) > 1:
-                v.append(Violation(
-                    "H1",
-                    f"班级 {cls.name} {_wd(o.slot.weekday)}{o.slot.name} 同时有多门课",
-                    {"class_id": cls.id, "weekday": o.slot.weekday,
-                     "period_no": o.slot.period_no},
-                ))
+                v.append(
+                    Violation(
+                        "H1",
+                        f"班级 {cls.name} {_wd(o.slot.weekday)}{o.slot.name} 同时有多门课",
+                        {
+                            "class_id": cls.id,
+                            "weekday": o.slot.weekday,
+                            "period_no": o.slot.period_no,
+                        },
+                    )
+                )
 
 
 def _pairwise_resource_clash(
@@ -154,19 +162,23 @@ def _pairwise_resource_clash(
                     continue
                 if not slots_overlap(a.slot, b.slot, same_table=a.table_id == b.table_id):
                     continue
-                v.append(Violation(
-                    code,
-                    f"{label} {name_of(rid)} {_wd(a.slot.weekday)}{a.slot.name} 同时有"
-                    f"「{a.assignment.subject_name}」与「{b.assignment.subject_name}」",
-                    {"resource_id": rid, "weekday": a.slot.weekday},
-                ))
+                v.append(
+                    Violation(
+                        code,
+                        f"{label} {name_of(rid)} {_wd(a.slot.weekday)}{a.slot.name} 同时有"
+                        f"「{a.assignment.subject_name}」与「{b.assignment.subject_name}」",
+                        {"resource_id": rid, "weekday": a.slot.weekday},
+                    )
+                )
 
 
 def _h2_teacher(problem: Problem, occ: list[_Occurrence], v: list[Violation]) -> None:
     _pairwise_resource_clash(
-        problem, occ,
+        problem,
+        occ,
         resource_of=lambda o: o.assignment.teacher_ids,
-        label="教师", code="H2",
+        label="教师",
+        code="H2",
         name_of=lambda tid: problem.teachers[tid].name,
         v=v,
     )
@@ -178,8 +190,11 @@ def _h3_room(problem: Problem, occ: list[_Occurrence], v: list[Violation]) -> No
         return (rid,) if rid is not None else ()
 
     _pairwise_resource_clash(
-        problem, occ,
-        resource_of=rooms, label="教室/场地", code="H3",
+        problem,
+        occ,
+        resource_of=rooms,
+        label="教室/场地",
+        code="H3",
         name_of=lambda rid: problem.rooms[rid].name if rid in problem.rooms else str(rid),
         v=v,
     )
@@ -190,12 +205,60 @@ def _h4_unavailable(problem: Problem, occ: list[_Occurrence], v: list[Violation]
         for tid in o.assignment.teacher_ids:
             teacher = problem.teachers.get(tid)
             if teacher and o.slot.key in teacher.unavailable:
-                v.append(Violation(
-                    "H4",
-                    f"教师{teacher.name} {_wd(o.slot.weekday)}{o.slot.name} 为不可排时段",
-                    {"teacher_id": tid, "weekday": o.slot.weekday,
-                     "period_no": o.slot.period_no},
-                ))
+                v.append(
+                    Violation(
+                        "H4",
+                        f"教师{teacher.name} {_wd(o.slot.weekday)}{o.slot.name} 为不可排时段",
+                        {
+                            "teacher_id": tid,
+                            "weekday": o.slot.weekday,
+                            "period_no": o.slot.period_no,
+                        },
+                    )
+                )
+
+
+def _configured_rules(
+    problem: Problem,
+    occ: list[_Occurrence],
+    entries: Sequence[SolvedEntry],
+    v: list[Violation],
+) -> None:
+    """独立复核规则编译器交付的硬禁排与固定起点。"""
+    for item in occ:
+        forbidden = problem.rule_constraints.hard_forbidden.get(item.assignment.id, frozenset())
+        if item.slot.key in forbidden:
+            v.append(
+                Violation(
+                    "R1",
+                    f"「{item.assignment.subject_name}」{_wd(item.slot.weekday)}"
+                    f"{item.slot.name}违反已激活排课规则",
+                    {
+                        "assignment_id": item.assignment.id,
+                        "weekday": item.slot.weekday,
+                        "period_no": item.slot.period_no,
+                        "rule_revision_id": problem.rule_revision_id,
+                    },
+                )
+            )
+    for entry in entries:
+        allowed = problem.rule_constraints.hard_allowed_starts.get(entry.assignment_id)
+        covered = {
+            (entry.weekday, entry.period_no + offset) for offset in range(entry.span)
+        }
+        if allowed is not None and not covered <= allowed:
+            v.append(
+                Violation(
+                    "R2",
+                    f"教学任务 {entry.assignment_id} 未安排在规则指定的固定课位",
+                    {
+                        "assignment_id": entry.assignment_id,
+                        "weekday": entry.weekday,
+                        "period_no": entry.period_no,
+                        "rule_revision_id": problem.rule_revision_id,
+                    },
+                )
+            )
 
 
 def _h7_group_sync(
@@ -215,11 +278,13 @@ def _h7_group_sync(
         members = [a for a in problem.assignments if a.unit_id == unit.id]
         slots = {frozenset(by_assignment.get(a.id, set())) for a in members}
         if len(slots) > 1:
-            v.append(Violation(
-                "H7",
-                f"走班群组「{unit.name}」的各门课未排在相同时段",
-                {"unit_id": unit.id},
-            ))
+            v.append(
+                Violation(
+                    "H7",
+                    f"走班群组「{unit.name}」的各门课未排在相同时段",
+                    {"unit_id": unit.id},
+                )
+            )
 
 
 def _h8_weekly_periods(
@@ -241,12 +306,14 @@ def _h8_weekly_periods(
         expected.extend([1] * (a.periods_per_week - a.block_periods))
         expected.sort(reverse=True)
         if got != expected:
-            v.append(Violation(
-                "H8",
-                f"「{a.subject_name}」排入 {sum(got)} 节(节长 {got or '无'}),"
-                f"应为 {a.periods_per_week} 节(节长 {expected})",
-                {"assignment_id": a.id, "placed": got, "expected": expected},
-            ))
+            v.append(
+                Violation(
+                    "H8",
+                    f"「{a.subject_name}」排入 {sum(got)} 节(节长 {got or '无'}),"
+                    f"应为 {a.periods_per_week} 节(节长 {expected})",
+                    {"assignment_id": a.id, "placed": got, "expected": expected},
+                )
+            )
 
 
 def _h9_locked(problem: Problem, entries: Sequence[SolvedEntry], v: list[Violation]) -> None:
@@ -289,11 +356,13 @@ def _h10_daily_cap(
     for (class_id, weekday, _subject_id), n in counts.items():
         if n > cap:
             cls = problem.classes[class_id]
-            v.append(Violation(
-                "H10",
-                f"班级 {cls.name} {_wd(weekday)} 同一科目排了 {n} 节,超过每日上限 {cap} 节",
-                {"class_id": class_id, "weekday": weekday, "count": n},
-            ))
+            v.append(
+                Violation(
+                    "H10",
+                    f"班级 {cls.name} {_wd(weekday)} 同一科目排了 {n} 节,超过每日上限 {cap} 节",
+                    {"class_id": class_id, "weekday": weekday, "count": n},
+                )
+            )
 
 
 def _room_type(
@@ -309,14 +378,19 @@ def _room_type(
         rid = _effective_room(problem, e, a)
         room = problem.rooms.get(rid) if rid is not None else None
         if room is None:
-            v.append(Violation(
-                "room_type", f"「{a.subject_name}」需要教室/场地,却未指派",
-                {"assignment_id": a.id},
-            ))
+            v.append(
+                Violation(
+                    "room_type",
+                    f"「{a.subject_name}」需要教室/场地,却未指派",
+                    {"assignment_id": a.id},
+                )
+            )
         elif room.room_type != a.required_room_type:
-            v.append(Violation(
-                "room_type",
-                f"「{a.subject_name}」需要 {a.required_room_type} 类型的教室/场地,"
-                f"却排在 {room.name}({room.room_type})",
-                {"assignment_id": a.id, "room_id": room.id},
-            ))
+            v.append(
+                Violation(
+                    "room_type",
+                    f"「{a.subject_name}」需要 {a.required_room_type} 类型的教室/场地,"
+                    f"却排在 {room.name}({room.room_type})",
+                    {"assignment_id": a.id, "room_id": room.id},
+                )
+            )

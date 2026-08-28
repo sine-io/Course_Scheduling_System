@@ -264,8 +264,12 @@ def stale_future_affected_count(db: Session, semester_id: int) -> int:
 
 def duplicate(db: Session, source: Timetable, name: str) -> Timetable:
     """复制为新草稿(含全部单元格与锁定状态);两份草稿完全独立。"""
-    new = Timetable(semester_id=source.semester_id, name=name,
-                    status=TimetableStatus.draft.value)
+    new = Timetable(
+        semester_id=source.semester_id,
+        rule_revision_id=source.rule_revision_id,
+        name=name,
+        status=TimetableStatus.draft.value,
+    )
     db.add(new)
     db.flush()
     entries = db.scalars(

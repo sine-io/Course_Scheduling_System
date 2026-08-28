@@ -23,6 +23,7 @@ from app.models.basedata import ClassUnit, Room, Subject
 from app.models.period import Period, PeriodType
 from app.models.timetable import ScheduleEntry, Timetable
 from app.services import period_tables as pt_service
+from app.services.scheduling_rules import hard_placement_conflicts
 from app.services.solver_data import load_config
 
 WEEKDAY_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
@@ -256,6 +257,22 @@ class _Checker:
                         "H5",
                         f"{self._slot(pmap, wd, pl.period_no)} 非一般上课节次,不可排课"))
                 continue
+
+            for rule_name in hard_placement_conflicts(
+                self.db,
+                self.timetable.semester_id,
+                self.timetable.rule_revision_id,
+                a,
+                table_id=table_id,
+                weekday=wd,
+                period_nos=[period_no for period_no, _start, _end in covered],
+            ):
+                conflicts.append(
+                    Conflict(
+                        "R1",
+                        f"{self._desc(a)}违反已激活规则「{rule_name}」",
+                    )
+                )
 
             # H1:班级不冲堂(仅比对现有单元格;同群组成员班级共用不算冲突)
             for c in self._classes(a):

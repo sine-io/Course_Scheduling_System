@@ -898,7 +898,14 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
     timetable_name = f"{semester.label}·参考文件草稿"
     timetable = db.scalar(select(Timetable).where(Timetable.semester_id == plan.semester_id, Timetable.name == timetable_name, Timetable.status == TimetableStatus.draft.value))
     if timetable is None:
-        timetable = Timetable(semester_id=plan.semester_id, name=timetable_name, status=TimetableStatus.draft.value)
+        from app.services.scheduling_rules import active_revision_id
+
+        timetable = Timetable(
+            semester_id=plan.semester_id,
+            rule_revision_id=active_revision_id(db, plan.semester_id),
+            name=timetable_name,
+            status=TimetableStatus.draft.value,
+        )
         db.add(timetable)
         db.flush()
     for fixed in plan.fixed_entries:

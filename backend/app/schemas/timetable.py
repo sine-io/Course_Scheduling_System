@@ -32,6 +32,7 @@ class TimetableBrief(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     semester_id: int
+    rule_revision_id: int | None = None
     name: str
     status: str
     publication_state: str = "draft"
@@ -41,6 +42,7 @@ class TimetableBrief(BaseModel):
 class TimetableOut(BaseModel):
     id: int
     semester_id: int
+    rule_revision_id: int | None = None
     name: str
     status: str
     entries: list[ScheduleEntryOut] = []

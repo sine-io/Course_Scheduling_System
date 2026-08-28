@@ -116,8 +116,9 @@ class UnscheduledCourse:
     assignment_ids: tuple[int, ...]
     subject_name: str
     class_names: tuple[str, ...]
-    periods: int           # 未排入的节数(每个时段只算一次)
-    reason: str = ""       # 完全排不下时的原因;solver 主动取舍掉的则留空
+    periods: int  # 未排入的节数(每个时段只算一次)
+    reason: str = ""  # 完全排不下时的原因;solver 主动取舍掉的则留空
+
 
 @dataclass(frozen=True, slots=True)
 class SolveOptions:
@@ -199,8 +200,10 @@ def _runs(table: PeriodTableSpec) -> list[list[Slot]]:
     runs: list[list[Slot]] = []
     current: list[Slot] = []
     for slot in table.slots:
-        if current and current[-1].weekday == slot.weekday and (
-            current[-1].period_no + 1 == slot.period_no
+        if (
+            current
+            and current[-1].weekday == slot.weekday
+            and (current[-1].period_no + 1 == slot.period_no)
         ):
             current.append(slot)
         else:
@@ -213,12 +216,17 @@ def _runs(table: PeriodTableSpec) -> list[list[Slot]]:
 
 
 def _candidates(
-    table: PeriodTableSpec, length: int, forbidden: frozenset[Cell]
+    table: PeriodTableSpec,
+    length: int,
+    forbidden: frozenset[Cell],
+    allowed_starts: frozenset[Cell] | None = None,
 ) -> list[_Candidate]:
     out: list[_Candidate] = []
     for run in _runs(table):
         for i in range(len(run) - length + 1):
             cells = tuple(s.key for s in run[i : i + length])
+            if allowed_starts is not None and any(cell not in allowed_starts for cell in cells):
+                continue
             if any(c in forbidden for c in cells):
                 continue  # H4:任一授课教师不可排 → 直接不进定义域
             out.append(_Candidate(run[i].weekday, run[i].period_no, cells))
@@ -249,17 +257,28 @@ def _build_courses(problem: Problem) -> list[_Course]:
                 raise SolverInputError(
                     f"走班群组「{unit.name}」的各门课节数/连堂结构不一致,无法同时段开课"
                 )
-            courses.append(_Course(
-                key=("unit", unit.id), unit=unit, assignments=tuple(members), table=table,
-                lengths=_lengths(members[0]),
-                teacher_ids=frozenset(t for a in members for t in a.teacher_ids),
-            ))
+            courses.append(
+                _Course(
+                    key=("unit", unit.id),
+                    unit=unit,
+                    assignments=tuple(members),
+                    table=table,
+                    lengths=_lengths(members[0]),
+                    teacher_ids=frozenset(t for a in members for t in a.teacher_ids),
+                )
+            )
         else:
             for a in members:
-                courses.append(_Course(
-                    key=("assignment", a.id), unit=unit, assignments=(a,), table=table,
-                    lengths=_lengths(a), teacher_ids=frozenset(a.teacher_ids),
-                ))
+                courses.append(
+                    _Course(
+                        key=("assignment", a.id),
+                        unit=unit,
+                        assignments=(a,),
+                        table=table,
+                        lengths=_lengths(a),
+                        teacher_ids=frozenset(a.teacher_ids),
+                    )
+                )
     return courses
 
 
@@ -341,33 +360,47 @@ class _Model:
 
     # ── 变量 ────────────────────────────
     def _forbidden(self, course: _Course) -> frozenset[Cell]:
-        if self._h4_is_soft:
-            return frozenset()  # 改由 _h4_unavailable 表达为惩罚
         cells: set[Cell] = set()
-        for tid in course.teacher_ids:
-            teacher = self.problem.teachers.get(tid)
-            if teacher and not self._off("H4", "teacher", tid):
-                cells |= set(teacher.unavailable)
+        if not self._h4_is_soft:
+            for tid in course.teacher_ids:
+                teacher = self.problem.teachers.get(tid)
+                if teacher and not self._off("H4", "teacher", tid):
+                    cells |= set(teacher.unavailable)
+        for assignment in course.assignments:
+            cells |= set(
+                self.problem.rule_constraints.hard_forbidden.get(assignment.id, frozenset())
+            )
         return frozenset(cells)
+
+    def _allowed_starts(self, course: _Course) -> frozenset[Cell] | None:
+        restricted = [
+            self.problem.rule_constraints.hard_allowed_starts[assignment.id]
+            for assignment in course.assignments
+            if assignment.id in self.problem.rule_constraints.hard_allowed_starts
+        ]
+        if not restricted:
+            return None
+        allowed = set(restricted[0])
+        for cells in restricted[1:]:
+            allowed.intersection_update(cells)
+        return frozenset(allowed)
 
     def _make_lesson_vars(self) -> None:
         allow_drop = self.relax is not None and self.relax.allow_unplaced
         for ci, course in enumerate(self.courses):
             forbidden = self._forbidden(course)
+            allowed_starts = self._allowed_starts(course)
             covering: dict[Cell, list[cp_model.IntVar]] = {}
             pos_by_length: dict[int, list[tuple[int, cp_model.IntVar]]] = {}
 
             for li, length in enumerate(course.lengths):
-                cands = _candidates(course.table, length, forbidden)
+                cands = _candidates(course.table, length, forbidden, allowed_starts)
                 if not cands:
                     reason = (
-                        f"找不到任何可排的 {length} 连堂时段"
-                        "(作息时间表或教师不可排时段过于严格)"
+                        f"找不到任何可排的 {length} 连堂时段(作息时间表或教师不可排时段过于严格)"
                     )
                     if not allow_drop:
-                        raise SolverInputError(
-                            f"「{course.assignments[0].subject_name}」{reason}"
-                        )
+                        raise SolverInputError(f"「{course.assignments[0].subject_name}」{reason}")
                     # 部分排课的承诺是「无法排入的列入列表,其他课程正常排入」。
                     # 这门课可能完全没有可排位置(例如协同教学的两位教师不可排
                     # 时段刚好覆盖整周),但不能因此让整个部分排课任务失败——
@@ -449,9 +482,7 @@ class _Model:
 
     # ── 硬约束 ──────────────────────────
     def _courses_of_class(self, class_id: int) -> list[int]:
-        return [
-            ci for ci, c in enumerate(self.courses) if class_id in c.unit.class_ids
-        ]
+        return [ci for ci, c in enumerate(self.courses) if class_id in c.unit.class_ids]
 
     def _h1_class(self) -> None:
         for cls in self.problem.classes.values():
@@ -462,9 +493,7 @@ class _Model:
             for slot in table.slots:
                 self.m.add_at_most_one(self.occ[(ci, slot.key)] for ci in cis)
 
-    def _resource_at_most_one(
-        self, entries: list[tuple[int, Slot, cp_model.IntVar]]
-    ) -> None:
+    def _resource_at_most_one(self, entries: list[tuple[int, Slot, cp_model.IntVar]]) -> None:
         """同一资源(教师或教室/场地)在同时段至多一个占用。
 
         entries 为 (table_id, slot, literal)。同表同节次 → 直接互斥;
@@ -587,11 +616,7 @@ class _Model:
                         self.m.add(sum(lits) <= self.cap)
 
     def _course_of_assignment(self) -> dict[int, int]:
-        return {
-            a.id: ci
-            for ci, course in enumerate(self.courses)
-            for a in course.assignments
-        }
+        return {a.id: ci for ci, course in enumerate(self.courses) for a in course.assignments}
 
     def _hints(self) -> None:
         """把来源草稿「未锁定」的单元格喂成求解提示(AddHint)。
@@ -715,6 +740,23 @@ class _Model:
         add("S7", self._s7_homeroom_first_period())
         add("S8", self._s8_fairness(unmet_by_teacher))
 
+        for rule in self.problem.rule_constraints.soft_rules:
+            for ci, course in enumerate(self.courses):
+                if not rule.assignment_ids.intersection(a.id for a in course.assignments):
+                    continue
+                cells = set().union(
+                    *(
+                        rule.penalty_cells.get(a.id, frozenset())
+                        for a in course.assignments
+                        if a.id in rule.assignment_ids
+                    )
+                )
+                lits = [self.occ[(ci, cell)] for cell in cells if (ci, cell) in self.occ]
+                if not lits:
+                    continue
+                expression = rule.weight * sum(lits)
+                terms.append(expression if rule.penalize_occupied else -expression)
+
         if terms:
             self.m.minimize(sum(terms))
             self.has_objective = True
@@ -834,8 +876,7 @@ class _Model:
                 continue
             table = self.problem.tables[cls.period_table_id]
             cis = [
-                ci for ci in self._courses_of_class(cls.id)
-                if tid in self.courses[ci].teacher_ids
+                ci for ci in self._courses_of_class(cls.id) if tid in self.courses[ci].teacher_ids
             ]
             if not cis:
                 continue  # 班主任没教这个班 → 这条软约束无从满足,不列入惩罚
@@ -890,11 +931,16 @@ class _Model:
                 for a in course.assignments:
                     room_id = a.room_id if a.room_id is not None else rooms_of.get(a.id)
                     key = (a.id, chosen.weekday, chosen.period_no, span)
-                    out.append(SolvedEntry(
-                        assignment_id=a.id, weekday=chosen.weekday,
-                        period_no=chosen.period_no, span=span, room_id=room_id,
-                        locked=key in locked,
-                    ))
+                    out.append(
+                        SolvedEntry(
+                            assignment_id=a.id,
+                            weekday=chosen.weekday,
+                            period_no=chosen.period_no,
+                            span=span,
+                            room_id=room_id,
+                            locked=key in locked,
+                        )
+                    )
         out.sort(key=lambda e: (e.weekday, e.period_no, e.assignment_id))
         return tuple(out), self._unscheduled(unplaced)
 
@@ -903,18 +949,18 @@ class _Model:
         out = []
         for ci, periods in unplaced.items():
             course = self.courses[ci]
-            class_names = sorted(
-                self.problem.classes[cid].name for cid in course.unit.class_ids
-            )
+            class_names = sorted(self.problem.classes[cid].name for cid in course.unit.class_ids)
             # 走班群组是「多门选修同时段开」,一个 _Course 含多门课;只显示第一门会误导
             subjects = sorted({a.subject_name for a in course.assignments})
-            out.append(UnscheduledCourse(
-                assignment_ids=tuple(a.id for a in course.assignments),
-                subject_name="、".join(subjects),
-                class_names=tuple(class_names),
-                periods=periods,
-                reason=self.blocked.get(ci, ""),
-            ))
+            out.append(
+                UnscheduledCourse(
+                    assignment_ids=tuple(a.id for a in course.assignments),
+                    subject_name="、".join(subjects),
+                    class_names=tuple(class_names),
+                    periods=periods,
+                    reason=self.blocked.get(ci, ""),
+                )
+            )
         out.sort(key=lambda u: (-u.periods, u.subject_name, u.assignment_ids))
         return tuple(out)
 
@@ -1031,11 +1077,13 @@ class _SolutionCallback(cp_model.CpSolverSolutionCallback):
     def on_solution_callback(self) -> None:
         self._count += 1
         if self._control.on_progress:
-            self._control.on_progress(SolveProgress(
-                solutions=self._count,
-                objective=self.objective_value if self._has_objective else 0.0,
-                elapsed=self.wall_time,
-            ))
+            self._control.on_progress(
+                SolveProgress(
+                    solutions=self._count,
+                    objective=self.objective_value if self._has_objective else 0.0,
+                    elapsed=self.wall_time,
+                )
+            )
         if self._control.should_stop and self._control.should_stop():
             self.stop_search()  # 保留当下最佳解,不是丢弃
 
