@@ -924,7 +924,7 @@ def build_plan(
         for name, info in source.teachers.items()
         if name != "金铭"
     }
-    # 规则中的教师即使 Excel 没有分配课，也需要进入可排教师集合。
+    # 规则中的教师即使尚未出现在 Excel 教师安排中，也需要进入可排教师集合。
     for name in (
         "朱振华",
         "唐延艳",

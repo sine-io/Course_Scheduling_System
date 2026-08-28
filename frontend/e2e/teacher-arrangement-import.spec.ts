@@ -46,7 +46,7 @@ async function prepareWorkbooks(templatePath: string, directory: string) {
     学校科目编码: 'SUB-MATH',
     科目名称: '数学',
     '领域/类别': '数学',
-    所需场地类型: '专用教室',
+    '所需教室/场地类型': '专用教室',
   })
   setRow(workbook, '教师', {
     学校教师编码: 'T-001',
@@ -83,10 +83,10 @@ async function prepareWorkbooks(templatePath: string, directory: string) {
     原始内容: '人数与费用由年级另行维护',
     备注: '来自教师安排表备注栏',
   })
-  setRow(workbook, '教室与场地', {
-    学校场地编码: 'ROOM-MATH',
-    场地名称: '数学专用教室',
-    场地类型: '专用教室',
+  setRow(workbook, '教室及户外场地', {
+    '学校教室/场地编码': 'ROOM-MATH',
+    '教室/场地名称': '数学专用教室',
+    '教室/场地类型': '专用教室',
     容量: 48,
     适用科目: 'SUB-MATH',
   })

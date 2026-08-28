@@ -462,13 +462,13 @@ function exportIssues() {
       type="success"
       :bordered="false"
     >
-      {{ result.idempotent ? '该批次已导入，未重复写入。' : `已导入批次 #${result.batch_id}，数据仍处于排课准备草稿。` }}
+      {{ result.idempotent ? '该导入记录已完成，未重复写入。' : `已导入记录 #${result.batch_id}，数据仍处于排课准备草稿。` }}
     </n-alert>
 
     <section class="template-import-scope" aria-labelledby="template-mode-heading">
       <div>
         <h3 id="template-mode-heading">导入模式</h3>
-        <p>{{ mode === 'standard' ? '教师、班级、科目与教学任务' : '同时包含场地和作息时间表' }}</p>
+        <p>{{ mode === 'standard' ? '教师、班级、科目与教学任务' : '同时包含教室/场地和作息时间表' }}</p>
       </div>
       <div class="template-mode-segment" role="group" aria-label="选择导入模式">
         <button
@@ -726,10 +726,10 @@ function exportIssues() {
       <div class="template-readiness-heading">
         <div>
           <h3 id="template-readiness-heading">排课就绪确认</h3>
-          <p>导入批次 #{{ result.batch_id }}</p>
+          <p>导入记录 #{{ result.batch_id }}</p>
         </div>
         <n-tag v-if="readiness" :type="readiness.ready ? 'success' : 'warning'" :bordered="false">
-          {{ readiness.ready ? '已就绪' : '待确认' }}
+          {{ readiness.ready ? '已确认' : '待确认' }}
         </n-tag>
       </div>
 

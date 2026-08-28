@@ -12,7 +12,7 @@ from tests.conftest import make_user
 PW = "password123"
 
 STANDARD_SHEETS = ["说明", "学期", "科目", "教师", "班级", "教学任务", "来源记录"]
-READY_ONLY_SHEETS = ["教室与场地", "作息时间表"]
+READY_ONLY_SHEETS = ["教室及户外场地", "作息时间表"]
 DATA_SHEETS = STANDARD_SHEETS[1:]
 
 
@@ -94,7 +94,7 @@ def test_downloads_a_versioned_workbook_for_the_selected_semester(
     }
     assert {"学期", "科目", "教师", "班级", "教学任务"} <= validated_sheets
     if mode == "scheduling_ready":
-        assert {"教室与场地", "作息时间表"} <= validated_sheets
+        assert {"教室及户外场地", "作息时间表"} <= validated_sheets
 
 
 def test_template_download_rejects_unknown_semester_and_mode(template_env):

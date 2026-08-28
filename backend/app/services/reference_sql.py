@@ -197,7 +197,7 @@ def build_xlsx_plan(
     source = _parse_xlsx(xlsx_bytes, include_word_history_fallback=False)
     xlsx_sha256 = _sha(xlsx_bytes)
     warnings = [
-        "本批次只处理 Excel；未读取排课规则.docx，不生成排课规则、固定课位或草稿课表",
+        "本次导入只处理 Excel；未读取排课规则.docx，不生成排课规则、固定课位或草稿课表",
         "费用、现有人数和缺口只保留在来源行摘要中，不会冒充教师或课时",
         "复合课时只取周课时字段中的第一个数字；加号后的附加课时不拆成未命名课程",
         "空白周课时、没有明确班级的年级范围只保留为警告，不生成教学任务",

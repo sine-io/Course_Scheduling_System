@@ -49,7 +49,7 @@ TEACHER_STATUS_BY_LABEL = {
 ENTITY_LABELS = {
     "subjects": "科目",
     "teachers": "教师",
-    "rooms": "教室与场地",
+    "rooms": "教室及户外场地",
     "period_tables": "作息时间表",
     "classes": "班级",
     "assignments": "教学任务",
@@ -1550,8 +1550,8 @@ def _validate_ready_plan(
             row=assignment.row,
             field_name="科目",
             value=assignment.values.get("subject_ref"),
-            message="该教学任务需要特殊场地，但没有适用的候选教室或场地",
-            suggestion="在“教室与场地”中补充同类型且适用于该科目的场地",
+            message="该教学任务需要专用教室或户外场地，但没有适用的候选教室资源",
+            suggestion="在“教室及户外场地”中补充同类型且适用于该科目的教室资源",
             planned_row=assignment,
         )
 
@@ -1820,10 +1820,10 @@ _REFERENCE_LABELS = {
     "timetable_entries": "课表",
     "teacher_time_rules": "教师时段规则",
     "teacher_subjects": "教师任教科目",
-    "room_subjects": "场地适用科目",
+    "room_subjects": "教室适用科目",
     "class_units": "班主任关系",
     "leave_requests": "请假记录",
-    "affected_periods": "调代课记录",
+    "affected_periods": "调课与代课记录",
     "notifications": "通知记录",
     "periods": "作息节次",
 }

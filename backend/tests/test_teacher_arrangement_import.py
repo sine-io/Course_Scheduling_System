@@ -81,7 +81,7 @@ def minimal_standard_workbook(
             "学校科目编码": "SUB-MATH",
             "科目名称": f"数学{suffix}",
             "领域/类别": "数学",
-            "所需场地类型": "普通教室",
+            "所需教室/场地类型": "普通教室",
         },
     )
     set_row(
@@ -152,15 +152,15 @@ def complete_ready_workbook(client, semester_id: int) -> bytes:
     set_row(
         workbook,
         "科目",
-        {"所需场地类型": "专用教室"},
+        {"所需教室/场地类型": "专用教室"},
     )
     set_row(
         workbook,
-        "教室与场地",
+        "教室及户外场地",
         {
-            "学校场地编码": "ROOM-MATH",
-            "场地名称": "数学专用教室",
-            "场地类型": "专用教室",
+            "学校教室/场地编码": "ROOM-MATH",
+            "教室/场地名称": "数学专用教室",
+            "教室/场地类型": "专用教室",
             "容量": 48,
             "适用科目": "SUB-MATH",
         },
@@ -977,7 +977,7 @@ def test_ready_preview_blocks_period_balance_capacity_and_special_room_gaps(impo
     no_special_room = load_workbook(
         io.BytesIO(complete_ready_workbook(client, semester_id))
     )
-    clear_data_row(no_special_room, "教室与场地")
+    clear_data_row(no_special_room, "教室及户外场地")
     no_special_room_output = io.BytesIO()
     no_special_room.save(no_special_room_output)
     assert "special_room_candidate_missing" in issue_codes(
