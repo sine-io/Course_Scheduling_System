@@ -125,6 +125,15 @@
   font-weight: 650;
 }
 
+.template-mode-segment button:focus-visible,
+.template-review-filters button:focus-visible,
+.template-review-queue > button:focus-visible,
+.template-review-decision button:focus-visible,
+.template-readiness-next:focus-visible {
+  outline: 2px solid #2f6f62;
+  outline-offset: 2px;
+}
+
 .template-import-file-flow {
   align-items: stretch;
 }
@@ -183,6 +192,17 @@
   gap: 9px;
   min-height: 88px;
   color: #4d5966;
+}
+
+.template-import-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.template-import-error .n-alert {
+  min-width: 0;
+  flex: 1;
 }
 
 .template-import-spinner {
@@ -674,7 +694,8 @@
   .template-import-steps li:nth-child(-n+2) { border-bottom: 1px solid #dfe5ea; }
 
   .template-import-file-flow,
-  .template-import-scope {
+  .template-import-scope,
+  .template-import-error {
     align-items: stretch;
     flex-direction: column;
   }

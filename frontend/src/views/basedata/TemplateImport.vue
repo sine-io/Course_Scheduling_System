@@ -7,6 +7,7 @@ import {
   FileCheck2,
   FileSpreadsheet,
   LoaderCircle,
+  RefreshCw,
   Upload,
 } from '@lucide/vue'
 import { NAlert, NButton, NTag } from 'naive-ui'
@@ -77,6 +78,8 @@ interface ReviewItem {
 }
 const activeFilter = ref<ReviewFilter>('new')
 const selectedReviewKey = ref<string | null>(null)
+type FailedAction = 'download' | 'preview' | 'readiness' | 'confirm_readiness'
+const failedAction = ref<FailedAction | null>(null)
 
 const allRows = computed(() => (
   preview.value?.sheets.flatMap(sheet => sheet.rows.map(row => ({ ...row, label: sheet.label }))) ?? []
@@ -118,6 +121,19 @@ const completedStep = computed(() => {
   if (file.value) return 2
   return 1
 })
+const retryBusy = computed(() => (
+  downloading.value
+  || previewing.value
+  || committing.value
+  || readinessLoading.value
+  || confirmingReadiness.value
+))
+const retryLabel = computed(() => ({
+  download: '重新下载',
+  preview: '重新预览',
+  readiness: '重新检查',
+  confirm_readiness: '重新确认',
+})[failedAction.value ?? 'preview'])
 const filterDefinitions: Array<{ key: ReviewFilter, label: string }> = [
   { key: 'blocker', label: '阻断' },
   { key: 'warning', label: '警告' },
@@ -183,6 +199,7 @@ watch(mode, () => {
   preview.value = null
   result.value = null
   error.value = null
+  failedAction.value = null
   confirmChanges.value = false
   confirmWarnings.value = false
   decisions.value = {}
@@ -221,6 +238,7 @@ function chooseFile(event: Event) {
   preview.value = null
   result.value = null
   error.value = null
+  failedAction.value = null
   confirmChanges.value = false
   confirmWarnings.value = false
   decisions.value = {}
@@ -230,10 +248,12 @@ function chooseFile(event: Event) {
 async function downloadTemplate() {
   downloading.value = true
   error.value = null
+  failedAction.value = null
   try {
     await downloadTeacherArrangementTemplate(props.semester.id, mode.value)
   } catch (cause) {
     error.value = apiErrorMessage(cause, '模板下载失败，请重试。')
+    failedAction.value = 'download'
   } finally {
     downloading.value = false
   }
@@ -243,6 +263,7 @@ async function previewWorkbook() {
   if (!file.value) return
   previewing.value = true
   error.value = null
+  failedAction.value = null
   result.value = null
   readiness.value = null
   try {
@@ -254,8 +275,23 @@ async function previewWorkbook() {
   } catch (cause) {
     preview.value = null
     error.value = apiErrorMessage(cause, '模板预览失败，请检查文件后重试。')
+    failedAction.value = 'preview'
   } finally {
     previewing.value = false
+  }
+}
+
+async function loadReadiness() {
+  readinessLoading.value = true
+  error.value = null
+  failedAction.value = null
+  try {
+    readiness.value = await getSemesterReadiness(props.semester.id)
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '数据已导入，但就绪检查加载失败，请重试。')
+    failedAction.value = 'readiness'
+  } finally {
+    readinessLoading.value = false
   }
 }
 
@@ -263,6 +299,7 @@ async function commitWorkbook() {
   if (!canCommit.value || !file.value || !preview.value) return
   committing.value = true
   error.value = null
+  failedAction.value = null
   try {
     result.value = await commitTeacherArrangementImport(
       props.semester.id,
@@ -274,17 +311,11 @@ async function commitWorkbook() {
       decisions.value,
     )
     if (mode.value === 'scheduling_ready') {
-      readinessLoading.value = true
-      try {
-        readiness.value = await getSemesterReadiness(props.semester.id)
-      } catch (cause) {
-        error.value = apiErrorMessage(cause, '数据已导入，但就绪检查加载失败，请重试。')
-      } finally {
-        readinessLoading.value = false
-      }
+      await loadReadiness()
     }
   } catch (cause) {
     error.value = apiErrorMessage(cause, '模板导入失败，请重新预览后再试。')
+    failedAction.value = 'preview'
   } finally {
     committing.value = false
   }
@@ -294,13 +325,27 @@ async function confirmReadiness() {
   if (!canConfirmReadiness.value) return
   confirmingReadiness.value = true
   error.value = null
+  failedAction.value = null
   try {
     readiness.value = await confirmSemesterReadiness(props.semester.id)
   } catch (cause) {
     error.value = apiErrorMessage(cause, '排课就绪确认失败，请重新检查后再试。')
+    failedAction.value = 'confirm_readiness'
   } finally {
     confirmingReadiness.value = false
   }
+}
+
+function clearFailure() {
+  error.value = null
+  failedAction.value = null
+}
+
+async function retryFailure() {
+  if (failedAction.value === 'download') await downloadTemplate()
+  else if (failedAction.value === 'readiness') await loadReadiness()
+  else if (failedAction.value === 'confirm_readiness') await confirmReadiness()
+  else await previewWorkbook()
 }
 
 function statusLabel(status: string) {
@@ -396,9 +441,21 @@ function exportIssues() {
     <n-alert v-if="!props.canEdit" type="info" :bordered="false">
       当前角色只能预览模板数据，提交导入需要教务主任权限。
     </n-alert>
-    <n-alert v-if="error" type="error" closable :bordered="false" @close="error = null">
-      {{ error }}
-    </n-alert>
+    <div v-if="error" class="template-import-error" data-testid="template-import-error">
+      <n-alert type="error" closable :bordered="false" @close="clearFailure">
+        {{ error }}
+      </n-alert>
+      <n-button
+        v-if="failedAction"
+        data-testid="template-error-retry"
+        secondary
+        :loading="retryBusy"
+        @click="retryFailure"
+      >
+        <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+        {{ retryLabel }}
+      </n-button>
+    </div>
     <n-alert
       v-if="result"
       data-testid="template-import-success"
@@ -475,7 +532,13 @@ function exportIssues() {
       </n-button>
     </section>
 
-    <section v-if="previewing" class="template-import-loading" role="status">
+    <section
+      v-if="previewing"
+      class="template-import-loading"
+      data-testid="template-preview-loading"
+      role="status"
+      aria-live="polite"
+    >
       <LoaderCircle class="template-import-spinner" :size="20" aria-hidden="true" />
       正在校验模板
     </section>
@@ -544,7 +607,7 @@ function exportIssues() {
             <strong>{{ item.title }}</strong>
             <small>{{ item.message }}</small>
           </button>
-          <div v-if="!reviewItems.length" class="template-review-empty">
+          <div v-if="!reviewItems.length" class="template-review-empty" data-testid="review-empty">
             当前分类没有记录
           </div>
         </div>

@@ -171,6 +171,21 @@ const readyPreview = {
   },
 }
 
+const emptyPreview = {
+  ...preview,
+  has_changes: false,
+  counts: {
+    new: 0,
+    changed: 0,
+    unchanged: 0,
+    conflict: 0,
+    disappeared: 0,
+    blocker: 0,
+    warning: 0,
+  },
+  sheets: [],
+}
+
 const readiness = {
   semester_id: 17,
   readiness: 'draft' as const,
@@ -415,6 +430,71 @@ describe('TemplateImport', () => {
     await flushPromises()
     expect(mocks.previewTeacherArrangementImport).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).not.toContain('预览已过期，请重新预览')
+    wrapper.unmount()
+  })
+
+  it('shows validation progress and an explicit empty review state', async () => {
+    let resolvePreview: (value: typeof emptyPreview) => void = () => undefined
+    mocks.previewTeacherArrangementImport.mockReturnValueOnce(new Promise((resolve) => {
+      resolvePreview = resolve
+    }))
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '空模板.xlsx')
+
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="template-preview-loading"]').text()).toContain('正在校验模板')
+
+    resolvePreview(emptyPreview)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="review-empty"]').text()).toContain('当前分类没有记录')
+    wrapper.unmount()
+  })
+
+  it('clears the old preview when the user replaces the workbook', async () => {
+    const wrapper = mountWorkspace()
+    const first = new File(['first'], '第一次.xlsx')
+    const replacement = new File(['replacement'], '修正后.xlsx')
+
+    await chooseWorkbook(wrapper, first)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="preview-count-new"]').exists()).toBe(true)
+
+    await chooseWorkbook(wrapper, replacement)
+
+    expect(wrapper.find('[data-testid="preview-count-new"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('修正后.xlsx')
+
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+    expect(mocks.previewTeacherArrangementImport).toHaveBeenLastCalledWith(
+      17,
+      'standard',
+      replacement,
+    )
+    wrapper.unmount()
+  })
+
+  it('offers a direct retry after preview loading fails', async () => {
+    mocks.previewTeacherArrangementImport
+      .mockRejectedValueOnce(new Error('校验服务暂时不可用'))
+      .mockResolvedValueOnce(preview)
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '待重试.xlsx')
+
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="template-import-error"]').text()).toContain('校验服务暂时不可用')
+    await wrapper.get('[data-testid="template-error-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.previewTeacherArrangementImport).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="preview-count-new"]').text()).toContain('5')
     wrapper.unmount()
   })
 

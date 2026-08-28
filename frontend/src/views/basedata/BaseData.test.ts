@@ -33,6 +33,12 @@ const ManualEntryStub = {
   template: '<div data-testid="manual-entry-stub">{{ semesterId }}/{{ String(canEdit) }}/{{ String(canDelete) }}/{{ String(canManageAccounts) }}/{{ String(showReadonlyNotice) }}</div>',
 }
 
+const TemplateImportStub = {
+  name: 'TemplateImport',
+  props: ['semester', 'canEdit'],
+  template: '<div data-testid="template-import-stub">{{ semester.id }}/{{ String(canEdit) }}</div>',
+}
+
 async function mountBaseData(roles: string[]) {
   const pinia = createPinia()
   const auth = useAuthStore(pinia)
@@ -58,7 +64,7 @@ async function mountBaseData(roles: string[]) {
   const wrapper = mount(BaseData, {
     global: {
       plugins: [pinia, router],
-      stubs: { ManualEntry: ManualEntryStub },
+      stubs: { ManualEntry: ManualEntryStub, TemplateImport: TemplateImportStub },
     },
   })
   await flushPromises()
@@ -83,6 +89,17 @@ describe('BaseData', () => {
     expect(wrapper.find('[data-testid="entry-mode"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="combined-import-panel"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('批量导入')
+    expect(wrapper.text()).not.toContain('参考文件')
+  })
+
+  it('通过基础数据页的正式入口进入模板导入工作区', async () => {
+    const wrapper = await mountBaseData(['director'])
+
+    await wrapper.get('[data-testid="basedata-template-import"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="template-import-stub"]').text()).toBe('8/true')
+    expect(wrapper.find('[data-testid="manual-entry-stub"]').exists()).toBe(false)
   })
 
   it('系统管理员在手工录入中保留删除和账号绑定能力', async () => {
