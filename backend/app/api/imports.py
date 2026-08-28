@@ -20,9 +20,17 @@ from app.api import high_risk_http
 from app.core.auth import get_active_user
 from app.core.db import get_db
 from app.core.permissions import can_edit_core, core_editor, core_viewer
+from app.models.semester import Semester
 from app.models.user import User
 from app.schemas.high_risk import HighRiskConfirmation
-from app.services import combined_import, high_risk, importer, reference_import, semester_context
+from app.services import (
+    combined_import,
+    high_risk,
+    importer,
+    reference_import,
+    semester_context,
+    teacher_arrangement_template,
+)
 
 router = APIRouter(tags=["import"])
 
@@ -62,6 +70,28 @@ def download_setup_template(_: object = Depends(viewer)) -> Response:
         headers={
             "Content-Disposition": 'attachment; filename="school_setup_template.xlsx"'
         },
+    )
+
+
+@router.get("/import/teacher-arrangements/template")
+def download_teacher_arrangement_template(
+    semester_id: int = Query(...),
+    mode: teacher_arrangement_template.TemplateMode = Query(...),
+    db: Session = Depends(get_db),
+    _: object = Depends(viewer),
+) -> Response:
+    """下载绑定目标学期的版本化教师安排模板。"""
+    semester = db.get(Semester, semester_id)
+    if semester is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            {"code": "semester_not_found", "message": "找不到学期"},
+        )
+    filename = teacher_arrangement_template.download_filename(semester, mode)
+    return Response(
+        content=teacher_arrangement_template.build_template(semester, mode),
+        media_type=XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

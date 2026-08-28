@@ -4,6 +4,7 @@ import type { HighRiskConfirmation } from '@/api/highRisk'
 import { apiErrorFromResponse } from '@/api/client'
 
 export type ImportEntity = 'subjects' | 'teachers' | 'classes' | 'assignments'
+export type TeacherArrangementMode = 'standard' | 'scheduling_ready'
 
 export interface ImportResult {
   imported: number
@@ -142,6 +143,22 @@ export async function downloadSetupTemplate(): Promise<void> {
     '/api/import/setup/template',
     'school_setup_template.xlsx',
     '组合模板下载失败',
+  )
+}
+
+/** 下载绑定目标学期的教师安排标准化模板。 */
+export async function downloadTeacherArrangementTemplate(
+  semesterId: number,
+  mode: TeacherArrangementMode,
+): Promise<void> {
+  const filename = mode === 'scheduling_ready'
+    ? '自动排课准备模板_v1.0.xlsx'
+    : '教师安排标准模板_v1.0.xlsx'
+  const params = new URLSearchParams({ semester_id: String(semesterId), mode })
+  await downloadResponse(
+    `/api/import/teacher-arrangements/template?${params.toString()}`,
+    filename,
+    '教师安排模板下载失败',
   )
 }
 
