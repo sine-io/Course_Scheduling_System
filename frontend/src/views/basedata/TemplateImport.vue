@@ -17,9 +17,11 @@ import {
   previewTeacherArrangementImport,
 } from '@/api/imports'
 import type {
+  TeacherArrangementIssue,
   TeacherArrangementCommitResult,
   TeacherArrangementMode,
   TeacherArrangementPreview,
+  TeacherArrangementPreviewRow,
 } from '@/api/imports'
 import type { SemesterListItem } from '@/api/semesters'
 import './template-import.css'
@@ -38,6 +40,23 @@ const downloading = ref(false)
 const previewing = ref(false)
 const committing = ref(false)
 const confirmChanges = ref(false)
+const confirmWarnings = ref(false)
+type ReviewFilter = 'blocker' | 'warning' | 'new' | 'changed' | 'unchanged' | 'disappeared'
+interface ReviewItem {
+  key: string
+  kind: 'issue' | 'row'
+  sheet: string
+  row: number
+  field: string
+  title: string
+  message: string
+  suggestion: string
+  value: unknown
+  status?: string
+  changes: TeacherArrangementPreviewRow['changes']
+}
+const activeFilter = ref<ReviewFilter>('new')
+const selectedReviewKey = ref<string | null>(null)
 
 const allRows = computed(() => (
   preview.value?.sheets.flatMap(sheet => sheet.rows.map(row => ({ ...row, label: sheet.label }))) ?? []
@@ -46,7 +65,8 @@ const canCommit = computed(() => Boolean(
   props.canEdit
   && file.value
   && preview.value?.can_commit
-  && (!preview.value.counts.changed || confirmChanges.value),
+  && (!preview.value.counts.changed || confirmChanges.value)
+  && (!preview.value.counts.warning || confirmWarnings.value),
 ))
 const completedStep = computed(() => {
   if (result.value) return 4
@@ -54,6 +74,62 @@ const completedStep = computed(() => {
   if (file.value) return 2
   return 1
 })
+const filterDefinitions: Array<{ key: ReviewFilter, label: string }> = [
+  { key: 'blocker', label: '阻断' },
+  { key: 'warning', label: '警告' },
+  { key: 'new', label: '新增' },
+  { key: 'changed', label: '变更' },
+  { key: 'unchanged', label: '不变' },
+  { key: 'disappeared', label: '消失' },
+]
+const filterCounts = computed<Record<ReviewFilter, number>>(() => ({
+  blocker: preview.value?.counts.blocker ?? 0,
+  warning: preview.value?.counts.warning ?? 0,
+  new: preview.value?.counts.new ?? 0,
+  changed: preview.value?.counts.changed ?? 0,
+  unchanged: preview.value?.counts.unchanged ?? 0,
+  disappeared: 0,
+}))
+const reviewItems = computed<ReviewItem[]>(() => {
+  if (!preview.value) return []
+  if (activeFilter.value === 'blocker' || activeFilter.value === 'warning') {
+    return preview.value.issues
+      .filter(issue => issue.severity === activeFilter.value)
+      .map((issue: TeacherArrangementIssue, index) => ({
+        key: `issue-${issue.severity}-${issue.sheet}-${issue.row}-${issue.field}-${index}`,
+        kind: 'issue' as const,
+        sheet: issue.sheet,
+        row: issue.row,
+        field: issue.field,
+        title: issue.field,
+        message: issue.message,
+        suggestion: issue.suggestion,
+        value: issue.value,
+        changes: [],
+      }))
+  }
+  if (activeFilter.value === 'disappeared') return []
+  return allRows.value
+    .filter(row => row.status === activeFilter.value)
+    .map(row => ({
+      key: `row-${row.label}-${row.row}-${row.source_key}`,
+      kind: 'row' as const,
+      sheet: row.label,
+      row: row.row,
+      field: '识别项',
+      title: row.identity,
+      message: `${statusLabel(row.status)}数据`,
+      suggestion: row.status === 'changed' ? '核对字段差异后确认更新' : '无需处理',
+      value: row.identity,
+      status: row.status,
+      changes: row.changes,
+    }))
+})
+const selectedReview = computed(() => (
+  reviewItems.value.find(item => item.key === selectedReviewKey.value)
+  ?? reviewItems.value[0]
+  ?? null
+))
 
 watch(mode, () => {
   file.value = null
@@ -61,6 +137,22 @@ watch(mode, () => {
   result.value = null
   error.value = null
   confirmChanges.value = false
+  confirmWarnings.value = false
+})
+
+watch(preview, (value) => {
+  if (!value) return
+  activeFilter.value = value.counts.blocker
+    ? 'blocker'
+    : value.counts.warning
+      ? 'warning'
+      : value.counts.new
+        ? 'new'
+        : value.counts.changed
+          ? 'changed'
+          : 'unchanged'
+  selectedReviewKey.value = null
+  confirmWarnings.value = false
 })
 
 function chooseFile(event: Event) {
@@ -70,6 +162,7 @@ function chooseFile(event: Event) {
   result.value = null
   error.value = null
   confirmChanges.value = false
+  confirmWarnings.value = false
 }
 
 async function downloadTemplate() {
@@ -114,6 +207,7 @@ async function commitWorkbook() {
       file.value,
       preview.value.fingerprint,
       confirmChanges.value,
+      confirmWarnings.value,
     )
   } catch (cause) {
     error.value = apiErrorMessage(cause, '模板导入失败，请重新预览后再试。')
@@ -124,6 +218,42 @@ async function commitWorkbook() {
 
 function statusLabel(status: string) {
   return { new: '新增', changed: '变更', unchanged: '不变' }[status] ?? status
+}
+
+function selectFilter(filter: ReviewFilter) {
+  activeFilter.value = filter
+  selectedReviewKey.value = null
+}
+
+function displayValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '空'
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
+}
+
+function csvCell(value: unknown) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`
+}
+
+function exportIssues() {
+  if (!preview.value?.issues.length) return
+  const header = ['严重级别', '工作表', '行号', '字段', '原值', '问题', '修复建议']
+  const rows = preview.value.issues.map(issue => [
+    issue.severity === 'blocker' ? '阻断' : '警告',
+    issue.sheet,
+    issue.row,
+    issue.field,
+    displayValue(issue.value),
+    issue.message,
+    issue.suggestion,
+  ])
+  const csv = [header, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = '教师安排模板问题.csv'
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -252,31 +382,76 @@ function statusLabel(status: string) {
         <div class="warning"><span>警告</span><strong>{{ preview.counts.warning }}</strong></div>
       </div>
 
-      <div v-if="preview.issues.length" class="template-import-issues">
-        <div v-for="issue in preview.issues" :key="`${issue.sheet}-${issue.row}-${issue.field}-${issue.code}`">
-          <AlertTriangle :size="16" aria-hidden="true" />
-          <span>{{ issue.sheet }} · 第 {{ issue.row }} 行 · {{ issue.field }}</span>
-          <strong>{{ issue.message }}</strong>
+      <div class="template-review-toolbar">
+        <div class="template-review-filters" role="group" aria-label="筛选预览结果">
+          <button
+            v-for="filter in filterDefinitions"
+            :key="filter.key"
+            type="button"
+            :data-testid="`review-filter-${filter.key}`"
+            :aria-pressed="activeFilter === filter.key"
+            @click="selectFilter(filter.key)"
+          >
+            <span>{{ filter.label }}</span>
+            <strong>{{ filterCounts[filter.key] }}</strong>
+          </button>
         </div>
+        <n-button
+          v-if="preview.issues.length"
+          data-testid="export-issues"
+          quaternary
+          size="small"
+          @click="exportIssues"
+        >
+          <template #icon><Download :size="15" aria-hidden="true" /></template>
+          导出问题
+        </n-button>
       </div>
 
-      <div v-if="allRows.length" class="template-import-table-wrap">
-        <table>
-          <thead><tr><th>工作表</th><th>行</th><th>识别项</th><th>结果</th></tr></thead>
-          <tbody>
-            <tr v-for="row in allRows.slice(0, 80)" :key="`${row.label}-${row.row}-${row.source_key}`">
-              <td>{{ row.label }}</td>
-              <td>{{ row.row }}</td>
-              <td>{{ row.identity }}</td>
-              <td><span :class="`row-status ${row.status}`">{{ statusLabel(row.status) }}</span></td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="template-review-workbench">
+        <div class="template-review-queue" aria-label="审查队列">
+          <button
+            v-for="(item, index) in reviewItems"
+            :key="item.key"
+            type="button"
+            :data-testid="`review-queue-item-${index}`"
+            :aria-current="selectedReview?.key === item.key ? 'true' : undefined"
+            @click="selectedReviewKey = item.key"
+          >
+            <span>{{ item.sheet }} · 第 {{ item.row }} 行</span>
+            <strong>{{ item.title }}</strong>
+            <small>{{ item.message }}</small>
+          </button>
+          <div v-if="!reviewItems.length" class="template-review-empty">
+            当前分类没有记录
+          </div>
+        </div>
+        <aside v-if="selectedReview" data-testid="review-detail" class="template-review-detail">
+          <div class="template-review-location">
+            <span>{{ selectedReview.sheet }}</span>
+            <strong>第 {{ selectedReview.row }} 行 · {{ selectedReview.field }}</strong>
+          </div>
+          <dl>
+            <div><dt>原值</dt><dd>{{ displayValue(selectedReview.value) }}</dd></div>
+            <div><dt>结果</dt><dd>{{ selectedReview.message }}</dd></div>
+            <div><dt>处理建议</dt><dd>{{ selectedReview.suggestion }}</dd></div>
+          </dl>
+          <div v-if="selectedReview.changes.length" class="template-review-changes">
+            <div v-for="change in selectedReview.changes" :key="change.field">
+              <strong>{{ change.field }}</strong>
+              <span>{{ displayValue(change.before) }} → {{ displayValue(change.after) }}</span>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <label v-if="preview.counts.changed" class="template-import-confirm">
         <input v-model="confirmChanges" type="checkbox">
         <span>确认使用模板中的值更新 {{ preview.counts.changed }} 条现有数据</span>
+      </label>
+      <label v-if="preview.counts.warning" class="template-import-confirm warning-confirm">
+        <input v-model="confirmWarnings" data-testid="confirm-warnings" type="checkbox">
+        <span>已逐条审查 {{ preview.counts.warning }} 项警告，确认按预览结果导入</span>
       </label>
 
       <footer class="template-import-submit">

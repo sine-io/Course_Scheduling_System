@@ -48,13 +48,19 @@ def set_row(workbook, sheet_name: str, values: dict[str, object], row: int = 4) 
     sheet = workbook[sheet_name]
     columns = {cell.value: index for index, cell in enumerate(sheet[1], start=1)}
     for header, value in values.items():
-        sheet.cell(row=row, column=columns[header], value=value)
+        sheet.cell(row=row, column=columns[header]).value = value
 
 
-def minimal_standard_workbook(client, semester_id: int, *, suffix: str = "") -> bytes:
+def minimal_standard_workbook(
+    client,
+    semester_id: int,
+    *,
+    suffix: str = "",
+    mode: str = "standard",
+) -> bytes:
     response = client.get(
         "/api/import/teacher-arrangements/template",
-        params={"semester_id": semester_id, "mode": "standard"},
+        params={"semester_id": semester_id, "mode": mode},
     )
     assert response.status_code == 200
     workbook = load_workbook(io.BytesIO(response.content))
@@ -81,18 +87,21 @@ def minimal_standard_workbook(client, semester_id: int, *, suffix: str = "") -> 
             "外聘": "否",
         },
     )
+    class_values: dict[str, object] = {
+        "学校班级编码": "C-701",
+        "班级名称": f"七年级1班{suffix}",
+        "年级": 7,
+        "学制": "初中",
+        "专业/班级类别": "普通班",
+        "班主任": "T-001",
+        "班级计划周课时": 5,
+    }
+    if mode == "scheduling_ready":
+        class_values["作息表编码"] = "PT-JUNIOR"
     set_row(
         workbook,
         "班级",
-        {
-            "学校班级编码": "C-701",
-            "班级名称": f"七年级1班{suffix}",
-            "年级": 7,
-            "学制": "初中",
-            "专业/班级类别": "普通班",
-            "班主任": "T-001",
-            "班级计划周课时": 5,
-        },
+        class_values,
     )
     set_row(
         workbook,
@@ -129,10 +138,12 @@ def post_workbook(
     semester_id: int,
     content: bytes,
     data: dict[str, str] | None = None,
+    *,
+    mode: str = "standard",
 ):
     return client.post(
         f"/api/import/teacher-arrangements/{action}",
-        params={"semester_id": semester_id, "mode": "standard"},
+        params={"semester_id": semester_id, "mode": mode},
         data=data,
         files={"file": ("teacher-arrangement.xlsx", content, XLSX_MIME)},
     )
@@ -356,3 +367,134 @@ def test_database_failure_rolls_back_the_whole_import(import_env, monkeypatch):
     assert db.query(Teacher).count() == 0
     assert db.query(ClassUnit).count() == 0
     assert db.query(CourseAssignment).count() == 0
+
+
+def test_standard_missing_values_are_warnings_and_require_confirmation(import_env):
+    client, db, semester_id = import_env
+    content = minimal_standard_workbook(client, semester_id)
+    workbook = load_workbook(io.BytesIO(content))
+    set_row(
+        workbook,
+        "教师",
+        {"基础周课时": None, "行政减课时": None},
+    )
+    set_row(workbook, "教学任务", {"主讲教师": None})
+    output = io.BytesIO()
+    workbook.save(output)
+
+    response = post_workbook(client, "preview", semester_id, output.getvalue())
+
+    assert response.status_code == 200, response.json()
+    preview = response.json()
+    assert preview["can_commit"] is True
+    assert preview["counts"]["warning"] == 3
+    assert {issue["code"] for issue in preview["issues"]} == {
+        "teacher_periods_defaulted",
+        "teacher_admin_reduction_defaulted",
+        "assignment_teacher_missing",
+    }
+    rejected = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "confirm_changes": "false",
+            "confirm_warnings": "false",
+        },
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "teacher_arrangement_warnings_unconfirmed"
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "confirm_changes": "false",
+            "confirm_warnings": "true",
+        },
+    )
+    assert committed.status_code == 200, committed.json()
+    assert db.query(Teacher).one().base_periods == 0
+    assert db.query(Teacher).one().admin_reduction == 0
+    assert db.query(CourseAssignment).one().teachers == []
+
+
+def test_ready_mode_requires_a_teacher_for_every_assignment(import_env):
+    client, _, semester_id = import_env
+    content = minimal_standard_workbook(
+        client, semester_id, mode="scheduling_ready"
+    )
+    workbook = load_workbook(io.BytesIO(content))
+    set_row(workbook, "教学任务", {"主讲教师": None})
+    output = io.BytesIO()
+    workbook.save(output)
+
+    response = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        output.getvalue(),
+        mode="scheduling_ready",
+    )
+
+    assert response.status_code == 200, response.json()
+    preview = response.json()
+    assert preview["can_commit"] is False
+    issue = next(
+        item for item in preview["issues"] if item["code"] == "assignment_teacher_missing"
+    )
+    assert issue["severity"] == "blocker"
+    assert issue["sheet"] == "教学任务"
+    assert issue["row"] == 4
+    assert issue["field"] == "主讲教师"
+
+
+def test_compound_periods_and_ambiguous_teacher_have_precise_locations(import_env):
+    client, _, semester_id = import_env
+    content = minimal_standard_workbook(client, semester_id)
+    workbook = load_workbook(io.BytesIO(content))
+    set_row(
+        workbook,
+        "教师",
+        {
+            "学校教师编码": "T-002",
+            "教师姓名": "王老师",
+            "基础周课时": 18,
+            "行政职务": "",
+            "行政减课时": 0,
+            "教师状态": "在岗",
+            "外聘": "否",
+        },
+        row=5,
+    )
+    set_row(
+        workbook,
+        "教学任务",
+        {"周课时": "4+1", "主讲教师": "王老师"},
+    )
+    output = io.BytesIO()
+    workbook.save(output)
+
+    response = post_workbook(client, "preview", semester_id, output.getvalue())
+
+    assert response.status_code == 200
+    issues = response.json()["issues"]
+    compound = next(item for item in issues if item["code"] == "compound_periods_not_split")
+    ambiguous = next(item for item in issues if item["code"] == "reference_ambiguous")
+    assert compound == {
+        "code": "compound_periods_not_split",
+        "severity": "blocker",
+        "sheet": "教学任务",
+        "row": 4,
+        "field": "周课时",
+        "value": "4+1",
+        "message": "复合课时不能写在同一任务行",
+        "suggestion": "拆成多行任务，并为每行填写唯一任务编码",
+    }
+    assert ambiguous["sheet"] == "教学任务"
+    assert ambiguous["row"] == 4
+    assert ambiguous["field"] == "主讲教师"

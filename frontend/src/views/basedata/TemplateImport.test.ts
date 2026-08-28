@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import TemplateImport from './TemplateImport.vue'
 
@@ -51,6 +51,24 @@ const preview = {
   issues: [],
 }
 
+const warningPreview = {
+  ...preview,
+  can_commit: true,
+  counts: { new: 5, changed: 0, unchanged: 0, blocker: 0, warning: 1 },
+  issues: [
+    {
+      code: 'assignment_teacher_missing',
+      severity: 'warning' as const,
+      sheet: '教学任务',
+      row: 4,
+      field: '主讲教师',
+      value: null,
+      message: '教学任务尚未指定主讲教师',
+      suggestion: '填写教师学校编码或目标学期内唯一姓名',
+    },
+  ],
+}
+
 function mountWorkspace(canEdit = true) {
   return mount(TemplateImport, {
     props: { semester, canEdit },
@@ -100,6 +118,10 @@ describe('TemplateImport', () => {
     })
   })
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('uses the selected mode when downloading the bound template', async () => {
     const wrapper = mountWorkspace()
 
@@ -138,6 +160,7 @@ describe('TemplateImport', () => {
       file,
       'preview-fingerprint',
       false,
+      false,
     )
     expect(wrapper.get('[data-testid="template-import-success"]').text()).toContain('已导入')
     wrapper.unmount()
@@ -153,6 +176,52 @@ describe('TemplateImport', () => {
 
     expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('只能预览')
+    wrapper.unmount()
+  })
+
+  it('shows a review queue, exports issues, and requires warning confirmation', async () => {
+    mocks.previewTeacherArrangementImport.mockResolvedValueOnce(warningPreview)
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:issues'),
+    })
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const downloads: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click(
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download)
+    })
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '教师安排标准模板.xlsx')
+
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="review-filter-warning"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="review-queue-item-0"]').text()).toContain('主讲教师')
+    expect(wrapper.get('[data-testid="review-detail"]').text()).toContain('填写教师学校编码')
+    expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="export-issues"]').trigger('click')
+    expect(downloads).toEqual(['教师安排模板问题.csv'])
+
+    await wrapper.get('[data-testid="confirm-warnings"]').setValue(true)
+    await wrapper.get('[data-testid="template-commit"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.commitTeacherArrangementImport).toHaveBeenCalledWith(
+      17,
+      'standard',
+      file,
+      'preview-fingerprint',
+      false,
+      true,
+    )
     wrapper.unmount()
   })
 })

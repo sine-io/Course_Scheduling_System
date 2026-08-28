@@ -398,6 +398,18 @@ def _integer(
     text = _text(value)
     if text is None:
         return default
+    if key == "weekly_periods" and "+" in text:
+        _issue(
+            issues,
+            code="compound_periods_not_split",
+            sheet=raw_row.sheet,
+            row=raw_row.row,
+            field_name=raw_row.headers.get(key, key),
+            value=value,
+            message="复合课时不能写在同一任务行",
+            suggestion="拆成多行任务，并为每行填写唯一任务编码",
+        )
+        return default
     try:
         number = float(text)
     except ValueError:
@@ -646,6 +658,32 @@ def _plan_teachers(
             values,
             raw.values,
         )
+        if _text(raw.values.get("base_periods")) is None:
+            _issue(
+                issues,
+                code="teacher_periods_defaulted",
+                sheet=row.sheet,
+                row=row.row,
+                field_name="基础周课时",
+                value=None,
+                message="基础周课时未填写，将按 0 导入",
+                suggestion="如需核算教师工作量，请填写实际基础周课时",
+                severity="warning",
+                planned_row=row,
+            )
+        if _text(raw.values.get("admin_reduction")) is None:
+            _issue(
+                issues,
+                code="teacher_admin_reduction_defaulted",
+                sheet=row.sheet,
+                row=row.row,
+                field_name="行政减课时",
+                value=None,
+                message="行政减课时未填写，将按 0 导入",
+                suggestion="有行政减课时请填写非负整数；系统不会从备注推断",
+                severity="warning",
+                planned_row=row,
+            )
         row.existing = _identify_existing(row=row, existing=existing, issues=issues)
         current = None
         if row.existing is not None:
@@ -828,6 +866,7 @@ def _plan_assignments(
     teacher_rows: list[PlannedRow],
     class_rows: list[PlannedRow],
     issues: list[LocatedIssue],
+    mode: TemplateMode,
 ) -> list[PlannedRow]:
     existing = list(
         db.scalars(select(CourseAssignment).where(CourseAssignment.semester_id == semester_id))
@@ -910,6 +949,23 @@ def _plan_assignments(
             field_name="主讲教师",
             required=False,
         )
+        if _text(raw.values.get("lead_teacher")) is None:
+            _issue(
+                issues,
+                code="assignment_teacher_missing",
+                sheet=row.sheet,
+                row=row.row,
+                field_name="主讲教师",
+                value=None,
+                message=(
+                    "自动排课准备模式下教学任务必须指定主讲教师"
+                    if mode == "scheduling_ready"
+                    else "教学任务尚未指定主讲教师"
+                ),
+                suggestion="填写教师学校编码或目标学期内唯一姓名",
+                severity="blocker" if mode == "scheduling_ready" else "warning",
+                planned_row=row,
+            )
         co_targets = []
         for teacher_ref in _names(raw.values.get("co_teachers")):
             target = _resolve_reference(
@@ -1160,6 +1216,7 @@ def build_plan(
         rows["teachers"],
         rows["classes"],
         issues,
+        mode,
     )
     rows["source_records"] = _plan_source_records(
         db, semester.id, raw_by_entity.get("source_records", []), issues

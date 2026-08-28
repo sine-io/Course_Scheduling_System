@@ -139,6 +139,7 @@ async def commit_teacher_arrangement_import(
     file: UploadFile = File(...),
     fingerprint: str = Form(...),
     confirm_changes: bool = Form(False),
+    confirm_warnings: bool = Form(False),
     db: Session = Depends(get_db),
     _: object = Depends(core_editor),
 ) -> dict:
@@ -182,6 +183,14 @@ async def commit_teacher_arrangement_import(
             {
                 "code": "teacher_arrangement_changes_unconfirmed",
                 "message": "工作簿会修改现有数据，请确认变更后再提交",
+            },
+        )
+    if any(issue.severity == "warning" for issue in plan.issues) and not confirm_warnings:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "teacher_arrangement_warnings_unconfirmed",
+                "message": "工作簿包含警告，请确认已审查警告后再提交",
             },
         )
     try:
