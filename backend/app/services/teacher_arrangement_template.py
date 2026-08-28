@@ -43,6 +43,7 @@ class FieldDefinition:
     choices: tuple[str, ...] = ()
     integer_range: tuple[int, int] | None = None
     time_value: bool = False
+    required_in_ready_mode: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,11 +229,11 @@ SHEET_DEFINITIONS = (
             FieldDefinition(
                 "planned_weekly_periods",
                 "班级计划周课时",
-                "必填；该班所有可排教学任务的周课时目标总数",
+                "标准模式选填，未填会给出警告；自动排课准备模式必填",
                 35,
                 aliases=("计划周课时",),
-                required=True,
                 integer_range=(0, 200),
+                required_in_ready_mode=True,
             ),
             FieldDefinition(
                 "period_table_code",
@@ -491,6 +492,12 @@ def fields_for_mode(
     )
 
 
+def field_required(field: FieldDefinition, mode: TemplateMode) -> bool:
+    return field.required or (
+        mode == "scheduling_ready" and field.required_in_ready_mode
+    )
+
+
 def _add_list_validation(sheet, column: str, values: tuple[str, ...], allow_blank: bool) -> None:
     validation = DataValidation(
         type="list",
@@ -553,7 +560,9 @@ def _add_required_text_validation(sheet, column: str) -> None:
     validation.add(f"{column}4:{column}{MAX_DATA_ROW}")
 
 
-def _style_data_sheet(sheet, fields: tuple[FieldDefinition, ...]) -> None:
+def _style_data_sheet(
+    sheet, fields: tuple[FieldDefinition, ...], mode: TemplateMode
+) -> None:
     for cell in sheet[1]:
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = _HEADER_FILL
@@ -574,15 +583,16 @@ def _style_data_sheet(sheet, fields: tuple[FieldDefinition, ...]) -> None:
     sheet.sheet_view.showGridLines = False
     for index, field in enumerate(fields, start=1):
         column = get_column_letter(index)
+        required = field_required(field, mode)
         longest = max(len(field.header), len(field.instruction), len(str(field.example)))
         sheet.column_dimensions[column].width = min(max(longest + 2, 14), 38)
         if field.choices:
-            _add_list_validation(sheet, column, field.choices, not field.required)
+            _add_list_validation(sheet, column, field.choices, not required)
         elif field.integer_range:
-            _add_integer_validation(sheet, column, field.integer_range, not field.required)
+            _add_integer_validation(sheet, column, field.integer_range, not required)
         elif field.time_value:
-            _add_time_validation(sheet, column, not field.required)
-        elif field.required:
+            _add_time_validation(sheet, column, not required)
+        elif required:
             _add_required_text_validation(sheet, column)
 
 
@@ -644,7 +654,7 @@ def _create_data_sheet(
         for cell in sheet[4]:
             cell.fill = _TARGET_FILL
             cell.font = Font(bold=True, color="375623")
-    _style_data_sheet(sheet, fields)
+    _style_data_sheet(sheet, fields, mode)
 
 
 def _create_schema(workbook: Workbook, semester: Semester, mode: TemplateMode) -> None:
@@ -673,7 +683,7 @@ def _create_schema(workbook: Workbook, semester: Semester, mode: TemplateMode) -
                     field.key,
                     field.header,
                     json.dumps(field.aliases, ensure_ascii=False),
-                    field.required,
+                    field_required(field, mode),
                 ]
             )
     sheet.sheet_state = "veryHidden"

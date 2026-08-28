@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { TeacherArrangementPreview } from '@/api/imports'
 import TemplateImport from './TemplateImport.vue'
 
 const mocks = vi.hoisted(() => ({
@@ -89,7 +90,7 @@ const warningPreview = {
   ],
 }
 
-const decisionPreview = {
+const decisionPreview: TeacherArrangementPreview = {
   ...preview,
   can_commit: false,
   counts: {
@@ -128,7 +129,7 @@ const decisionPreview = {
             key: 'teachers:code:T-001',
             kind: 'conflict' as const,
             selected: null,
-            options: ['incoming', 'current'] as const,
+            options: ['incoming', 'current'],
             removal_allowed: false,
             reason: null,
           },
@@ -151,7 +152,7 @@ const decisionPreview = {
             key: 'source_records:SRC-001',
             kind: 'disappeared' as const,
             selected: null,
-            options: ['keep', 'remove'] as const,
+            options: ['keep', 'remove'],
             removal_allowed: true,
             reason: null,
           },
@@ -160,6 +161,28 @@ const decisionPreview = {
     },
   ],
   issues: [],
+}
+
+function previewWithDecisions(
+  selected: Record<string, 'incoming' | 'current' | 'keep' | 'remove'>,
+): TeacherArrangementPreview {
+  const result = structuredClone(decisionPreview)
+  result.fingerprint = `decision-${Object.values(selected).join('-')}`
+  const conflict = result.sheets[0]!.rows[0]!
+  const disappeared = result.sheets[1]!.rows[0]!
+  const conflictSelection = selected['teachers:code:T-001']
+  const disappearedSelection = selected['source_records:SRC-001']
+  if (conflict.decision && conflictSelection) {
+    conflict.decision.selected = conflictSelection
+    conflict.status = conflictSelection === 'incoming' ? 'changed' : 'unchanged'
+    result.counts.conflict = 0
+    result.counts[conflict.status] += 1
+  }
+  if (disappeared.decision && disappearedSelection) {
+    disappeared.decision.selected = disappearedSelection
+  }
+  result.can_commit = Boolean(conflictSelection && disappearedSelection)
+  return result
 }
 
 const readyPreview = {
@@ -296,7 +319,7 @@ describe('TemplateImport', () => {
     await wrapper.get('[data-testid="template-preview"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.previewTeacherArrangementImport).toHaveBeenCalledWith(17, 'standard', file)
+    expect(mocks.previewTeacherArrangementImport).toHaveBeenCalledWith(17, 'standard', file, {})
     expect(wrapper.get('[data-testid="preview-count-new"]').text()).toContain('5')
     expect(wrapper.text()).toContain('TASK-701-MATH')
 
@@ -377,7 +400,19 @@ describe('TemplateImport', () => {
   })
 
   it('requires conflict and disappeared decisions before committing a reimport', async () => {
-    mocks.previewTeacherArrangementImport.mockResolvedValueOnce(decisionPreview)
+    const finalPreview = previewWithDecisions({
+      'teachers:code:T-001': 'incoming',
+      'source_records:SRC-001': 'keep',
+    })
+    let resolveFinalPreview: (value: TeacherArrangementPreview) => void = () => undefined
+    mocks.previewTeacherArrangementImport
+      .mockResolvedValueOnce(decisionPreview)
+      .mockResolvedValueOnce(previewWithDecisions({
+        'teachers:code:T-001': 'incoming',
+      }))
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveFinalPreview = resolve
+      }))
     const wrapper = mountWorkspace()
     const file = new File(['xlsx'], '教师安排重导入.xlsx')
 
@@ -389,13 +424,20 @@ describe('TemplateImport', () => {
     expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
     expect(wrapper.get('[data-testid="decision-incoming"]').text()).toContain('模板')
     await wrapper.get('[data-testid="decision-incoming"]').trigger('click')
+    await flushPromises()
 
     await wrapper.get('[data-testid="review-filter-disappeared"]').trigger('click')
     expect(wrapper.get('[data-testid="decision-keep"]').text()).toContain('保留')
+    await wrapper.get('[data-testid="confirm-changes"]').setValue(true)
     await wrapper.get('[data-testid="decision-keep"]').trigger('click')
     expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
 
+    resolveFinalPreview(finalPreview)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
+
     await wrapper.get('[data-testid="confirm-changes"]').setValue(true)
+    expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeUndefined()
     await wrapper.get('[data-testid="template-commit"]').trigger('click')
     await flushPromises()
 
@@ -403,9 +445,26 @@ describe('TemplateImport', () => {
       17,
       'standard',
       file,
-      'preview-fingerprint',
+      'decision-incoming-keep',
       true,
       false,
+      {
+        'teachers:code:T-001': 'incoming',
+        'source_records:SRC-001': 'keep',
+      },
+    )
+    expect(mocks.previewTeacherArrangementImport).toHaveBeenNthCalledWith(
+      2,
+      17,
+      'standard',
+      file,
+      { 'teachers:code:T-001': 'incoming' },
+    )
+    expect(mocks.previewTeacherArrangementImport).toHaveBeenNthCalledWith(
+      3,
+      17,
+      'standard',
+      file,
       {
         'teachers:code:T-001': 'incoming',
         'source_records:SRC-001': 'keep',
@@ -474,6 +533,7 @@ describe('TemplateImport', () => {
       17,
       'standard',
       replacement,
+      {},
     )
     wrapper.unmount()
   })

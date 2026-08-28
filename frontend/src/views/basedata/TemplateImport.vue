@@ -99,6 +99,8 @@ const canCommit = computed(() => Boolean(
   props.canEdit
   && file.value
   && preview.value
+  && !previewing.value
+  && !committing.value
   && !preview.value.counts.blocker
   && !unresolvedDecisionCount.value
   && (!pendingChangeCount.value || confirmChanges.value)
@@ -259,7 +261,9 @@ async function downloadTemplate() {
   }
 }
 
-async function previewWorkbook() {
+async function requestPreview(
+  selectedDecisions: Record<string, TeacherArrangementDecisionValue>,
+) {
   if (!file.value) return
   previewing.value = true
   error.value = null
@@ -271,6 +275,7 @@ async function previewWorkbook() {
       props.semester.id,
       mode.value,
       file.value,
+      selectedDecisions,
     )
   } catch (cause) {
     preview.value = null
@@ -279,6 +284,10 @@ async function previewWorkbook() {
   } finally {
     previewing.value = false
   }
+}
+
+async function previewWorkbook() {
+  await requestPreview(decisions.value)
 }
 
 async function loadReadiness() {
@@ -375,8 +384,10 @@ function selectFilter(filter: ReviewFilter) {
   selectedReviewKey.value = null
 }
 
-function chooseDecision(key: string, value: TeacherArrangementDecisionValue) {
-  decisions.value = { ...decisions.value, [key]: value }
+async function chooseDecision(key: string, value: TeacherArrangementDecisionValue) {
+  const selectedDecisions = { ...decisions.value, [key]: value }
+  decisions.value = selectedDecisions
+  await requestPreview(selectedDecisions)
 }
 
 function selectedDecision(decision: TeacherArrangementDecision) {
@@ -462,7 +473,7 @@ function exportIssues() {
       type="success"
       :bordered="false"
     >
-      {{ result.idempotent ? '该导入记录已完成，未重复写入。' : `已导入记录 #${result.batch_id}，数据仍处于排课准备草稿。` }}
+      {{ result.idempotent ? '该导入记录已完成，未重复写入。' : `已导入记录 #${result.batch_id}，排课就绪状态已回到待确认。` }}
     </n-alert>
 
     <section class="template-import-scope" aria-labelledby="template-mode-heading">
@@ -633,6 +644,7 @@ function exportIssues() {
                   type="button"
                   data-testid="decision-incoming"
                   :aria-pressed="selectedDecision(selectedReview.decision) === 'incoming'"
+                  :disabled="previewing"
                   @click="chooseDecision(selectedReview.decision.key, 'incoming')"
                 >
                   使用模板值
@@ -641,6 +653,7 @@ function exportIssues() {
                   type="button"
                   data-testid="decision-current"
                   :aria-pressed="selectedDecision(selectedReview.decision) === 'current'"
+                  :disabled="previewing"
                   @click="chooseDecision(selectedReview.decision.key, 'current')"
                 >
                   保留系统值
@@ -651,6 +664,7 @@ function exportIssues() {
                   type="button"
                   data-testid="decision-keep"
                   :aria-pressed="selectedDecision(selectedReview.decision) === 'keep'"
+                  :disabled="previewing"
                   @click="chooseDecision(selectedReview.decision.key, 'keep')"
                 >
                   保留为手工数据
@@ -658,7 +672,7 @@ function exportIssues() {
                 <button
                   type="button"
                   data-testid="decision-remove"
-                  :disabled="!selectedReview.decision.removal_allowed"
+                  :disabled="previewing || !selectedReview.decision.removal_allowed"
                   :aria-pressed="selectedDecision(selectedReview.decision) === 'remove'"
                   :title="selectedReview.decision.reason ?? undefined"
                   @click="chooseDecision(selectedReview.decision.key, 'remove')"
@@ -703,7 +717,7 @@ function exportIssues() {
         </span>
         <span v-else>
           <CheckCircle2 :size="16" aria-hidden="true" />
-          提交不会创建排课草案或激活规则
+          提交不会创建课表草稿或激活规则
         </span>
         <n-button
           data-testid="template-commit"

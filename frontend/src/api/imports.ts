@@ -260,20 +260,20 @@ async function postTeacherArrangementWorkbook<T>(
   semesterId: number,
   mode: TeacherArrangementMode,
   file: File,
+  decisions: Record<string, TeacherArrangementDecisionValue>,
   extra?: {
     fingerprint: string
     confirmChanges: boolean
     confirmWarnings: boolean
-    decisions: Record<string, TeacherArrangementDecisionValue>
   },
 ): Promise<T> {
   const form = new FormData()
   form.append('file', file)
+  form.append('decisions', JSON.stringify(decisions))
   if (extra) {
     form.append('fingerprint', extra.fingerprint)
     form.append('confirm_changes', String(extra.confirmChanges))
     form.append('confirm_warnings', String(extra.confirmWarnings))
-    form.append('decisions', JSON.stringify(extra.decisions))
   }
   const params = new URLSearchParams({ semester_id: String(semesterId), mode })
   const response = await fetch(
@@ -293,12 +293,14 @@ export function previewTeacherArrangementImport(
   semesterId: number,
   mode: TeacherArrangementMode,
   file: File,
+  decisions: Record<string, TeacherArrangementDecisionValue> = {},
 ): Promise<TeacherArrangementPreview> {
   return postTeacherArrangementWorkbook<TeacherArrangementPreview>(
     'preview',
     semesterId,
     mode,
     file,
+    decisions,
   )
 }
 
@@ -316,7 +318,8 @@ export function commitTeacherArrangementImport(
     semesterId,
     mode,
     file,
-    { fingerprint, confirmChanges, confirmWarnings, decisions },
+    decisions,
+    { fingerprint, confirmChanges, confirmWarnings },
   )
 }
 

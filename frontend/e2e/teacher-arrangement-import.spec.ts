@@ -173,7 +173,7 @@ for (const viewport of VIEWPORTS) {
       await expect(page.getByTestId('template-commit')).toBeEnabled()
       await page.getByTestId('template-commit').click()
 
-      await expect(page.getByTestId('template-import-success')).toContainText('数据仍处于排课准备草稿')
+      await expect(page.getByTestId('template-import-success')).toContainText('排课就绪状态已回到待确认')
       await expect(page.getByTestId('template-readiness')).toContainText('数据完整性')
       await expect(page.getByTestId('template-readiness')).toContainText('求解预检')
       await expect(page.getByTestId('readiness-confirm')).toBeEnabled()

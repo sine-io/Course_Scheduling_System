@@ -662,6 +662,9 @@
           SCHOOL ||--o{ SEMESTER : &quot;有&quot;
           SCHOOL ||--|| SEMESTER_CONTEXT : &quot;维护&quot;
           SEMESTER_CONTEXT ||--o| SEMESTER : &quot;指向当前&quot;
+          SEMESTER ||--o{ TEACHER_ARRANGEMENT_IMPORT_BATCH : &quot;记录模板导入&quot;
+          TEACHER_ARRANGEMENT_IMPORT_BATCH ||--o{ TEACHER_ARRANGEMENT_IMPORT_RECORD : &quot;包含逐行结果&quot;
+          SEMESTER ||--o{ TEACHER_ARRANGEMENT_SOURCE_RECORD : &quot;保留非排课来源信息&quot;
           SEMESTER ||--o{ PERIOD_TABLE : &quot;使用&quot;
           PERIOD_TABLE ||--o{ PERIOD : &quot;定义节次&quot;
           SEMESTER ||--o{ TEACHER : &quot;聘任(快照)&quot;
@@ -707,7 +710,7 @@
       <tr>
       <td><code>semester</code></td>
       <td>学年学期</td>
-      <td>学年起始年（如 2026）、学期（1/2）、起止日期、状态（准备中/进行中/已归档）；学年起始年与学期组合唯一</td>
+      <td>学年起始年（如 2026）、学期（1/2）、起止日期、生命周期状态（准备中/进行中/已归档）、排课就绪状态（草稿/已确认）；学年起始年与学期组合唯一</td>
       </tr>
       <tr>
       <td><code>semester_context</code></td>
@@ -717,7 +720,7 @@
       <tr>
       <td><code>period_table</code></td>
       <td>作息时间表</td>
-      <td>名称;一学期可有多套(如高中部/初中部各一套)</td>
+      <td>学校编码、名称；一学期可有多套（如高中部/初中部各一套）</td>
       </tr>
       <tr>
       <td><code>period</code></td>
@@ -727,22 +730,22 @@
       <tr>
       <td><code>teacher</code></td>
       <td>教师</td>
-      <td>姓名、任教科目（多选）、基本课时、行政职务与减课数、是否外聘/企业兼职教师、在职状态、联系信息（电子邮箱、手机号、即时通讯账号，均选填）、绑定账号（<code>user_id</code>，可空外键 → users）</td>
+      <td>学校编码、姓名、任教科目（多选）、基本课时、行政职务与减课数、教师安排状态、是否外聘/企业兼职教师、在职状态、联系信息（电子邮箱、手机号、即时通讯账号，均选填）、绑定账号（<code>user_id</code>，可空外键 → users）</td>
       </tr>
       <tr>
       <td><code>class_unit</code></td>
       <td>班级</td>
-      <td>年级、班名、学制标签(普/综/技/初中/小学)、专业类别(中职)、班主任、人数；班名在同一学期内唯一(<code>uq(semester_id, name)</code>)</td>
+      <td>学校编码、年级、班名、学制标签（小学/初中/普通高中/综合高中/中职/职业高中）、专业类别、班主任、人数、班级计划周课时、作息时间表；班名在同一学期内唯一（<code>uq(semester_id, name)</code>）</td>
       </tr>
       <tr>
       <td><code>subject</code></td>
       <td>科目</td>
-      <td>名称、领域/群别、需要教室/场地类型、默认连堂规则</td>
+      <td>学校编码、名称、领域/类别、需要教室/场地类型、默认连堂规则</td>
       </tr>
       <tr>
       <td><code>room</code></td>
       <td>教室/场地</td>
-      <td>名称、类型(普通/专科/实训场地/户外)、容量、适用科目</td>
+      <td>学校编码、名称、类型（普通教室/专用教室/实训场地/户外）、容量、适用科目</td>
       </tr>
       <tr>
       <td><code>scheduling_unit</code></td>
@@ -752,7 +755,7 @@
       <tr>
       <td><code>course_assignment</code></td>
       <td><strong>教学任务</strong></td>
-      <td>排课单位、科目、每周节数、教室/场地需求(类型或指定教室/场地)、是否锁定教室/场地</td>
+      <td>学校任务编码、排课单位、科目、课程组成、每周节数、教室/场地需求（类型或指定教室/场地）、是否锁定教室/场地</td>
       </tr>
       <tr>
       <td><code>assignment_teacher</code></td>
@@ -813,6 +816,21 @@
       <td><code>constraint_config</code></td>
       <td>软约束权重</td>
       <td>每学期一组 key/value；保存 S1–S8 权重和 H10 上限等参数，复制新学期时可选择一并复制</td>
+      </tr>
+      <tr>
+      <td><code>teacher_arrangement_import_batch</code></td>
+      <td>一次教师安排模板导入</td>
+      <td>目标学期、工作簿摘要、模板版本、导入模式、预览指纹、文件名、用户决策、结果统计和创建时间；不保存原始工作簿二进制内容</td>
+      </tr>
+      <tr>
+      <td><code>teacher_arrangement_import_record</code></td>
+      <td>教师安排导入逐行记录</td>
+      <td>所属导入记录、目标学期、实体类型、稳定来源键、工作表与行号、目标记录、处理结果、原始值和已应用值</td>
+      </tr>
+      <tr>
+      <td><code>teacher_arrangement_source_record</code></td>
+      <td>非排课来源记录</td>
+      <td>目标学期、来源编码、类别、可选教学任务编码、内容和备注；用于保留费用、人数、缺编、周期等不直接参与排课的信息</td>
       </tr>
       </tbody>
       </table></div>

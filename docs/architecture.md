@@ -152,6 +152,9 @@ erDiagram
     SCHOOL ||--o{ SEMESTER : "有"
     SCHOOL ||--|| SEMESTER_CONTEXT : "维护"
     SEMESTER_CONTEXT ||--o| SEMESTER : "指向当前"
+    SEMESTER ||--o{ TEACHER_ARRANGEMENT_IMPORT_BATCH : "记录模板导入"
+    TEACHER_ARRANGEMENT_IMPORT_BATCH ||--o{ TEACHER_ARRANGEMENT_IMPORT_RECORD : "包含逐行结果"
+    SEMESTER ||--o{ TEACHER_ARRANGEMENT_SOURCE_RECORD : "保留非排课来源信息"
     SEMESTER ||--o{ PERIOD_TABLE : "使用"
     PERIOD_TABLE ||--o{ PERIOD : "定义节次"
     SEMESTER ||--o{ TEACHER : "聘任(快照)"
@@ -185,16 +188,16 @@ erDiagram
 | 实体 | 说明 | 关键字段 |
 |---|---|---|
 | `app_setting` | 单校全局设置 | 不隶属学期，以 key/value 存放 SMTP、学校名称和超课时上限；增加普通设置无需新增数据库迁移 |
-| `semester` | 学年学期 | 学年起始年（如 2026）、学期（1/2）、起止日期、状态（准备中/进行中/已归档）；学年起始年与学期组合唯一 |
+| `semester` | 学年学期 | 学年起始年（如 2026）、学期（1/2）、起止日期、生命周期状态（准备中/进行中/已归档）、排课就绪状态（草稿/已确认）；学年起始年与学期组合唯一 |
 | `semester_context` | 当前学期工作上下文 | 单校单例行（`id=1`）；`current_semester_id` 是可空且唯一的学期外键，`revision` 用于并发切换校验；当前指针不复用学期生命周期状态 |
-| `period_table` | 作息时间表 | 名称;一学期可有多套(如高中部/初中部各一套) |
+| `period_table` | 作息时间表 | 学校编码、名称；一学期可有多套（如高中部/初中部各一套） |
 | `period` | 节次定义 | 星期(1–5,可扩至 6)、第几节、起止时间、类型(一般课/早自习/午休/班主任时间/固定用途) |
-| `teacher` | 教师 | 姓名、任教科目（多选）、基本课时、行政职务与减课数、是否外聘/企业兼职教师、在职状态、联系信息（电子邮箱、手机号、即时通讯账号，均选填）、绑定账号（`user_id`，可空外键 → users） |
-| `class_unit` | 班级 | 年级、班名、学制标签(普/综/技/初中/小学)、专业类别(中职)、班主任、人数；班名在同一学期内唯一(`uq(semester_id, name)`) |
-| `subject` | 科目 | 名称、领域/群别、需要教室/场地类型、默认连堂规则 |
-| `room` | 教室/场地 | 名称、类型(普通/专科/实训场地/户外)、容量、适用科目 |
+| `teacher` | 教师 | 学校编码、姓名、任教科目（多选）、基本课时、行政职务与减课数、教师安排状态、是否外聘/企业兼职教师、在职状态、联系信息（电子邮箱、手机号、即时通讯账号，均选填）、绑定账号（`user_id`，可空外键 → users） |
+| `class_unit` | 班级 | 学校编码、年级、班名、学制标签（小学/初中/普通高中/综合高中/中职/职业高中）、专业类别、班主任、人数、班级计划周课时、作息时间表；班名在同一学期内唯一（`uq(semester_id, name)`） |
+| `subject` | 科目 | 学校编码、名称、领域/类别、需要教室/场地类型、默认连堂规则 |
+| `room` | 教室/场地 | 学校编码、名称、类型（普通教室/专用教室/实训场地/户外）、容量、适用科目 |
 | `scheduling_unit` | **排课单位**（关键抽象） | 类型：`single`（单一班级）/`group`（走班群组）；走班群组通过 `scheduling_unit_member` 关联多个班级 |
-| `course_assignment` | **教学任务** | 排课单位、科目、每周节数、教室/场地需求(类型或指定教室/场地)、是否锁定教室/场地 |
+| `course_assignment` | **教学任务** | 学校任务编码、排课单位、科目、课程组成、每周节数、教室/场地需求（类型或指定教室/场地）、是否锁定教室/场地 |
 | `assignment_teacher` | 教学任务教师 | 支持协同教学(多教师);主讲/协同标记 |
 | `block_rule` | 连堂规则 | 连堂长度(2–4)、每周次数(如「每周 6 节,其中 3 连堂×2 次」) |
 | `teacher_time_rule` | 教师时段规则 | 类型:`unavailable`(硬:不可排)/`avoid`(软:尽量避开)/`prefer`(软:偏好);对应星期×节次 |
@@ -207,6 +210,9 @@ erDiagram
 | `user` / `user_role` | 账号与角色 | 本地账号和密码(bcrypt);角色:admin(唯一内置系统管理员) / director(教务主任) / teacher(教师)；普通账号权限取角色并集，不保存侧栏入口偏好 |
 | `audit_log` | 操作轨迹 | 谁在何时改了什么(排课变更、调课与代课指派必记) |
 | `constraint_config` | 软约束权重 | 每学期一组 key/value；保存 S1–S8 权重和 H10 上限等参数，复制新学期时可选择一并复制 |
+| `teacher_arrangement_import_batch` | 一次教师安排模板导入 | 目标学期、工作簿摘要、模板版本、导入模式、预览指纹、文件名、用户决策、结果统计和创建时间；不保存原始工作簿二进制内容 |
+| `teacher_arrangement_import_record` | 教师安排导入逐行记录 | 所属导入记录、目标学期、实体类型、稳定来源键、工作表与行号、目标记录、处理结果、原始值和已应用值 |
+| `teacher_arrangement_source_record` | 非排课来源记录 | 目标学期、来源编码、类别、可选教学任务编码、内容和备注；用于保留费用、人数、缺编、周期等不直接参与排课的信息 |
 
 ### 2.3 关键设计决策
 

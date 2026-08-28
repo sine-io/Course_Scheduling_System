@@ -27,6 +27,7 @@ class TeacherArrangementImportBatch(Base):
     template_version: Mapped[str] = mapped_column(String(32))
     mode: Mapped[str] = mapped_column(String(32))
     filename: Mapped[str] = mapped_column(String(255))
+    decisions: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     summary: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

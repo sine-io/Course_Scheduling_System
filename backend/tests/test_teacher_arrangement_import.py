@@ -480,6 +480,62 @@ def test_standard_missing_values_are_warnings_and_require_confirmation(import_en
     assert db.query(CourseAssignment).one().teachers == []
 
 
+def test_class_planned_periods_warn_in_standard_and_block_ready_mode(import_env):
+    client, db, semester_id = import_env
+    standard = load_workbook(
+        io.BytesIO(minimal_standard_workbook(client, semester_id))
+    )
+    set_row(standard, "班级", {"班级计划周课时": None})
+    standard_output = io.BytesIO()
+    standard.save(standard_output)
+
+    standard_preview = post_workbook(
+        client, "preview", semester_id, standard_output.getvalue()
+    ).json()
+
+    assert standard_preview["can_commit"] is True
+    assert standard_preview["counts"]["warning"] == 1
+    assert {issue["code"] for issue in standard_preview["issues"]} == {
+        "class_planned_periods_missing"
+    }
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        standard_output.getvalue(),
+        data={
+            "fingerprint": standard_preview["fingerprint"],
+            "confirm_warnings": "true",
+        },
+    )
+    assert committed.status_code == 200, committed.json()
+    assert db.query(ClassUnit).one().planned_weekly_periods is None
+
+    ready = load_workbook(
+        io.BytesIO(
+            minimal_standard_workbook(
+                client, semester_id, suffix="-ready", mode="scheduling_ready"
+            )
+        )
+    )
+    set_row(ready, "班级", {"班级计划周课时": None})
+    ready_output = io.BytesIO()
+    ready.save(ready_output)
+
+    ready_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        ready_output.getvalue(),
+        mode="scheduling_ready",
+    ).json()
+
+    assert ready_preview["can_commit"] is False
+    assert "required_value_missing" in {
+        issue["code"] for issue in ready_preview["issues"]
+    }
+
+
 def test_ready_mode_requires_a_teacher_for_every_assignment(import_env):
     client, _, semester_id = import_env
     content = minimal_standard_workbook(
@@ -662,20 +718,49 @@ def test_divergent_reimport_requires_and_applies_conflict_decision(import_env):
     assert rejected.status_code == 409
     assert rejected.json()["detail"]["code"] == "teacher_arrangement_decisions_required"
 
-    committed = post_workbook(
+    decisions = {conflict["decision"]["key"]: "incoming"}
+    decided_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        output.getvalue(),
+        data={"decisions": json.dumps(decisions)},
+    ).json()
+    assert decided_preview["fingerprint"] != preview["fingerprint"]
+    assert decided_preview["can_commit"] is True
+
+    stale = post_workbook(
         client,
         "commit",
         semester_id,
         output.getvalue(),
         data={
             "fingerprint": preview["fingerprint"],
-            "decisions": json.dumps({conflict["decision"]["key"]: "incoming"}),
+            "decisions": json.dumps(decisions),
+            "confirm_changes": "true",
+        },
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["code"] == "teacher_arrangement_preview_stale"
+
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": decided_preview["fingerprint"],
+            "decisions": json.dumps(decisions),
             "confirm_changes": "true",
         },
     )
     assert committed.status_code == 200, committed.json()
     db.expire_all()
     assert db.query(Teacher).one().base_periods == 20
+    batch = db.query(TeacherArrangementImportBatch).order_by(
+        TeacherArrangementImportBatch.id.desc()
+    ).first()
+    assert batch is not None and batch.decisions == decisions
 
 
 def test_disappeared_source_record_requires_decision_and_can_be_removed(import_env):
@@ -717,14 +802,22 @@ def test_disappeared_source_record_requires_decision_and_can_be_removed(import_e
     assert rejected.status_code == 409
     assert rejected.json()["detail"]["code"] == "teacher_arrangement_decisions_required"
 
+    decisions = {disappeared["decision"]["key"]: "remove"}
+    decided_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        output.getvalue(),
+        data={"decisions": json.dumps(decisions)},
+    ).json()
     committed = post_workbook(
         client,
         "commit",
         semester_id,
         output.getvalue(),
         data={
-            "fingerprint": preview["fingerprint"],
-            "decisions": json.dumps({disappeared["decision"]["key"]: "remove"}),
+            "fingerprint": decided_preview["fingerprint"],
+            "decisions": json.dumps(decisions),
         },
     )
     assert committed.status_code == 200, committed.json()
@@ -764,14 +857,22 @@ def test_disappeared_keep_detaches_source_without_deleting_target(import_env):
         if row["status"] == "disappeared"
     )
 
+    decisions = {disappeared["decision"]["key"]: "keep"}
+    decided_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        output.getvalue(),
+        data={"decisions": json.dumps(decisions)},
+    ).json()
     committed = post_workbook(
         client,
         "commit",
         semester_id,
         output.getvalue(),
         data={
-            "fingerprint": preview["fingerprint"],
-            "decisions": json.dumps({disappeared["decision"]["key"]: "keep"}),
+            "fingerprint": decided_preview["fingerprint"],
+            "decisions": json.dumps(decisions),
         },
     )
 
@@ -813,14 +914,22 @@ def test_disappeared_referenced_teacher_cannot_be_removed(import_env):
     assert disappeared["source_key"] == "code:T-001"
     assert disappeared["decision"]["removal_allowed"] is False
     assert "引用" in disappeared["decision"]["reason"]
+    decisions = {disappeared["decision"]["key"]: "remove"}
+    decided_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        output.getvalue(),
+        data={"decisions": json.dumps(decisions)},
+    ).json()
     rejected = post_workbook(
         client,
         "commit",
         semester_id,
         output.getvalue(),
         data={
-            "fingerprint": preview["fingerprint"],
-            "decisions": json.dumps({disappeared["decision"]["key"]: "remove"}),
+            "fingerprint": decided_preview["fingerprint"],
+            "decisions": json.dumps(decisions),
         },
     )
     assert rejected.status_code == 409

@@ -71,6 +71,15 @@ def test_downloads_a_versioned_workbook_for_the_selected_semester(
     assert workbook["_schema"]["B2"].value == "1.0"
     assert workbook["_schema"]["B3"].value == mode
     assert workbook["_schema"]["B4"].value == semester_id
+    schema_required = {
+        (row[0], row[2]): row[5]
+        for row in workbook["_schema"].iter_rows(
+            min_row=10, max_col=6, values_only=True
+        )
+    }
+    assert schema_required[("classes", "planned_weekly_periods")] is (
+        mode == "scheduling_ready"
+    )
 
     expected_data_sheets = (
         [*DATA_SHEETS, *READY_ONLY_SHEETS]

@@ -32,6 +32,7 @@ from app.services.teacher_arrangement_template import (
     FieldDefinition,
     SheetDefinition,
     TemplateMode,
+    field_required,
     fields_for_mode,
     visible_definitions,
 )
@@ -213,6 +214,7 @@ class ImportPlan:
     mode: TemplateMode
     workbook_sha256: str
     fingerprint: str
+    decisions: dict[str, str]
     rows: dict[str, list[PlannedRow]]
     issues: list[LocatedIssue]
 
@@ -444,7 +446,7 @@ def _read_sheet_rows(
         seen_fields.add(field_definition.key)
         columns[column] = field_definition
     for field_definition in fields:
-        if field_definition.required and field_definition.key not in seen_fields:
+        if field_required(field_definition, mode) and field_definition.key not in seen_fields:
             _issue(
                 issues,
                 code="required_header_missing",
@@ -472,7 +474,7 @@ def _read_sheet_rows(
         result.append(raw_row)
         for field_definition in fields:
             if (
-                field_definition.required
+                field_required(field_definition, mode)
                 and field_definition.key in seen_fields
                 and _text(values.get(field_definition.key)) is None
             ):
@@ -1218,6 +1220,22 @@ def _plan_classes(
             values,
             raw.values,
         )
+        if (
+            mode == "standard"
+            and _text(raw.values.get("planned_weekly_periods")) is None
+        ):
+            _issue(
+                issues,
+                code="class_planned_periods_missing",
+                sheet=row.sheet,
+                row=row.row,
+                field_name="班级计划周课时",
+                value=None,
+                message="班级计划周课时未填写",
+                suggestion="自动排课前请补齐该班所有可排教学任务的周课时目标总数",
+                severity="warning",
+                planned_row=row,
+            )
         homeroom_ref = _text(raw.values.get("homeroom_teacher"))
         target = _resolve_reference(
             value=homeroom_ref,
@@ -2063,14 +2081,16 @@ def _fingerprint(
     semester_id: int,
     mode: TemplateMode,
     database_snapshot: dict[str, Any],
+    decisions: dict[str, str],
 ) -> str:
     payload = {
-        "plan_version": 3,
+        "plan_version": 4,
         "template_version": TEMPLATE_VERSION,
         "workbook_sha256": workbook_sha256,
         "semester_id": semester_id,
         "mode": mode,
         "database": database_snapshot,
+        "decisions": decisions,
     }
     encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(encoded.encode()).hexdigest()
@@ -2083,6 +2103,7 @@ def build_plan(
     mode: TemplateMode,
     decisions: dict[str, str] | None = None,
 ) -> ImportPlan:
+    normalized_decisions = dict(sorted((decisions or {}).items()))
     workbook = _load_workbook(content, semester, mode)
     issues: list[LocatedIssue] = []
     raw_by_entity: dict[str, list[RawRow]] = {}
@@ -2169,7 +2190,7 @@ def build_plan(
     rows["source_records"] = _plan_source_records(
         db, semester.id, raw_by_entity.get("source_records", []), issues
     )
-    _reconcile_import_history(db, semester.id, rows, decisions or {}, issues)
+    _reconcile_import_history(db, semester.id, rows, normalized_decisions, issues)
     if mode == "scheduling_ready":
         _validate_ready_plan(db, semester.id, rows, issues)
     workbook_sha256 = hashlib.sha256(content).hexdigest()
@@ -2182,7 +2203,9 @@ def build_plan(
             semester_id=semester.id,
             mode=mode,
             database_snapshot=_database_snapshot(db, semester.id),
+            decisions=normalized_decisions,
         ),
+        decisions=normalized_decisions,
         rows=rows,
         issues=issues,
     )
@@ -2465,6 +2488,7 @@ def apply_plan(db: Session, plan: ImportPlan, *, filename: str) -> dict[str, Any
         template_version=TEMPLATE_VERSION,
         mode=plan.mode,
         filename=filename[:255],
+        decisions=plan.decisions,
     )
     db.add(batch)
     db.flush()
