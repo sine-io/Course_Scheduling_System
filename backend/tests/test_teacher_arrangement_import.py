@@ -2,6 +2,7 @@
 
 import io
 import json
+from datetime import time
 
 import pytest
 from openpyxl import load_workbook
@@ -9,7 +10,9 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.imports import XLSX_MIME
 from app.models.assignment import CourseAssignment, SchedulingUnit
-from app.models.basedata import ClassUnit, Subject, Teacher
+from app.models.audit import AuditLog
+from app.models.basedata import ClassUnit, Room, Subject, Teacher
+from app.models.period import Period, PeriodTable, PeriodType
 from app.models.semester import Semester
 from app.models.teacher_arrangement_import import (
     TeacherArrangementImportBatch,
@@ -134,6 +137,51 @@ def minimal_standard_workbook(
             "备注": "来自教师安排表备注栏",
         },
     )
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def complete_ready_workbook(client, semester_id: int) -> bytes:
+    content = minimal_standard_workbook(
+        client,
+        semester_id,
+        mode="scheduling_ready",
+    )
+    workbook = load_workbook(io.BytesIO(content))
+    set_row(
+        workbook,
+        "科目",
+        {"所需场地类型": "专用教室"},
+    )
+    set_row(
+        workbook,
+        "教室与场地",
+        {
+            "学校场地编码": "ROOM-MATH",
+            "场地名称": "数学专用教室",
+            "场地类型": "专用教室",
+            "容量": 48,
+            "适用科目": "SUB-MATH",
+        },
+    )
+    for offset, weekday in enumerate(
+        ("星期一", "星期二", "星期三", "星期四", "星期五")
+    ):
+        set_row(
+            workbook,
+            "作息时间表",
+            {
+                "作息表编码": "PT-JUNIOR",
+                "作息表名称": "初中部作息",
+                "星期": weekday,
+                "节次": 1,
+                "课时类型": "常规课时",
+                "开始时间": time(8, 0),
+                "结束时间": time(8, 45),
+            },
+            row=4 + offset,
+        )
     output = io.BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -778,3 +826,211 @@ def test_disappeared_referenced_teacher_cannot_be_removed(import_env):
     assert rejected.status_code == 409
     assert rejected.json()["detail"]["code"] == "teacher_arrangement_blockers"
     assert db.query(Teacher).count() == 1
+
+
+def test_ready_import_builds_room_and_period_data_then_requires_director_confirmation(
+    import_env,
+):
+    client, db, semester_id = import_env
+    content = complete_ready_workbook(client, semester_id)
+
+    preview_response = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        content,
+        mode="scheduling_ready",
+    )
+
+    assert preview_response.status_code == 200, preview_response.json()
+    preview = preview_response.json()
+    assert preview["can_commit"] is True
+    assert preview["counts"] == {
+        "new": 7,
+        "changed": 0,
+        "unchanged": 0,
+        "conflict": 0,
+        "disappeared": 0,
+        "blocker": 0,
+        "warning": 0,
+    }
+    assert [sheet["key"] for sheet in preview["sheets"]] == [
+        "subjects",
+        "teachers",
+        "rooms",
+        "period_tables",
+        "classes",
+        "assignments",
+        "source_records",
+    ]
+
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        content,
+        data={"fingerprint": preview["fingerprint"]},
+        mode="scheduling_ready",
+    )
+
+    assert committed.status_code == 200, committed.json()
+    assert committed.json()["created"] == {
+        "subjects": 1,
+        "teachers": 1,
+        "rooms": 1,
+        "period_tables": 1,
+        "classes": 1,
+        "assignments": 1,
+        "source_records": 1,
+    }
+    room = db.query(Room).one()
+    table = db.query(PeriodTable).one()
+    class_unit = db.query(ClassUnit).one()
+    assert room.school_code == "ROOM-MATH"
+    assert [subject.school_code for subject in room.subjects] == ["SUB-MATH"]
+    assert table.school_code == "PT-JUNIOR"
+    assert table.name == "初中部作息"
+    assert table.num_weekdays == 5
+    assert class_unit.period_table_id == table.id
+    periods = db.query(Period).order_by(Period.weekday, Period.period_no).all()
+    assert [(period.weekday, period.period_no) for period in periods] == [
+        (1, 1),
+        (2, 1),
+        (3, 1),
+        (4, 1),
+        (5, 1),
+    ]
+    assert all(period.type == PeriodType.regular.value for period in periods)
+    assert all(
+        (period.start_time, period.end_time) == (time(8, 0), time(8, 45))
+        for period in periods
+    )
+    assert db.get(Semester, semester_id).readiness == "draft"
+    assert db.query(Timetable).count() == 0
+
+    report = client.get(f"/api/semesters/{semester_id}/readiness")
+    assert report.status_code == 200, report.json()
+    assert report.json()["ready"] is False
+    assert report.json()["issues"] == []
+    assert [
+        (check["key"], check["ok"])
+        for check in report.json()["checks"]
+    ] == [("data_integrity", True), ("solver_preflight", True)]
+
+    make_user(db, "arrangement-teacher", PW, roles=[Role.teacher])
+    assert client.post(
+        "/api/auth/login",
+        json={"username": "arrangement-teacher", "password": PW},
+    ).status_code == 200
+    assert client.post(f"/api/semesters/{semester_id}/readiness").status_code == 403
+    assert client.post(
+        "/api/auth/login",
+        json={"username": "arrangement-director", "password": PW},
+    ).status_code == 200
+
+    confirmed = client.post(f"/api/semesters/{semester_id}/readiness")
+
+    assert confirmed.status_code == 200, confirmed.json()
+    assert confirmed.json()["ready"] is True
+    assert db.query(Timetable).count() == 0
+    audit = db.query(AuditLog).filter_by(action="confirm_semester_readiness").one()
+    assert audit.username == "arrangement-director"
+    assert audit.target_id == semester_id
+    assert "数据完整性" in audit.detail
+    assert "求解预检" in audit.detail
+
+
+def test_ready_preview_blocks_period_balance_capacity_and_special_room_gaps(import_env):
+    client, _, semester_id = import_env
+
+    def issue_codes(content: bytes) -> set[str]:
+        response = post_workbook(
+            client,
+            "preview",
+            semester_id,
+            content,
+            mode="scheduling_ready",
+        )
+        assert response.status_code == 200, response.json()
+        assert response.json()["can_commit"] is False
+        return {issue["code"] for issue in response.json()["issues"]}
+
+    missing_time = load_workbook(io.BytesIO(complete_ready_workbook(client, semester_id)))
+    set_row(missing_time, "作息时间表", {"结束时间": None})
+    missing_time_output = io.BytesIO()
+    missing_time.save(missing_time_output)
+    assert "required_value_missing" in issue_codes(missing_time_output.getvalue())
+
+    mismatch = load_workbook(io.BytesIO(complete_ready_workbook(client, semester_id)))
+    set_row(mismatch, "班级", {"班级计划周课时": 6})
+    mismatch_output = io.BytesIO()
+    mismatch.save(mismatch_output)
+    assert "class_assignment_periods_mismatch" in issue_codes(mismatch_output.getvalue())
+
+    capacity = load_workbook(io.BytesIO(complete_ready_workbook(client, semester_id)))
+    set_row(capacity, "班级", {"班级计划周课时": 6})
+    set_row(capacity, "教学任务", {"周课时": 6})
+    capacity_output = io.BytesIO()
+    capacity.save(capacity_output)
+    assert "class_period_capacity_exceeded" in issue_codes(capacity_output.getvalue())
+
+    no_special_room = load_workbook(
+        io.BytesIO(complete_ready_workbook(client, semester_id))
+    )
+    clear_data_row(no_special_room, "教室与场地")
+    no_special_room_output = io.BytesIO()
+    no_special_room.save(no_special_room_output)
+    assert "special_room_candidate_missing" in issue_codes(
+        no_special_room_output.getvalue()
+    )
+
+
+def test_ready_reimport_replaces_period_cells_without_duplicates(import_env):
+    client, db, semester_id = import_env
+    original = complete_ready_workbook(client, semester_id)
+    first_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        original,
+        mode="scheduling_ready",
+    ).json()
+    first = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        original,
+        data={"fingerprint": first_preview["fingerprint"]},
+        mode="scheduling_ready",
+    )
+    assert first.status_code == 200, first.json()
+    workbook = load_workbook(io.BytesIO(original))
+    set_row(workbook, "作息时间表", {"结束时间": time(8, 50)})
+    output = io.BytesIO()
+    workbook.save(output)
+
+    changed_preview = post_workbook(
+        client,
+        "preview",
+        semester_id,
+        output.getvalue(),
+        mode="scheduling_ready",
+    )
+
+    assert changed_preview.status_code == 200, changed_preview.json()
+    assert changed_preview.json()["counts"]["changed"] == 1
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": changed_preview.json()["fingerprint"],
+            "confirm_changes": "true",
+        },
+        mode="scheduling_ready",
+    )
+    assert committed.status_code == 200, committed.json()
+    assert db.query(Period).count() == 5
+    monday = db.query(Period).filter_by(weekday=1, period_no=1).one()
+    assert monday.end_time == time(8, 50)

@@ -35,10 +35,20 @@ class PeriodType(enum.StrEnum):
 
 class PeriodTable(Base):
     __tablename__ = "period_tables"
+    __table_args__ = (
+        UniqueConstraint(
+            "semester_id",
+            "school_code",
+            name="uq_period_tables_semester_school_code",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
+    )
+    school_code: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(64))
     num_weekdays: Mapped[int] = mapped_column(Integer, default=5)  # 一周上课天数(5 或 6)

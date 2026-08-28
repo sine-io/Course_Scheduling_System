@@ -5,11 +5,14 @@ import TemplateImport from './TemplateImport.vue'
 
 const mocks = vi.hoisted(() => ({
   commitTeacherArrangementImport: vi.fn(),
+  confirmSemesterReadiness: vi.fn(),
   downloadTeacherArrangementTemplate: vi.fn(),
+  getSemesterReadiness: vi.fn(),
   previewTeacherArrangementImport: vi.fn(),
 }))
 
 vi.mock('@/api/imports', () => ({ ...mocks }))
+vi.mock('@/api/calendar', () => ({ ...mocks }))
 
 const semester = {
   id: 17,
@@ -159,6 +162,41 @@ const decisionPreview = {
   issues: [],
 }
 
+const readyPreview = {
+  ...preview,
+  mode: 'scheduling_ready' as const,
+  counts: {
+    ...preview.counts,
+    new: 7,
+  },
+}
+
+const readiness = {
+  semester_id: 17,
+  readiness: 'draft' as const,
+  ready: false,
+  issues: [],
+  checks: [
+    {
+      key: 'data_integrity',
+      label: '数据完整性',
+      ok: true,
+      error_count: 0,
+      warning_count: 0,
+      issues: [],
+    },
+    {
+      key: 'solver_preflight',
+      label: '求解预检',
+      ok: true,
+      error_count: 0,
+      warning_count: 0,
+      issues: [],
+    },
+  ],
+  calendar_exception_count: 0,
+}
+
 function mountWorkspace(canEdit = true) {
   return mount(TemplateImport, {
     props: { semester, canEdit },
@@ -179,6 +217,12 @@ describe('TemplateImport', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     mocks.downloadTeacherArrangementTemplate.mockResolvedValue(undefined)
+    mocks.getSemesterReadiness.mockResolvedValue(readiness)
+    mocks.confirmSemesterReadiness.mockResolvedValue({
+      ...readiness,
+      readiness: 'ready',
+      ready: true,
+    })
     mocks.previewTeacherArrangementImport.mockResolvedValue(preview)
     mocks.commitTeacherArrangementImport.mockResolvedValue({
       batch_id: 31,
@@ -371,6 +415,64 @@ describe('TemplateImport', () => {
     await flushPromises()
     expect(mocks.previewTeacherArrangementImport).toHaveBeenCalledTimes(2)
     expect(wrapper.text()).not.toContain('预览已过期，请重新预览')
+    wrapper.unmount()
+  })
+
+  it('confirms readiness after both checks pass and opens the rule editor next', async () => {
+    mocks.previewTeacherArrangementImport.mockResolvedValueOnce(readyPreview)
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '自动排课准备模板.xlsx')
+
+    await wrapper.get('[data-testid="template-mode-ready"]').trigger('click')
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="template-commit"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.getSemesterReadiness).toHaveBeenCalledWith(17)
+    expect(wrapper.get('[data-testid="template-readiness"]').text()).toContain('数据完整性')
+    expect(wrapper.get('[data-testid="template-readiness"]').text()).toContain('求解预检')
+    expect(wrapper.get('[data-testid="readiness-confirm"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.text()).toContain('确认就绪')
+
+    await wrapper.get('[data-testid="readiness-confirm"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.confirmSemesterReadiness).toHaveBeenCalledWith(17)
+    expect(wrapper.get('[data-testid="readiness-next"]').attributes('href')).toBe('/scheduling/settings')
+    expect(wrapper.get('[data-testid="readiness-next"]').text()).toContain('编辑排课规则')
+    wrapper.unmount()
+  })
+
+  it('keeps readiness confirmation blocked when a check fails', async () => {
+    mocks.previewTeacherArrangementImport.mockResolvedValueOnce(readyPreview)
+    mocks.getSemesterReadiness.mockResolvedValueOnce({
+      ...readiness,
+      issues: [{ code: 'teacher_overload', message: '教师可排时段不足' }],
+      checks: [
+        readiness.checks[0],
+        {
+          ...readiness.checks[1],
+          ok: false,
+          error_count: 1,
+          issues: [{ code: 'teacher_overload', message: '教师可排时段不足' }],
+        },
+      ],
+    })
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '自动排课准备模板.xlsx')
+
+    await wrapper.get('[data-testid="template-mode-ready"]').trigger('click')
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="template-commit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="readiness-confirm"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="template-readiness"]').text()).toContain('教师可排时段不足')
+    expect(wrapper.find('[data-testid="readiness-next"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

@@ -17,8 +17,27 @@ export interface SemesterReadiness {
   semester_id: number
   readiness: 'draft' | 'ready'
   ready: boolean
-  issues: { code: string; message: string }[]
+  issues: ReadinessIssue[]
+  checks: ReadinessCheck[]
   calendar_exception_count: number
+}
+
+export interface ReadinessIssue {
+  level?: 'error' | 'warning'
+  code: string
+  message: string
+  subject_type?: string
+  subject_id?: number
+  detail?: Record<string, unknown>
+}
+
+export interface ReadinessCheck {
+  key: 'data_integrity' | 'solver_preflight'
+  label: string
+  ok: boolean
+  error_count: number
+  warning_count: number
+  issues: ReadinessIssue[]
 }
 
 export const listCalendarExceptions = (semesterId: number) =>

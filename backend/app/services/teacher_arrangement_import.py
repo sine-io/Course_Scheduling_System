@@ -7,6 +7,7 @@ import io
 import json
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, time, timedelta
 from typing import Any, Literal
 
 from openpyxl import load_workbook
@@ -15,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.core.db import Base
 from app.models.assignment import AssignmentTeacher, CourseAssignment
-from app.models.basedata import ClassUnit, Subject, Teacher
+from app.models.basedata import ClassUnit, Room, RoomType, Subject, Teacher
+from app.models.period import Period, PeriodTable, PeriodType
 from app.models.semester import Semester, SemesterReadiness
 from app.models.teacher_arrangement_import import (
     TeacherArrangementImportBatch,
@@ -47,11 +49,48 @@ TEACHER_STATUS_BY_LABEL = {
 ENTITY_LABELS = {
     "subjects": "科目",
     "teachers": "教师",
+    "rooms": "教室与场地",
+    "period_tables": "作息时间表",
     "classes": "班级",
     "assignments": "教学任务",
     "source_records": "来源记录",
 }
-PLAN_ENTITY_KEYS = tuple(ENTITY_LABELS)
+BASE_ENTITY_KEYS = (
+    "subjects",
+    "teachers",
+    "classes",
+    "assignments",
+    "source_records",
+)
+READY_ENTITY_KEYS = (
+    "subjects",
+    "teachers",
+    "rooms",
+    "period_tables",
+    "classes",
+    "assignments",
+    "source_records",
+)
+WEEKDAY_BY_LABEL = {
+    "星期一": 1,
+    "星期二": 2,
+    "星期三": 3,
+    "星期四": 4,
+    "星期五": 5,
+    "星期六": 6,
+    "星期日": 7,
+}
+PERIOD_TYPE_BY_LABEL = {
+    "常规课时": PeriodType.regular.value,
+    "晨会": PeriodType.morning.value,
+    "午休": PeriodType.lunch.value,
+    "课间": PeriodType.reserved.value,
+    "活动": PeriodType.reserved.value,
+}
+
+
+def _entity_keys(mode: TemplateMode) -> tuple[str, ...]:
+    return READY_ENTITY_KEYS if mode == "scheduling_ready" else BASE_ENTITY_KEYS
 
 
 class InvalidTeacherArrangementWorkbook(ValueError):
@@ -234,7 +273,7 @@ class ImportPlan:
                     "label": ENTITY_LABELS[entity],
                     "rows": [row.as_dict() for row in self.rows[entity]],
                 }
-                for entity in PLAN_ENTITY_KEYS
+                for entity in self.rows
             ],
             "issues": [issue.as_dict() for issue in self.issues],
         }
@@ -419,7 +458,7 @@ def _read_sheet_rows(
 
     result: list[RawRow] = []
     for row_number, cells in enumerate(sheet.iter_rows(min_row=4, values_only=True), start=4):
-        values = {
+        values: dict[str, Any] = {
             field_definition.key: cells[column - 1] if column <= len(cells) else None
             for column, field_definition in columns.items()
         }
@@ -528,6 +567,52 @@ def _boolean(raw_row: RawRow, key: str, issues: list[LocatedIssue]) -> bool:
         issues,
         default="false",
     ) == "true"
+
+
+def _clock_time(
+    raw_row: RawRow,
+    key: str,
+    issues: list[LocatedIssue],
+) -> str | None:
+    value = raw_row.values.get(key)
+    if _text(value) is None:
+        return None
+    parsed: time | None = None
+    if isinstance(value, datetime):
+        parsed = value.time()
+    elif isinstance(value, time):
+        parsed = value
+    elif isinstance(value, timedelta):
+        seconds = int(value.total_seconds()) % (24 * 60 * 60)
+        parsed = time(seconds // 3600, (seconds % 3600) // 60, seconds % 60)
+    elif isinstance(value, (int, float)) and 0 <= value < 1:
+        seconds = round(float(value) * 24 * 60 * 60) % (24 * 60 * 60)
+        parsed = time(seconds // 3600, (seconds % 3600) // 60, seconds % 60)
+    else:
+        text = _text(value) or ""
+        for fmt in ("%H:%M", "%H:%M:%S"):
+            try:
+                parsed = datetime.strptime(text, fmt).time()
+                break
+            except ValueError:
+                continue
+    if parsed is None:
+        _issue(
+            issues,
+            code="invalid_time",
+            sheet=raw_row.sheet,
+            row=raw_row.row,
+            field_name=raw_row.headers.get(key, key),
+            value=value,
+            message="时间格式无效",
+            suggestion="请使用 Excel 时间格式，例如 08:00",
+        )
+        return None
+    return parsed.replace(microsecond=0).isoformat()
+
+
+def _time_from_iso(value: str | None) -> time | None:
+    return time.fromisoformat(value) if value else None
 
 
 def _source_key(code: str | None, name: str) -> str:
@@ -837,16 +922,274 @@ def _resolve_reference(
     return None
 
 
+def _plan_rooms(
+    db: Session,
+    semester_id: int,
+    raw_rows: list[RawRow],
+    subject_rows: list[PlannedRow],
+    issues: list[LocatedIssue],
+) -> list[PlannedRow]:
+    existing = list(db.scalars(select(Room).where(Room.semester_id == semester_id)))
+    existing_subjects = list(
+        db.scalars(select(Subject).where(Subject.semester_id == semester_id))
+    )
+    room_types = {label: value.value for label, value in ROOM_TYPE_BY_LABEL.items()}
+    result: list[PlannedRow] = []
+    for raw in raw_rows:
+        name = _text(raw.values.get("name")) or ""
+        code = _text(raw.values.get("school_code"))
+        values: dict[str, Any] = {
+            "school_code": code,
+            "name": name,
+            "room_type": _choice(
+                raw,
+                "room_type",
+                room_types,
+                issues,
+                default=RoomType.normal.value,
+            ),
+            "capacity": _integer(raw, "capacity", issues, default=None, maximum=5000),
+            "applicable_subjects": [],
+        }
+        row = PlannedRow(
+            "rooms",
+            raw.sheet,
+            raw.row,
+            _source_key(code, name),
+            code or name,
+            values,
+            raw.values,
+        )
+        targets: list[Any] = []
+        for subject_ref in _names(raw.values.get("applicable_subjects")):
+            target = _resolve_reference(
+                value=subject_ref,
+                entity_label="科目",
+                planned=subject_rows,
+                existing=existing_subjects,
+                issues=issues,
+                owner=row,
+                field_name="适用科目",
+                required=True,
+            )
+            if target is not None and target not in targets:
+                targets.append(target)
+        row.references["applicable_subjects"] = targets
+        row.values["applicable_subjects"] = sorted(
+            _planned_reference(target) for target in targets
+        )
+        row.existing = _identify_existing(row=row, existing=existing, issues=issues)
+        current = None
+        if row.existing is not None:
+            current = {
+                "school_code": row.existing.school_code,
+                "name": row.existing.name,
+                "room_type": row.existing.room_type,
+                "capacity": row.existing.capacity,
+                "applicable_subjects": sorted(
+                    _object_reference(subject) for subject in row.existing.subjects
+                ),
+            }
+        _set_status(row, current)
+        result.append(row)
+    _deduplicate_named_rows(result, issues)
+    return result
+
+
+def _period_name(period_type: str, period_number: int) -> str:
+    if period_type == PeriodType.regular.value:
+        return f"第{period_number}节"
+    return {
+        PeriodType.morning.value: "晨会",
+        PeriodType.lunch.value: "午休",
+        PeriodType.homeroom.value: "班主任时间",
+        PeriodType.reserved.value: "活动",
+    }.get(period_type, f"第{period_number}节")
+
+
+def _period_values(period: Period) -> dict[str, Any]:
+    return {
+        "weekday": period.weekday,
+        "period_number": period.period_no,
+        "period_type": period.type,
+        "start_time": (
+            period.start_time.replace(microsecond=0).isoformat()
+            if period.start_time
+            else None
+        ),
+        "end_time": (
+            period.end_time.replace(microsecond=0).isoformat()
+            if period.end_time
+            else None
+        ),
+    }
+
+
+def _period_table_current(table: PeriodTable) -> dict[str, Any]:
+    return {
+        "school_code": table.school_code,
+        "name": table.name,
+        "num_weekdays": table.num_weekdays,
+        "is_default": table.is_default,
+        "periods": [
+            _period_values(period)
+            for period in sorted(
+                table.periods,
+                key=lambda item: (item.weekday, item.period_no),
+            )
+        ],
+    }
+
+
+def _plan_period_tables(
+    db: Session,
+    semester_id: int,
+    raw_rows: list[RawRow],
+    issues: list[LocatedIssue],
+) -> list[PlannedRow]:
+    existing = list(
+        db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester_id))
+    )
+    grouped: dict[str, list[RawRow]] = defaultdict(list)
+    for raw in raw_rows:
+        grouped[_text(raw.values.get("table_code")) or ""].append(raw)
+
+    result: list[PlannedRow] = []
+    has_existing_default = any(table.is_default for table in existing)
+    for index, (code, group) in enumerate(grouped.items()):
+        first = group[0]
+        name = _text(first.values.get("table_name")) or ""
+        values: dict[str, Any] = {
+            "school_code": code,
+            "name": name,
+            "num_weekdays": 0,
+            "is_default": False,
+            "periods": [],
+        }
+        row = PlannedRow(
+            "period_tables",
+            first.sheet,
+            first.row,
+            _source_key(code, name),
+            code or name,
+            values,
+            {"rows": [raw.values for raw in group]},
+        )
+        seen_cells: set[tuple[int, int]] = set()
+        periods: list[dict[str, Any]] = []
+        for raw in group:
+            row_name = _text(raw.values.get("table_name")) or ""
+            if row_name != name:
+                _issue(
+                    issues,
+                    code="period_table_name_inconsistent",
+                    sheet=raw.sheet,
+                    row=raw.row,
+                    field_name="作息表名称",
+                    value=row_name,
+                    message="同一作息表编码使用了不同名称",
+                    suggestion=f"将名称统一为“{name}”",
+                    planned_row=row,
+                )
+            weekday = int(
+                _choice(
+                    raw,
+                    "weekday",
+                    {label: str(value) for label, value in WEEKDAY_BY_LABEL.items()},
+                    issues,
+                    default="1",
+                )
+            )
+            period_number = _integer(
+                raw,
+                "period_number",
+                issues,
+                minimum=1,
+                maximum=20,
+            )
+            period_type = _choice(
+                raw,
+                "period_type",
+                PERIOD_TYPE_BY_LABEL,
+                issues,
+                default=PeriodType.regular.value,
+            )
+            start_time = _clock_time(raw, "start_time", issues)
+            end_time = _clock_time(raw, "end_time", issues)
+            if start_time and end_time and end_time <= start_time:
+                _issue(
+                    issues,
+                    code="period_time_order_invalid",
+                    sheet=raw.sheet,
+                    row=raw.row,
+                    field_name="结束时间",
+                    value=end_time,
+                    message="结束时间必须晚于开始时间",
+                    suggestion="核对该节次的开始和结束时间",
+                    planned_row=row,
+                )
+            if period_number is None:
+                continue
+            cell = (weekday, period_number)
+            if cell in seen_cells:
+                _issue(
+                    issues,
+                    code="period_cell_duplicate",
+                    sheet=raw.sheet,
+                    row=raw.row,
+                    field_name="星期/节次",
+                    value=f"{weekday}-{period_number}",
+                    message="同一作息表中的星期和节次重复",
+                    suggestion="每套作息表的每个星期、节次只保留一行",
+                    planned_row=row,
+                )
+                continue
+            seen_cells.add(cell)
+            periods.append(
+                {
+                    "weekday": weekday,
+                    "period_number": period_number,
+                    "period_type": period_type,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                }
+            )
+        periods.sort(key=lambda item: (item["weekday"], item["period_number"]))
+        row.values["periods"] = periods
+        row.values["num_weekdays"] = max(
+            (period["weekday"] for period in periods),
+            default=0,
+        )
+        row.existing = _identify_existing(row=row, existing=existing, issues=issues)
+        row.values["is_default"] = bool(
+            row.existing.is_default
+            if row.existing is not None
+            else not has_existing_default and index == 0
+        )
+        _set_status(
+            row,
+            _period_table_current(row.existing) if row.existing is not None else None,
+        )
+        result.append(row)
+    _deduplicate_named_rows(result, issues)
+    return result
+
+
 def _plan_classes(
     db: Session,
     semester_id: int,
     raw_rows: list[RawRow],
     teacher_rows: list[PlannedRow],
+    period_table_rows: list[PlannedRow],
     issues: list[LocatedIssue],
+    mode: TemplateMode,
 ) -> list[PlannedRow]:
     existing = list(db.scalars(select(ClassUnit).where(ClassUnit.semester_id == semester_id)))
     existing_teachers = list(
         db.scalars(select(Teacher).where(Teacher.semester_id == semester_id))
+    )
+    existing_period_tables = list(
+        db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester_id))
     )
     tracks = {label: value.value for label, value in TRACK_BY_LABEL.items()}
     result: list[PlannedRow] = []
@@ -864,6 +1207,8 @@ def _plan_classes(
             ),
             "homeroom_teacher": None,
         }
+        if mode == "scheduling_ready":
+            values["period_table"] = None
         row = PlannedRow(
             "classes",
             raw.sheet,
@@ -886,6 +1231,23 @@ def _plan_classes(
         )
         row.references["homeroom_teacher"] = target
         row.values["homeroom_teacher"] = _planned_reference(target) if target else None
+        if mode == "scheduling_ready":
+            period_table_target = _resolve_reference(
+                value=_text(raw.values.get("period_table_code")),
+                entity_label="作息时间表",
+                planned=period_table_rows,
+                existing=existing_period_tables,
+                issues=issues,
+                owner=row,
+                field_name="作息表编码",
+                required=True,
+            )
+            row.references["period_table"] = period_table_target
+            row.values["period_table"] = (
+                _planned_reference(period_table_target)
+                if period_table_target is not None
+                else None
+            )
         row.existing = _identify_existing(row=row, existing=existing, issues=issues)
         current = None
         if row.existing is not None:
@@ -902,6 +1264,12 @@ def _plan_classes(
                     else None
                 ),
             }
+            if mode == "scheduling_ready":
+                current["period_table"] = (
+                    _object_reference(row.existing.period_table)
+                    if row.existing.period_table
+                    else None
+                )
         _set_status(row, current)
         result.append(row)
     _deduplicate_named_rows(result, issues)
@@ -1071,6 +1439,123 @@ def _plan_assignments(
     return result
 
 
+def _regular_period_capacity(target: PlannedRow | PeriodTable | None) -> int:
+    if target is None:
+        return 0
+    if isinstance(target, PlannedRow):
+        return sum(
+            1
+            for period in target.values.get("periods", [])
+            if period.get("period_type") == PeriodType.regular.value
+        )
+    return sum(1 for period in target.periods if period.type == PeriodType.regular.value)
+
+
+def _room_accepts_subject(
+    room: PlannedRow | Room,
+    subject: PlannedRow | Subject,
+    required_room_type: str,
+) -> bool:
+    if isinstance(room, PlannedRow):
+        if room.values.get("room_type") != required_room_type:
+            return False
+        subjects = room.references.get("applicable_subjects", [])
+        return not subjects or subject in subjects
+    if room.room_type != required_room_type:
+        return False
+    subject_id = (
+        subject.existing.id
+        if isinstance(subject, PlannedRow) and subject.existing is not None
+        else subject.id
+        if isinstance(subject, Subject)
+        else None
+    )
+    return not room.subjects or any(item.id == subject_id for item in room.subjects)
+
+
+def _validate_ready_plan(
+    db: Session,
+    semester_id: int,
+    rows: dict[str, list[PlannedRow]],
+    issues: list[LocatedIssue],
+) -> None:
+    assignment_rows = rows["assignments"]
+    for class_row in rows["classes"]:
+        planned = class_row.values.get("planned_weekly_periods")
+        assigned = sum(
+            assignment.values.get("weekly_periods") or 0
+            for assignment in assignment_rows
+            if assignment.references.get("class") is class_row
+        )
+        if planned is not None and assigned != planned:
+            _issue(
+                issues,
+                code="class_assignment_periods_mismatch",
+                sheet=class_row.sheet,
+                row=class_row.row,
+                field_name="班级计划周课时",
+                value={"planned": planned, "assigned": assigned},
+                message=f"班级计划周课时为 {planned}，教学任务合计为 {assigned}",
+                suggestion="调整教学任务周课时，使合计与班级计划完全一致",
+                planned_row=class_row,
+            )
+        capacity = _regular_period_capacity(class_row.references.get("period_table"))
+        if planned is not None and planned > capacity:
+            _issue(
+                issues,
+                code="class_period_capacity_exceeded",
+                sheet=class_row.sheet,
+                row=class_row.row,
+                field_name="班级计划周课时",
+                value={"planned": planned, "capacity": capacity},
+                message=f"班级计划周课时 {planned} 超过作息表常规课时容量 {capacity}",
+                suggestion="增加作息表常规课时，或降低班级计划周课时",
+                planned_row=class_row,
+            )
+
+    planned_rooms = [
+        room
+        for room in rows["rooms"]
+        if room.status != "disappeared" or room.decision_selected == "keep"
+    ]
+    replaced_room_ids = {
+        room.existing.id for room in planned_rooms if room.existing is not None
+    }
+    existing_rooms = [
+        room
+        for room in db.scalars(select(Room).where(Room.semester_id == semester_id))
+        if room.id not in replaced_room_ids
+    ]
+    room_candidates: list[PlannedRow | Room] = [*planned_rooms, *existing_rooms]
+    for assignment in assignment_rows:
+        subject = assignment.references.get("subject")
+        if subject is None:
+            continue
+        required_room_type = (
+            subject.values.get("required_room_type")
+            if isinstance(subject, PlannedRow)
+            else subject.required_room_type
+        ) or RoomType.normal.value
+        if required_room_type == RoomType.normal.value:
+            continue
+        if any(
+            _room_accepts_subject(room, subject, required_room_type)
+            for room in room_candidates
+        ):
+            continue
+        _issue(
+            issues,
+            code="special_room_candidate_missing",
+            sheet=assignment.sheet,
+            row=assignment.row,
+            field_name="科目",
+            value=assignment.values.get("subject_ref"),
+            message="该教学任务需要特殊场地，但没有适用的候选教室或场地",
+            suggestion="在“教室与场地”中补充同类型且适用于该科目的场地",
+            planned_row=assignment,
+        )
+
+
 def _plan_source_records(
     db: Session, semester_id: int, raw_rows: list[RawRow], issues: list[LocatedIssue]
 ) -> list[PlannedRow]:
@@ -1145,6 +1630,18 @@ def _teacher_current(teacher: Teacher) -> dict[str, Any]:
     }
 
 
+def _room_current(room: Room) -> dict[str, Any]:
+    return {
+        "school_code": room.school_code,
+        "name": room.name,
+        "room_type": room.room_type,
+        "capacity": room.capacity,
+        "applicable_subjects": sorted(
+            _object_reference(subject) for subject in room.subjects
+        ),
+    }
+
+
 def _class_current(class_unit: ClassUnit) -> dict[str, Any]:
     return {
         "school_code": class_unit.school_code,
@@ -1156,6 +1653,11 @@ def _class_current(class_unit: ClassUnit) -> dict[str, Any]:
         "homeroom_teacher": (
             _object_reference(class_unit.homeroom_teacher)
             if class_unit.homeroom_teacher
+            else None
+        ),
+        "period_table": (
+            _object_reference(class_unit.period_table)
+            if class_unit.period_table
             else None
         ),
     }
@@ -1176,6 +1678,10 @@ def _target_current(entity: str, target: Any) -> dict[str, Any]:
         return _subject_current(target)
     if entity == "teachers":
         return _teacher_current(target)
+    if entity == "rooms":
+        return _room_current(target)
+    if entity == "period_tables":
+        return _period_table_current(target)
     if entity == "classes":
         return _class_current(target)
     if entity == "assignments":
@@ -1207,6 +1713,8 @@ def _record_target(
     model_by_entity = {
         "subjects": Subject,
         "teachers": Teacher,
+        "rooms": Room,
+        "period_tables": PeriodTable,
         "classes": ClassUnit,
         "assignments": CourseAssignment,
         "source_records": TeacherArrangementSourceRecord,
@@ -1317,6 +1825,7 @@ _REFERENCE_LABELS = {
     "leave_requests": "请假记录",
     "affected_periods": "调代课记录",
     "notifications": "通知记录",
+    "periods": "作息节次",
 }
 
 
@@ -1325,6 +1834,7 @@ def _removal_safety(db: Session, entity: str, target: Any | None) -> tuple[bool,
         return True, None
     owned_children = {
         "assignments": {"assignment_teachers", "block_rules"},
+        "period_tables": {"periods"},
     }.get(entity, set())
     target_table = target.__table__
     for table in Base.metadata.tables.values():
@@ -1357,7 +1867,7 @@ def _add_disappeared_rows(
         for row in entity_rows
     }
     for (entity, source_key), record in latest_records.items():
-        if entity not in PLAN_ENTITY_KEYS or (entity, source_key) in current_keys:
+        if entity not in rows or (entity, source_key) in current_keys:
             continue
         if record.outcome != "applied":
             continue
@@ -1454,6 +1964,10 @@ def _reconcile_import_history(
 def _database_snapshot(db: Session, semester_id: int) -> dict[str, Any]:
     subjects = list(db.scalars(select(Subject).where(Subject.semester_id == semester_id)))
     teachers = list(db.scalars(select(Teacher).where(Teacher.semester_id == semester_id)))
+    rooms = list(db.scalars(select(Room).where(Room.semester_id == semester_id)))
+    period_tables = list(
+        db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester_id))
+    )
     classes = list(db.scalars(select(ClassUnit).where(ClassUnit.semester_id == semester_id)))
     assignments = list(
         db.scalars(select(CourseAssignment).where(CourseAssignment.semester_id == semester_id))
@@ -1490,6 +2004,14 @@ def _database_snapshot(db: Session, semester_id: int) -> dict[str, Any]:
                 item.is_active,
             ]
             for item in sorted(teachers, key=lambda item: item.id)
+        ],
+        "rooms": [
+            [item.id, *_room_current(item).values()]
+            for item in sorted(rooms, key=lambda item: item.id)
+        ],
+        "period_tables": [
+            [item.id, *_period_table_current(item).values()]
+            for item in sorted(period_tables, key=lambda item: item.id)
         ],
         "classes": [
             [
@@ -1543,7 +2065,7 @@ def _fingerprint(
     database_snapshot: dict[str, Any],
 ) -> str:
     payload = {
-        "plan_version": 2,
+        "plan_version": 3,
         "template_version": TEMPLATE_VERSION,
         "workbook_sha256": workbook_sha256,
         "semester_id": semester_id,
@@ -1604,19 +2126,35 @@ def build_plan(
             ),
         )
 
-    rows: dict[str, list[PlannedRow]] = {key: [] for key in PLAN_ENTITY_KEYS}
+    rows: dict[str, list[PlannedRow]] = {key: [] for key in _entity_keys(mode)}
     rows["subjects"] = _plan_subjects(
         db, semester.id, raw_by_entity.get("subjects", []), issues
     )
     rows["teachers"] = _plan_teachers(
         db, semester.id, raw_by_entity.get("teachers", []), issues
     )
+    if mode == "scheduling_ready":
+        rows["rooms"] = _plan_rooms(
+            db,
+            semester.id,
+            raw_by_entity.get("rooms", []),
+            rows["subjects"],
+            issues,
+        )
+        rows["period_tables"] = _plan_period_tables(
+            db,
+            semester.id,
+            raw_by_entity.get("period_tables", []),
+            issues,
+        )
     rows["classes"] = _plan_classes(
         db,
         semester.id,
         raw_by_entity.get("classes", []),
         rows["teachers"],
+        rows.get("period_tables", []),
         issues,
+        mode,
     )
     rows["assignments"] = _plan_assignments(
         db,
@@ -1632,6 +2170,8 @@ def build_plan(
         db, semester.id, raw_by_entity.get("source_records", []), issues
     )
     _reconcile_import_history(db, semester.id, rows, decisions or {}, issues)
+    if mode == "scheduling_ready":
+        _validate_ready_plan(db, semester.id, rows, issues)
     workbook_sha256 = hashlib.sha256(content).hexdigest()
     return ImportPlan(
         semester_id=semester.id,
@@ -1691,6 +2231,61 @@ def _apply_teachers(db: Session, semester_id: int, rows: list[PlannedRow]) -> No
     db.flush()
 
 
+def _apply_rooms(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
+    for row in rows:
+        if row.status == "disappeared":
+            continue
+        room = row.existing or Room(semester_id=semester_id)
+        if row.existing is None:
+            db.add(room)
+        for key in ("school_code", "name", "room_type", "capacity"):
+            if key in row.fields_to_apply:
+                setattr(room, key, row.values[key])
+        if "applicable_subjects" in row.fields_to_apply:
+            room.subjects = [
+                _applied_target(target)
+                for target in row.references.get("applicable_subjects", [])
+            ]
+        row.applied = room
+    db.flush()
+
+
+def _apply_period_tables(
+    db: Session,
+    semester_id: int,
+    rows: list[PlannedRow],
+) -> None:
+    for row in rows:
+        if row.status == "disappeared":
+            continue
+        table = row.existing or PeriodTable(semester_id=semester_id)
+        if row.existing is None:
+            db.add(table)
+        for key in ("school_code", "name", "num_weekdays", "is_default"):
+            if key in row.fields_to_apply:
+                setattr(table, key, row.values[key])
+        if "periods" in row.fields_to_apply:
+            if row.existing is not None:
+                table.periods.clear()
+                db.flush()
+            table.periods = [
+                Period(
+                    weekday=period["weekday"],
+                    period_no=period["period_number"],
+                    name=_period_name(
+                        period["period_type"],
+                        period["period_number"],
+                    ),
+                    type=period["period_type"],
+                    start_time=_time_from_iso(period["start_time"]),
+                    end_time=_time_from_iso(period["end_time"]),
+                )
+                for period in row.values["periods"]
+            ]
+        row.applied = table
+    db.flush()
+
+
 def _apply_classes(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
     for row in rows:
         if row.status == "disappeared":
@@ -1711,6 +2306,8 @@ def _apply_classes(db: Session, semester_id: int, rows: list[PlannedRow]) -> Non
         if "homeroom_teacher" in row.fields_to_apply:
             homeroom_teacher = _applied_target(row.references.get("homeroom_teacher"))
             class_unit.homeroom_teacher = homeroom_teacher
+        if "period_table" in row.fields_to_apply:
+            class_unit.period_table = _applied_target(row.references.get("period_table"))
         row.applied = class_unit
     db.flush()
 
@@ -1732,7 +2329,6 @@ def _apply_assignments(db: Session, semester_id: int, rows: list[PlannedRow]) ->
         if "subject_ref" in row.fields_to_apply:
             subject = _applied_target(row.references["subject"])
             assignment.subject = subject
-            assignment.required_room_type = subject.required_room_type
         if "weekly_periods" in row.fields_to_apply:
             assignment.periods_per_week = row.values["weekly_periods"]
         if {"lead_teacher", "co_teachers"} & row.fields_to_apply:
@@ -1764,6 +2360,11 @@ def _apply_assignments(db: Session, semester_id: int, rows: list[PlannedRow]) ->
                     )
         if row.existing is None:
             db.add(assignment)
+        assignment.required_room_type = (
+            None
+            if assignment.subject.required_room_type == RoomType.normal.value
+            else assignment.subject.required_room_type
+        )
         row.applied = assignment
     db.flush()
 
@@ -1787,11 +2388,13 @@ def _apply_disappeared(db: Session, plan: ImportPlan) -> None:
         "assignments",
         "source_records",
         "classes",
+        "period_tables",
+        "rooms",
         "teachers",
         "subjects",
     )
     for entity in removal_order:
-        for row in plan.rows[entity]:
+        for row in plan.rows.get(entity, []):
             if row.status != "disappeared":
                 continue
             if row.decision_selected == "keep":
@@ -1815,11 +2418,11 @@ def _result_counts(
     dict[str, int],
     dict[str, int],
 ]:
-    created = {key: 0 for key in PLAN_ENTITY_KEYS}
-    updated = {key: 0 for key in PLAN_ENTITY_KEYS}
-    unchanged = {key: 0 for key in PLAN_ENTITY_KEYS}
-    removed = {key: 0 for key in PLAN_ENTITY_KEYS}
-    kept = {key: 0 for key in PLAN_ENTITY_KEYS}
+    created = {key: 0 for key in plan.rows}
+    updated = {key: 0 for key in plan.rows}
+    unchanged = {key: 0 for key in plan.rows}
+    removed = {key: 0 for key in plan.rows}
+    kept = {key: 0 for key in plan.rows}
     for entity, rows in plan.rows.items():
         for row in rows:
             if row.status == "new":
@@ -1842,6 +2445,10 @@ def apply_plan(db: Session, plan: ImportPlan, *, filename: str) -> dict[str, Any
     _apply_disappeared(db, plan)
     _apply_subjects(db, plan.semester_id, plan.rows["subjects"])
     _apply_teachers(db, plan.semester_id, plan.rows["teachers"])
+    if "rooms" in plan.rows:
+        _apply_rooms(db, plan.semester_id, plan.rows["rooms"])
+    if "period_tables" in plan.rows:
+        _apply_period_tables(db, plan.semester_id, plan.rows["period_tables"])
     _apply_classes(db, plan.semester_id, plan.rows["classes"])
     _apply_assignments(db, plan.semester_id, plan.rows["assignments"])
     _apply_source_records(db, plan.semester_id, plan.rows["source_records"])

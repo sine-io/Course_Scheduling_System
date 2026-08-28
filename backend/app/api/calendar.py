@@ -45,7 +45,8 @@ def _out(row: SemesterCalendarException) -> CalendarExceptionOut:
 
 
 def _readiness(db: Session, semester: Semester) -> SemesterReadinessOut:
-    issues = calendar_service.readiness_issues(db, semester)
+    report = calendar_service.readiness_report(db, semester)
+    issues = report["issues"]
     count = int(
         db.scalar(
             select(func.count()).select_from(SemesterCalendarException).where(
@@ -59,6 +60,7 @@ def _readiness(db: Session, semester: Semester) -> SemesterReadinessOut:
         readiness=semester.readiness,
         ready=semester.readiness == SemesterReadiness.ready.value and not issues,
         issues=issues,
+        checks=report["checks"],
         calendar_exception_count=count,
     )
 
@@ -195,7 +197,8 @@ def confirm_readiness(
     semester_id: int, db: Session = Depends(get_db), user: User = Depends(editor)
 ) -> SemesterReadinessOut:
     semester = _writable_semester(db, semester_id)
-    issues = calendar_service.readiness_issues(db, semester)
+    report = calendar_service.readiness_report(db, semester)
+    issues = report["issues"]
     if issues:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -209,7 +212,13 @@ def confirm_readiness(
     db.add(AuditLog(
         user_id=user.id, username=user.username, action="confirm_semester_readiness",
         target_type="semester", target_id=semester.id,
-        detail=f"确认 {semester.label} 排课准备完成"[:500],
+        semester_id=semester.id,
+        actor_roles=sorted(user.role_names),
+        result="success",
+        detail=(
+            f"确认 {semester.label} 排课准备完成；"
+            "数据完整性通过；求解预检通过"
+        )[:500],
     ))
     db.commit()
     db.refresh(semester)

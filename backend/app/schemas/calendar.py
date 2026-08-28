@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date as _Date
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -49,5 +50,6 @@ class SemesterReadinessOut(BaseModel):
     semester_id: int
     readiness: SemesterReadiness
     ready: bool
-    issues: list[dict[str, str]] = []
+    issues: list[dict[str, Any]] = Field(default_factory=list)
+    checks: list[dict[str, Any]] = Field(default_factory=list)
     calendar_exception_count: int = 0

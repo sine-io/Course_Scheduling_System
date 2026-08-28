@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Download,
   FileCheck2,
@@ -11,6 +12,11 @@ import {
 import { NAlert, NButton, NTag } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { apiErrorMessage } from '@/api/client'
+import {
+  confirmSemesterReadiness,
+  getSemesterReadiness,
+} from '@/api/calendar'
+import type { SemesterReadiness } from '@/api/calendar'
 import {
   commitTeacherArrangementImport,
   downloadTeacherArrangementTemplate,
@@ -41,6 +47,9 @@ const error = ref<string | null>(null)
 const downloading = ref(false)
 const previewing = ref(false)
 const committing = ref(false)
+const readinessLoading = ref(false)
+const confirmingReadiness = ref(false)
+const readiness = ref<SemesterReadiness | null>(null)
 const confirmChanges = ref(false)
 const confirmWarnings = ref(false)
 const decisions = ref<Record<string, TeacherArrangementDecisionValue>>({})
@@ -92,8 +101,19 @@ const canCommit = computed(() => Boolean(
   && (!pendingChangeCount.value || confirmChanges.value)
   && (!preview.value.counts.warning || confirmWarnings.value),
 ))
+const stepLabels = computed(() => (
+  mode.value === 'scheduling_ready'
+    ? ['选择范围', '准备文件', '校验数据', '确认导入', '确认就绪']
+    : ['选择范围', '准备文件', '校验数据', '确认导入']
+))
+const canConfirmReadiness = computed(() => Boolean(
+  props.canEdit
+  && readiness.value
+  && !readiness.value.ready
+  && readiness.value.checks.every(check => check.ok),
+))
 const completedStep = computed(() => {
-  if (result.value) return 4
+  if (result.value) return mode.value === 'scheduling_ready' ? 5 : 4
   if (preview.value) return 3
   if (file.value) return 2
   return 1
@@ -166,6 +186,7 @@ watch(mode, () => {
   confirmChanges.value = false
   confirmWarnings.value = false
   decisions.value = {}
+  readiness.value = null
 })
 
 watch(preview, (value) => {
@@ -203,6 +224,7 @@ function chooseFile(event: Event) {
   confirmChanges.value = false
   confirmWarnings.value = false
   decisions.value = {}
+  readiness.value = null
 }
 
 async function downloadTemplate() {
@@ -222,6 +244,7 @@ async function previewWorkbook() {
   previewing.value = true
   error.value = null
   result.value = null
+  readiness.value = null
   try {
     preview.value = await previewTeacherArrangementImport(
       props.semester.id,
@@ -250,10 +273,33 @@ async function commitWorkbook() {
       confirmWarnings.value,
       decisions.value,
     )
+    if (mode.value === 'scheduling_ready') {
+      readinessLoading.value = true
+      try {
+        readiness.value = await getSemesterReadiness(props.semester.id)
+      } catch (cause) {
+        error.value = apiErrorMessage(cause, '数据已导入，但就绪检查加载失败，请重试。')
+      } finally {
+        readinessLoading.value = false
+      }
+    }
   } catch (cause) {
     error.value = apiErrorMessage(cause, '模板导入失败，请重新预览后再试。')
   } finally {
     committing.value = false
+  }
+}
+
+async function confirmReadiness() {
+  if (!canConfirmReadiness.value) return
+  confirmingReadiness.value = true
+  error.value = null
+  try {
+    readiness.value = await confirmSemesterReadiness(props.semester.id)
+  } catch (cause) {
+    error.value = apiErrorMessage(cause, '排课就绪确认失败，请重新检查后再试。')
+  } finally {
+    confirmingReadiness.value = false
   }
 }
 
@@ -336,8 +382,12 @@ function exportIssues() {
       </n-tag>
     </header>
 
-    <ol class="template-import-steps" aria-label="导入进度">
-      <li v-for="(label, index) in ['选择范围', '准备文件', '校验数据', '确认导入']" :key="label" :class="{ active: completedStep >= index + 1 }">
+    <ol
+      class="template-import-steps"
+      :class="{ 'has-five': stepLabels.length === 5 }"
+      aria-label="导入进度"
+    >
+      <li v-for="(label, index) in stepLabels" :key="label" :class="{ active: completedStep >= index + 1 }">
         <span>{{ index + 1 }}</span>
         <strong>{{ label }}</strong>
       </li>
@@ -602,6 +652,89 @@ function exportIssues() {
           确认导入
         </n-button>
       </footer>
+    </section>
+
+    <section
+      v-if="mode === 'scheduling_ready' && result"
+      data-testid="template-readiness"
+      class="template-readiness"
+      aria-labelledby="template-readiness-heading"
+    >
+      <div class="template-readiness-heading">
+        <div>
+          <h3 id="template-readiness-heading">排课就绪确认</h3>
+          <p>导入批次 #{{ result.batch_id }}</p>
+        </div>
+        <n-tag v-if="readiness" :type="readiness.ready ? 'success' : 'warning'" :bordered="false">
+          {{ readiness.ready ? '已就绪' : '待确认' }}
+        </n-tag>
+      </div>
+
+      <div v-if="readinessLoading" class="template-import-loading" role="status">
+        <LoaderCircle class="template-import-spinner" :size="20" aria-hidden="true" />
+        正在执行就绪检查
+      </div>
+      <template v-else-if="readiness">
+        <div class="template-readiness-checks">
+          <div
+            v-for="check in readiness.checks"
+            :key="check.key"
+            class="template-readiness-check"
+            :class="{ failed: !check.ok }"
+          >
+            <CheckCircle2 v-if="check.ok" :size="20" aria-hidden="true" />
+            <AlertTriangle v-else :size="20" aria-hidden="true" />
+            <div>
+              <strong>{{ check.label }}</strong>
+              <span v-if="check.ok">
+                通过<span v-if="check.warning_count">，{{ check.warning_count }} 项提醒</span>
+              </span>
+              <span v-else>{{ check.error_count }} 项未通过</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="readiness.issues.length" class="template-readiness-issues" role="alert">
+          <div v-for="issue in readiness.issues" :key="`${issue.code}-${issue.subject_type}-${issue.subject_id}`">
+            <AlertTriangle :size="16" aria-hidden="true" />
+            <span>{{ issue.message }}</span>
+          </div>
+        </div>
+
+        <footer class="template-readiness-actions">
+          <span v-if="readiness.ready">
+            <CheckCircle2 :size="16" aria-hidden="true" />
+            已由教务主任确认
+          </span>
+          <span v-else-if="canConfirmReadiness">
+            <CheckCircle2 :size="16" aria-hidden="true" />
+            两项检查均已通过
+          </span>
+          <span v-else>
+            <AlertTriangle :size="16" aria-hidden="true" />
+            处理未通过项后再确认
+          </span>
+          <a
+            v-if="readiness.ready"
+            data-testid="readiness-next"
+            class="template-readiness-next"
+            href="/scheduling/settings"
+          >
+            编辑排课规则
+            <ArrowRight :size="16" aria-hidden="true" />
+          </a>
+          <n-button
+            v-else
+            data-testid="readiness-confirm"
+            type="primary"
+            :loading="confirmingReadiness"
+            :disabled="!canConfirmReadiness"
+            @click="confirmReadiness"
+          >
+            确认排课就绪
+          </n-button>
+        </footer>
+      </template>
     </section>
   </div>
 </template>

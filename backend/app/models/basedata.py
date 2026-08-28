@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.db import Base
 
 if TYPE_CHECKING:
+    from app.models.period import PeriodTable
     from app.models.user import User
 
 
@@ -190,3 +191,4 @@ class ClassUnit(Base):
     )
 
     homeroom_teacher: Mapped[Teacher | None] = relationship(lazy="selectin")
+    period_table: Mapped["PeriodTable | None"] = relationship(lazy="selectin")

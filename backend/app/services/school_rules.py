@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
@@ -130,7 +130,7 @@ def academic_year_config() -> dict[str, object]:
 
 
 class SemesterNotReadyError(RuntimeError):
-    def __init__(self, semester_id: int, issues: list[dict[str, str]] | None = None) -> None:
+    def __init__(self, semester_id: int, issues: list[dict[str, Any]] | None = None) -> None:
         self.semester_id = semester_id
         self.issues = issues or []
         super().__init__("学期排课准备尚未确认，暂不能自动排课或发布课表")

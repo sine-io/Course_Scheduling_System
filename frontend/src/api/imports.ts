@@ -8,6 +8,8 @@ export type TeacherArrangementMode = 'standard' | 'scheduling_ready'
 export type TeacherArrangementEntity =
   | 'subjects'
   | 'teachers'
+  | 'rooms'
+  | 'period_tables'
   | 'classes'
   | 'assignments'
   | 'source_records'
