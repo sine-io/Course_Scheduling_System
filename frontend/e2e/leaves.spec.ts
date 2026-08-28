@@ -102,9 +102,7 @@ test('请假登记:教务主任代登全天假,展开受影响节次,销假后�
   await expect(page.getByText('已销假').first()).toBeVisible()
   await expect(table.locator('tbody tr').first()).toContainText('已取消')
   // 颜色也要对:已取消不该和「待处理」长得一样,否则扫表时分不出还有几节没人处理
-  const cancelledColor = await table.getByTestId('lv-status').first()
-    .evaluate((el) => getComputedStyle(el).color)
-  expect(cancelledColor).not.toBe(PENDING_ORANGE)
+  await expect(table.getByTestId('lv-status').first()).not.toHaveCSS('color', PENDING_ORANGE)
   await page.screenshot({ path: `${SHOTS}/leave-2-cancelled.png` })
 
   await deleteSemesterByYearTerm(page, YEAR, 1)
