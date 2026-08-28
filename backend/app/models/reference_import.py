@@ -15,7 +15,9 @@ from app.core.db import Base
 class ReferenceImportBatch(Base):
     __tablename__ = "reference_import_batches"
     __table_args__ = (
-        UniqueConstraint("semester_id", "fingerprint", name="uq_reference_import_batch_fingerprint"),
+        UniqueConstraint(
+            "semester_id", "fingerprint", name="uq_reference_import_batch_fingerprint"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -216,14 +216,10 @@ def build_xlsx_plan(
     ]
 
     source_subjects = {
-        _canonical_xlsx_subject(subject)
-        for subject, _ in source.row_periods
-        if subject != "校医"
+        _canonical_xlsx_subject(subject) for subject, _ in source.row_periods if subject != "校医"
     }
     source_subjects.update(
-        _canonical_xlsx_subject(subject)
-        for subject, _ in source.mappings
-        if subject != "校医"
+        _canonical_xlsx_subject(subject) for subject, _ in source.mappings if subject != "校医"
     )
     source_subjects.update(
         _canonical_xlsx_subject(subject)
@@ -271,9 +267,11 @@ def build_xlsx_plan(
                 {
                     "subject": subject,
                     "grade": grade,
-                    "raw": str(source.row_periods.get((source_subject, grade))
-                               or source.row_periods.get((source_subject, 0))
-                               or ""),
+                    "raw": str(
+                        source.row_periods.get((source_subject, grade))
+                        or source.row_periods.get((source_subject, 0))
+                        or ""
+                    ),
                     "primary_periods": periods,
                     "unmodeled_suffix": extra,
                 }
@@ -305,6 +303,7 @@ def build_xlsx_plan(
                 split_names = [(name, physical_split.get(name)) for name in names]
                 if all(count is not None for _, count in split_names):
                     for teacher, count in split_names:
+                        assert count is not None
                         assignments.append(
                             XlsxAssignment(
                                 class_name=class_name,
@@ -346,9 +345,7 @@ def build_xlsx_plan(
             )
 
     for item in unresolved:
-        warnings.append(
-            f"{item['class_name']} 的{item['subject']}未生成教学任务：{item['reason']}"
-        )
+        warnings.append(f"{item['class_name']} 的{item['subject']}未生成教学任务：{item['reason']}")
     for item in composite_periods:
         warnings.append(
             f"{item['subject']} {item['grade']}年级周课时 {item['raw']} "
@@ -420,8 +417,7 @@ def render_sql(plan: XlsxReferencePlan) -> str:
         for name, info in plan.teachers.items()
     ]
     subject_rows = [
-        (item["name"], item["is_major"], item.get("required_room_type"))
-        for item in plan.subjects
+        (item["name"], item["is_major"], item.get("required_room_type")) for item in plan.subjects
     ]
     class_rows = [
         (item["name"], item["grade"], item["track"], item.get("homeroom_teacher"))
@@ -535,8 +531,8 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION '找不到 2026-2027 第 1 学期';
     END IF;
-    IF semester_row.start_date IS DISTINCT FROM DATE { _sql_literal(TARGET_START.isoformat()) }
-       OR semester_row.end_date IS DISTINCT FROM DATE { _sql_literal(TARGET_END.isoformat()) } THEN
+    IF semester_row.start_date IS DISTINCT FROM DATE {_sql_literal(TARGET_START.isoformat())}
+       OR semester_row.end_date IS DISTINCT FROM DATE {_sql_literal(TARGET_END.isoformat())} THEN
         RAISE EXCEPTION '目标学期日期不符：需要 2026-09-01 至 2027-01-25';
     END IF;
 END $$;

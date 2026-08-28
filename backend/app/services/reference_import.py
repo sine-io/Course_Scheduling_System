@@ -62,27 +62,55 @@ SUBJECT_ALIASES = {
 WORD_TOTALS = {7: 35, 8: 35, 9: 35}
 COMPONENTS: dict[int, list[tuple[str, str, int]]] = {
     7: [
-        ("语文", "core", 6), ("数学", "core", 4), ("劳动", "math-plus", 1),
-        ("英语", "core", 3), ("校本课程", "english-plus", 1), ("地方课程", "english-plus", 1),
-        ("道德与法治", "core", 3), ("历史", "core", 2), ("生物学", "core", 3),
-        ("地理", "core", 2), ("体育与健康", "physical", 4), ("音乐", "core", 1),
-        ("美术", "core", 1), ("信息科技", "core", 1), ("班团队", "fixed-class-team", 1),
+        ("语文", "core", 6),
+        ("数学", "core", 4),
+        ("劳动", "math-plus", 1),
+        ("英语", "core", 3),
+        ("校本课程", "english-plus", 1),
+        ("地方课程", "english-plus", 1),
+        ("道德与法治", "core", 3),
+        ("历史", "core", 2),
+        ("生物学", "core", 3),
+        ("地理", "core", 2),
+        ("体育与健康", "physical", 4),
+        ("音乐", "core", 1),
+        ("美术", "core", 1),
+        ("信息科技", "core", 1),
+        ("班团队", "fixed-class-team", 1),
         ("国防体育", "national-defense", 1),
     ],
     8: [
-        ("语文", "core", 5), ("数学", "core", 4), ("劳动", "math-plus", 1),
-        ("英语", "core", 3), ("信息科技", "english-plus", 1), ("班团队", "english-plus", 1),
-        ("道德与法治", "core", 3), ("历史", "core", 2), ("生物学", "core", 2),
-        ("地理", "core", 2), ("物理", "core", 3), ("综合实践活动", "physics-plus", 1),
-        ("体育与健康", "physical", 4), ("音乐", "core", 1), ("美术", "core", 1),
+        ("语文", "core", 5),
+        ("数学", "core", 4),
+        ("劳动", "math-plus", 1),
+        ("英语", "core", 3),
+        ("信息科技", "english-plus", 1),
+        ("班团队", "english-plus", 1),
+        ("道德与法治", "core", 3),
+        ("历史", "core", 2),
+        ("生物学", "core", 2),
+        ("地理", "core", 2),
+        ("物理", "core", 3),
+        ("综合实践活动", "physics-plus", 1),
+        ("体育与健康", "physical", 4),
+        ("音乐", "core", 1),
+        ("美术", "core", 1),
         ("国防体育", "national-defense", 1),
     ],
     9: [
-        ("语文", "core", 6), ("数学", "core", 5), ("英语", "core", 3),
-        ("劳动", "foreign-plus", 1), ("综合实践活动", "foreign-plus", 1),
-        ("道德与法治", "core", 3), ("历史", "core", 2), ("物理", "core", 3),
-        ("班团队", "physics-plus", 1), ("化学", "core", 3), ("体育与健康", "physical", 5),
-        ("音乐", "physics-plus-independent", 1), ("美术", "chemistry-plus-independent", 1),
+        ("语文", "core", 6),
+        ("数学", "core", 5),
+        ("英语", "core", 3),
+        ("劳动", "foreign-plus", 1),
+        ("综合实践活动", "foreign-plus", 1),
+        ("道德与法治", "core", 3),
+        ("历史", "core", 2),
+        ("物理", "core", 3),
+        ("班团队", "physics-plus", 1),
+        ("化学", "core", 3),
+        ("体育与健康", "physical", 5),
+        ("音乐", "physics-plus-independent", 1),
+        ("美术", "chemistry-plus-independent", 1),
     ],
 }
 
@@ -314,7 +342,7 @@ def _expand_classes(matches: list[re.Match[str]], scopes: list[int]) -> list[str
         output.append(f"{match.group(1)}.{int(match.group(2))}")
     # 同年级区间（如 8.1-8.2）。
     for left, right in zip(matches, matches[1:], strict=False):
-        if left.end() < right.start() and "-" not in left.string[left.end():right.start()]:
+        if left.end() < right.start() and "-" not in left.string[left.end() : right.start()]:
             continue
         if left.group(1) == right.group(1):
             grade = int(left.group(1))
@@ -355,7 +383,9 @@ def _segments(cell: str) -> list[str]:
     current: list[str] = []
     depth = 0
     opening = {"(", "（"}
-    closing = {")": "(", "）": "（",
+    closing = {
+        ")": "(",
+        "）": "（",
     }
     for char in cell:
         if char in opening:
@@ -466,11 +496,15 @@ def _parse_xlsx(data: bytes, *, include_word_history_fallback: bool = True) -> P
                     classes = _expand_classes(matches, scopes)
                     for class_name in classes:
                         grade = int(class_name.split(".", 1)[0])
-                        if scopes and grade not in scopes and current_subject not in {"历史", "地理"}:
+                        if (
+                            scopes
+                            and grade not in scopes
+                            and current_subject not in {"历史", "地理"}
+                        ):
                             continue
-                        mapping = parsed.mappings.setdefault((current_subject, grade), {}).setdefault(
-                            class_name, []
-                        )
+                        mapping = parsed.mappings.setdefault(
+                            (current_subject, grade), {}
+                        ).setdefault(class_name, [])
                         if name not in mapping:
                             mapping.append(name)
                         if "班主任" in notes and class_name not in parsed.class_teachers:
@@ -484,7 +518,9 @@ def _parse_xlsx(data: bytes, *, include_word_history_fallback: bool = True) -> P
 
 
 def _db_snapshot(db: Session, semester_id: int) -> dict[str, Any]:
-    assignments = db.scalars(select(CourseAssignment).where(CourseAssignment.semester_id == semester_id)).all()
+    assignments = db.scalars(
+        select(CourseAssignment).where(CourseAssignment.semester_id == semester_id)
+    ).all()
     teachers = db.scalars(select(Teacher).where(Teacher.semester_id == semester_id)).all()
     classes = db.scalars(select(ClassUnit).where(ClassUnit.semester_id == semester_id)).all()
     return {
@@ -520,6 +556,7 @@ def _component_specs(source: ParsedSource, warnings: list[str]) -> list[Assignme
     for grade, components in COMPONENTS.items():
         for class_name in CLASS_NAMES[grade]:
             for subject, component, periods in components:
+                teacher: str | None
                 if component == "national-defense":
                     teacher = "刘锴"
                 elif component == "fixed-class-team":
@@ -538,7 +575,9 @@ def _component_specs(source: ParsedSource, warnings: list[str]) -> list[Assignme
                             "劳动": "数学" if grade in {7, 8} else "英语",
                             "校本课程": "英语",
                             "地方课程": "英语",
-                            "班团队": "英语" if grade == 8 else ("物理" if grade == 9 else "班团队"),
+                            "班团队": "英语"
+                            if grade == 8
+                            else ("物理" if grade == 9 else "班团队"),
                             "综合实践活动": "物理" if grade == 8 else "英语",
                             "信息科技": "英语",
                         }[subject]
@@ -574,7 +613,9 @@ def _component_specs(source: ParsedSource, warnings: list[str]) -> list[Assignme
     # 因此不再减少普通体育的课时字段。
     for grade in (7, 8, 9):
         for class_name in CLASS_NAMES[grade]:
-            physical = [row for row in rows if row.class_name == class_name and row.subject == "体育与健康"]
+            physical = [
+                row for row in rows if row.class_name == class_name and row.subject == "体育与健康"
+            ]
             if not physical:
                 continue
             target = physical[-1]
@@ -587,7 +628,9 @@ def _component_specs(source: ParsedSource, warnings: list[str]) -> list[Assignme
                 if len(names) > 1:
                     target.teacher = names[0]
                     target.periods = 1
-                    target.source_key = _source_key(target.class_name, target.subject, target.component, target.teacher)
+                    target.source_key = _source_key(
+                        target.class_name, target.subject, target.component, target.teacher
+                    )
                     rows.append(
                         AssignmentRow(
                             class_name=class_name,
@@ -596,7 +639,9 @@ def _component_specs(source: ParsedSource, warnings: list[str]) -> list[Assignme
                             component="physical-split",
                             periods=3,
                             teacher=names[1],
-                            source_key=_source_key(class_name, "体育与健康", "physical-split", names[1]),
+                            source_key=_source_key(
+                                class_name, "体育与健康", "physical-split", names[1]
+                            ),
                             notes="Excel 明确的 7.5 班体育分工",
                             required_room_type=ROOM_BY_SUBJECT["体育与健康"],
                         )
@@ -608,15 +653,87 @@ def _rule_specs(source: ParsedSource) -> list[RuleRow]:
     rules: list[RuleRow] = []
     for weekday, subjects in RESEARCH_DAYS.items():
         for subject in subjects:
-            rules.append(RuleRow("subject", None, _canonical_subject(subject), weekday, None, "avoid", f"research:{weekday}:{subject}", f"周{weekday}为{subject}研究日，尤其避免上午", False))
+            rules.append(
+                RuleRow(
+                    "subject",
+                    None,
+                    _canonical_subject(subject),
+                    weekday,
+                    None,
+                    "avoid",
+                    f"research:{weekday}:{subject}",
+                    f"周{weekday}为{subject}研究日，尤其避免上午",
+                    False,
+                )
+            )
     rules.extend(
         [
-            RuleRow("global", None, None, 1, 1, "unavailable", "global:mon-p1", "全校周一上午第1节不排行政会议", True),
-            RuleRow("subject", None, "体育与健康", None, 3, "window", "subject:pe-from-p3", "体育一般从第3节开始", False),
-            RuleRow("subject", None, "语文", None, None, "prefer", "subject:major-morning", "语文、数学、英语优先上午前3节", False),
-            RuleRow("room", None, None, None, None, "capacity", "room:special-one-each", "音乐、美术、机房、理化生实验室各一间，按资源冲突校验", True),
-            RuleRow("national-defense", 7, "国防体育", None, 3, "window", "national-defense:grade7:tue-fri-p3-p4", "七年级国防体育安排在周二至周五第3/4节候选时段", False),
-            RuleRow("national-defense", 8, "国防体育", None, 3, "window", "national-defense:grade8:tue-fri-p3-p4", "八年级国防体育安排在周二至周五第3/4节候选时段", False),
+            RuleRow(
+                "global",
+                None,
+                None,
+                1,
+                1,
+                "unavailable",
+                "global:mon-p1",
+                "全校周一上午第1节不排行政会议",
+                True,
+            ),
+            RuleRow(
+                "subject",
+                None,
+                "体育与健康",
+                None,
+                3,
+                "window",
+                "subject:pe-from-p3",
+                "体育一般从第3节开始",
+                False,
+            ),
+            RuleRow(
+                "subject",
+                None,
+                "语文",
+                None,
+                None,
+                "prefer",
+                "subject:major-morning",
+                "语文、数学、英语优先上午前3节",
+                False,
+            ),
+            RuleRow(
+                "room",
+                None,
+                None,
+                None,
+                None,
+                "capacity",
+                "room:special-one-each",
+                "音乐、美术、机房、理化生实验室各一间，按资源冲突校验",
+                True,
+            ),
+            RuleRow(
+                "national-defense",
+                7,
+                "国防体育",
+                None,
+                3,
+                "window",
+                "national-defense:grade7:tue-fri-p3-p4",
+                "七年级国防体育安排在周二至周五第3/4节候选时段",
+                False,
+            ),
+            RuleRow(
+                "national-defense",
+                8,
+                "国防体育",
+                None,
+                3,
+                "window",
+                "national-defense:grade8:tue-fri-p3-p4",
+                "八年级国防体育安排在周二至周五第3/4节候选时段",
+                False,
+            ),
         ]
     )
     return rules
@@ -625,10 +742,34 @@ def _rule_specs(source: ParsedSource) -> list[RuleRow]:
 def _teacher_rule_rows(teachers: dict[str, dict[str, Any]]) -> list[RuleRow]:
     rows: list[RuleRow] = []
     for name in teachers:
-        rows.append(RuleRow("teacher", None, None, 1, 1, "unavailable", f"teacher:{name}:mon-p1", f"{name}遵守周一上午第1节全校会议", True))
+        rows.append(
+            RuleRow(
+                "teacher",
+                None,
+                None,
+                1,
+                1,
+                "unavailable",
+                f"teacher:{name}:mon-p1",
+                f"{name}遵守周一上午第1节全校会议",
+                True,
+            )
+        )
     for name in ("贾宁", "孙佳伟", "裴树丹", "宋广莲", "王少凤"):
         if name in teachers:
-            rows.append(RuleRow("teacher", None, None, 1, 6, "unavailable", f"teacher:{name}:class-meeting", "班主任会议固定占用周一下午第2节", True))
+            rows.append(
+                RuleRow(
+                    "teacher",
+                    None,
+                    None,
+                    1,
+                    6,
+                    "unavailable",
+                    f"teacher:{name}:class-meeting",
+                    "班主任会议固定占用周一下午第2节",
+                    True,
+                )
+            )
     return rows
 
 
@@ -675,21 +816,41 @@ def _apply_teacher_time_rules(db: Session, teacher: Teacher) -> None:
     for (weekday, period), rule_type in wanted.items():
         if (weekday, period) in existing:
             continue
-        db.add(TeacherTimeRule(teacher_id=teacher.id, weekday=weekday, period_no=period, rule_type=rule_type))
+        db.add(
+            TeacherTimeRule(
+                teacher_id=teacher.id, weekday=weekday, period_no=period, rule_type=rule_type
+            )
+        )
 
 
 def _ensure_period_table(db: Session, semester_id: int) -> PeriodTable:
-    tables = list(db.scalars(select(PeriodTable).where(PeriodTable.semester_id == semester_id).order_by(PeriodTable.id)))
+    tables = list(
+        db.scalars(
+            select(PeriodTable)
+            .where(PeriodTable.semester_id == semester_id)
+            .order_by(PeriodTable.id)
+        )
+    )
     table = next((item for item in tables if item.is_default), tables[0] if tables else None)
     if table is None:
-        table = PeriodTable(semester_id=semester_id, name="初中五天八节", num_weekdays=5, is_default=True)
+        table = PeriodTable(
+            semester_id=semester_id, name="初中五天八节", num_weekdays=5, is_default=True
+        )
         db.add(table)
         db.flush()
     existing = {(p.weekday, p.period_no) for p in table.periods}
     for weekday in range(1, 6):
         for period_no in range(1, 9):
             if (weekday, period_no) not in existing:
-                db.add(Period(period_table_id=table.id, weekday=weekday, period_no=period_no, name=f"第{period_no}节", type=PeriodType.regular.value))
+                db.add(
+                    Period(
+                        period_table_id=table.id,
+                        weekday=weekday,
+                        period_no=period_no,
+                        name=f"第{period_no}节",
+                        type=PeriodType.regular.value,
+                    )
+                )
     db.flush()
     return table
 
@@ -717,12 +878,26 @@ def build_plan(
     )
     semester = db.get(Semester, semester_id)
     if semester is None:
-        plan.errors.append({"code": "semester_not_found", "message": "找不到目标学期", "source": str(semester_id)})
+        plan.errors.append(
+            {"code": "semester_not_found", "message": "找不到目标学期", "source": str(semester_id)}
+        )
     else:
         if (semester.academic_year, semester.term) != (TARGET_ACADEMIC_YEAR, TARGET_TERM):
-            plan.errors.append({"code": "semester_mismatch", "message": "参考文件适配器只接受 2026-2027 第1学期", "source": semester.label})
+            plan.errors.append(
+                {
+                    "code": "semester_mismatch",
+                    "message": "参考文件适配器只接受 2026-2027 第1学期",
+                    "source": semester.label,
+                }
+            )
         if semester.start_date != TARGET_START or semester.end_date != TARGET_END:
-            plan.errors.append({"code": "semester_dates_mismatch", "message": "目标学期起止日期必须为 2026-09-01 至 2027-01-25", "source": f"{semester.start_date} - {semester.end_date}"})
+            plan.errors.append(
+                {
+                    "code": "semester_dates_mismatch",
+                    "message": "目标学期起止日期必须为 2026-09-01 至 2027-01-25",
+                    "source": f"{semester.start_date} - {semester.end_date}",
+                }
+            )
     plan.classes = [
         {
             "name": name,
@@ -733,12 +908,41 @@ def build_plan(
         for grade in (7, 8, 9)
         for name in CLASS_NAMES[grade]
     ]
-    subject_names = sorted({subject for values in COMPONENTS.values() for subject, _, _ in values} | {"心理健康教育"})
-    plan.subjects = [{"name": name, "is_major": name in MAJOR_SUBJECTS, "required_room_type": ROOM_BY_SUBJECT.get(name)} for name in subject_names]
-    plan.teachers = {name: {**info, "notes": "；".join(info["notes"])} for name, info in source.teachers.items() if name != "金铭"}
+    subject_names = sorted(
+        {subject for values in COMPONENTS.values() for subject, _, _ in values} | {"心理健康教育"}
+    )
+    plan.subjects = [
+        {
+            "name": name,
+            "is_major": name in MAJOR_SUBJECTS,
+            "required_room_type": ROOM_BY_SUBJECT.get(name),
+        }
+        for name in subject_names
+    ]
+    plan.teachers = {
+        name: {**info, "notes": "；".join(info["notes"])}
+        for name, info in source.teachers.items()
+        if name != "金铭"
+    }
     # 规则中的教师即使 Excel 没有分配课，也需要进入可排教师集合。
-    for name in ("朱振华", "唐延艳", "崔洪刚", "朱峻", "张灿", "孟召磊", "路兆宇", "贾宁", "孙佳伟", "裴树丹", "宋广莲", "王少凤", "刘锴"):
-        plan.teachers.setdefault(name, {"notes": "Word 规则教师", "external": False, "admin": False, "maternity": False})
+    for name in (
+        "朱振华",
+        "唐延艳",
+        "崔洪刚",
+        "朱峻",
+        "张灿",
+        "孟召磊",
+        "路兆宇",
+        "贾宁",
+        "孙佳伟",
+        "裴树丹",
+        "宋广莲",
+        "王少凤",
+        "刘锴",
+    ):
+        plan.teachers.setdefault(
+            name, {"notes": "Word 规则教师", "external": False, "admin": False, "maternity": False}
+        )
     plan.rooms = [
         {"name": "音乐教室", "room_type": RoomType.special.value},
         {"name": "美术教室", "room_type": RoomType.special.value},
@@ -749,33 +953,76 @@ def build_plan(
     plan.assignments = _component_specs(source, plan.warnings)
     plan.rules = _rule_specs(source) + _teacher_rule_rows(plan.teachers)
     plan.fixed_entries = [
-        FixedRow(class_name, "班团队", source.class_teachers.get(class_name), 2, 3, f"fixed:{class_name}:class-team:tue-p3", "Word 固定：七年级班团队周二第3节")
+        FixedRow(
+            class_name,
+            "班团队",
+            source.class_teachers.get(class_name),
+            2,
+            3,
+            f"fixed:{class_name}:class-team:tue-p3",
+            "Word 固定：七年级班团队周二第3节",
+        )
         for class_name in CLASS_NAMES[7]
     ]
-    plan.warnings.append("Excel 中‘课时费’按费用处理，未作为每周课时；‘缺口’仅作为提示，不自动生成教师")
+    plan.warnings.append(
+        "Excel 中‘课时费’按费用处理，未作为每周课时；‘缺口’仅作为提示，不自动生成教师"
+    )
     plan.warnings.append("产假教师按正常在岗教师参与排课；校医金铭被排除，不创建教学任务")
     plan.warnings.append("Word 对体育、信息和七年级历史的范围/冲突优先于 Excel 表头")
     plan.warnings.append("九年级按本次导入决策覆盖 Word 原文 34 节，按 35 节生成")
     for class_name in CLASS_NAMES[7]:
         if class_name not in source.class_teachers:
-            plan.warnings.append(f"{class_name} 未能从来源文本确定班主任，班团队任务将等待人工指定教师")
+            plan.warnings.append(
+                f"{class_name} 未能从来源文本确定班主任，班团队任务将等待人工指定教师"
+            )
     if not source.mappings.get(("信息科技", 8)):
-        plan.warnings.append("Excel 未提供八年级信息科技独立教师；按英语 3+2 的复合任务由英语教师承担")
-    totals: dict[str, int] = {name: 0 for name in (name for grade in CLASS_NAMES.values() for name in grade)}
+        plan.warnings.append(
+            "Excel 未提供八年级信息科技独立教师；按英语 3+2 的复合任务由英语教师承担"
+        )
+    totals: dict[str, int] = {
+        name: 0 for name in (name for grade in CLASS_NAMES.values() for name in grade)
+    }
     for row in plan.assignments:
         totals[row.class_name] += row.periods
     for class_name, total in totals.items():
         if total != WORD_TOTALS[int(class_name.split(".", 1)[0])]:
-            plan.errors.append({"code": "class_total_mismatch", "message": f"{class_name} 归一化后为 {total} 节，目标为 35 节", "source": class_name})
-    existing_keys = {key for key in _db_snapshot(db, semester_id)["assignments"] if key.startswith(ADAPTER_VERSION)}
+            plan.errors.append(
+                {
+                    "code": "class_total_mismatch",
+                    "message": f"{class_name} 归一化后为 {total} 节，目标为 35 节",
+                    "source": class_name,
+                }
+            )
+    existing_keys = {
+        key
+        for key in _db_snapshot(db, semester_id)["assignments"]
+        if key.startswith(ADAPTER_VERSION)
+    }
     incoming_keys = {row.source_key for row in plan.assignments}
     for row in plan.assignments:
-        plan.changes.append({"entity": "course_assignment", "status": "unchanged" if row.source_key in existing_keys else "new", "identity": row.source_key, "details": row.as_dict()})
+        plan.changes.append(
+            {
+                "entity": "course_assignment",
+                "status": "unchanged" if row.source_key in existing_keys else "new",
+                "identity": row.source_key,
+                "details": row.as_dict(),
+            }
+        )
     for class_item in plan.classes:
-        plan.changes.append({"entity": "class", "status": "existing" if class_item["name"] in _db_snapshot(db, semester_id)["classes"] else "new", "identity": class_item["name"]})
+        plan.changes.append(
+            {
+                "entity": "class",
+                "status": "existing"
+                if class_item["name"] in _db_snapshot(db, semester_id)["classes"]
+                else "new",
+                "identity": class_item["name"],
+            }
+        )
     disappeared = sorted(existing_keys - incoming_keys)
     if disappeared:
-        plan.warnings.append(f"检测到 {len(disappeared)} 个此前导入但本次文件消失的教学任务；仅提示，不删除")
+        plan.warnings.append(
+            f"检测到 {len(disappeared)} 个此前导入但本次文件消失的教学任务；仅提示，不删除"
+        )
     fingerprint_payload = {
         "adapter": ADAPTER_VERSION,
         "semester": semester_id,
@@ -785,14 +1032,23 @@ def build_plan(
         "database": _db_snapshot(db, semester_id),
         "paragraphs": paragraphs,
     }
-    plan.fingerprint = hashlib.sha256(json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    plan.fingerprint = hashlib.sha256(
+        json.dumps(fingerprint_payload, ensure_ascii=False, sort_keys=True).encode()
+    ).hexdigest()
     return plan
 
 
 def _find_or_create_subject(db: Session, semester_id: int, item: dict[str, Any]) -> Subject:
-    subject = db.scalar(select(Subject).where(Subject.semester_id == semester_id, Subject.name == item["name"]))
+    subject = db.scalar(
+        select(Subject).where(Subject.semester_id == semester_id, Subject.name == item["name"])
+    )
     if subject is None:
-        subject = Subject(semester_id=semester_id, name=item["name"], is_major=item["is_major"], required_room_type=item.get("required_room_type"))
+        subject = Subject(
+            semester_id=semester_id,
+            name=item["name"],
+            is_major=item["is_major"],
+            required_room_type=item.get("required_room_type"),
+        )
         db.add(subject)
         db.flush()
     return subject
@@ -822,31 +1078,57 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
             ).all()
         )
         if existing_keys == incoming_keys:
-            return {"batch_id": duplicate.id, "timetable_id": duplicate.summary.get("timetable_id"), "created": {}, "unchanged": {"batch": 1}, "warnings": plan.warnings, "idempotent": True}
+            return {
+                "batch_id": duplicate.id,
+                "timetable_id": duplicate.summary.get("timetable_id"),
+                "created": {},
+                "unchanged": {"batch": 1},
+                "warnings": plan.warnings,
+                "idempotent": True,
+            }
     semester = db.get(Semester, plan.semester_id)
     if semester is None:
         raise ValueError("目标学期不存在")
-    subjects = {item["name"]: _find_or_create_subject(db, plan.semester_id, item) for item in plan.subjects}
+    subjects = {
+        item["name"]: _find_or_create_subject(db, plan.semester_id, item) for item in plan.subjects
+    }
     teachers: dict[str, Teacher] = {}
     for name, info in plan.teachers.items():
-        teacher = db.scalar(select(Teacher).where(Teacher.semester_id == plan.semester_id, Teacher.name == name))
+        teacher = db.scalar(
+            select(Teacher).where(Teacher.semester_id == plan.semester_id, Teacher.name == name)
+        )
         if teacher is None:
-            teacher = Teacher(semester_id=plan.semester_id, name=name, base_periods=0, is_external=bool(info.get("external")), is_active=True, admin_title="行政" if info.get("admin") else None)
+            teacher = Teacher(
+                semester_id=plan.semester_id,
+                name=name,
+                base_periods=0,
+                is_external=bool(info.get("external")),
+                is_active=True,
+                admin_title="行政" if info.get("admin") else None,
+            )
             db.add(teacher)
             db.flush()
         elif info.get("maternity") and not teacher.is_active:
             plan.warnings.append(f"{name} 已存在但被标记为停用，请人工确认后再排课")
         teachers[name] = teacher
         for subject in subjects.values():
-            if subject.name in {row.subject for row in plan.assignments if row.teacher == name} and subject not in teacher.subjects:
+            if (
+                subject.name in {row.subject for row in plan.assignments if row.teacher == name}
+                and subject not in teacher.subjects
+            ):
                 teacher.subjects.append(subject)
         _apply_teacher_time_rules(db, teacher)
     classes: dict[str, ClassUnit] = {}
     table = _ensure_period_table(db, plan.semester_id)
     for item in plan.classes:
-        class_unit = db.scalar(select(ClassUnit).where(ClassUnit.semester_id == plan.semester_id, ClassUnit.name == item["name"]))
+        class_unit = db.scalar(
+            select(ClassUnit).where(
+                ClassUnit.semester_id == plan.semester_id, ClassUnit.name == item["name"]
+            )
+        )
+        homeroom_name = item.get("homeroom_teacher")
+        homeroom_teacher = teachers.get(homeroom_name) if isinstance(homeroom_name, str) else None
         if class_unit is None:
-            homeroom_teacher = teachers.get(item.get("homeroom_teacher"))
             class_unit = ClassUnit(
                 semester_id=plan.semester_id,
                 grade=item["grade"],
@@ -860,16 +1142,18 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
         elif class_unit.period_table_id is None:
             class_unit.period_table_id = table.id
         # Keep an existing manual homeroom assignment; fill only an empty field.
-        if class_unit.homeroom_teacher_id is None:
-            homeroom_teacher = teachers.get(item.get("homeroom_teacher"))
-            if homeroom_teacher is not None:
-                class_unit.homeroom_teacher_id = homeroom_teacher.id
+        if class_unit.homeroom_teacher_id is None and homeroom_teacher is not None:
+            class_unit.homeroom_teacher_id = homeroom_teacher.id
         classes[item["name"]] = class_unit
     rooms: dict[str, Room] = {}
     for item in plan.rooms:
-        room = db.scalar(select(Room).where(Room.semester_id == plan.semester_id, Room.name == item["name"]))
+        room = db.scalar(
+            select(Room).where(Room.semester_id == plan.semester_id, Room.name == item["name"])
+        )
         if room is None:
-            room = Room(semester_id=plan.semester_id, name=item["name"], room_type=item["room_type"])
+            room = Room(
+                semester_id=plan.semester_id, name=item["name"], room_type=item["room_type"]
+            )
             db.add(room)
             db.flush()
         rooms[item["name"]] = room
@@ -878,25 +1162,67 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
     created = 0
     unchanged = 0
     for row in plan.assignments:
-        assignment = db.scalar(select(CourseAssignment).where(CourseAssignment.semester_id == plan.semester_id, CourseAssignment.reference_source_key == row.source_key))
+        assignment = db.scalar(
+            select(CourseAssignment).where(
+                CourseAssignment.semester_id == plan.semester_id,
+                CourseAssignment.reference_source_key == row.source_key,
+            )
+        )
         if assignment is not None:
             assignments[row.source_key] = assignment
             unchanged += 1
             continue
         unit = get_or_create_single_unit(db, classes[row.class_name])
-        assignment = CourseAssignment(semester_id=plan.semester_id, scheduling_unit_id=unit.id, subject_id=subjects[row.subject].id, periods_per_week=row.periods, required_room_type=row.required_room_type, reference_source_key=row.source_key)
+        assignment = CourseAssignment(
+            semester_id=plan.semester_id,
+            scheduling_unit_id=unit.id,
+            subject_id=subjects[row.subject].id,
+            periods_per_week=row.periods,
+            required_room_type=row.required_room_type,
+            reference_source_key=row.source_key,
+        )
         db.add(assignment)
         db.flush()
         if row.teacher and row.teacher in teachers:
-            db.add(AssignmentTeacher(course_assignment_id=assignment.id, teacher_id=teachers[row.teacher].id, is_lead=True))
+            db.add(
+                AssignmentTeacher(
+                    course_assignment_id=assignment.id,
+                    teacher_id=teachers[row.teacher].id,
+                    is_lead=True,
+                )
+            )
         assignments[row.source_key] = assignment
         created += 1
     for rule in plan.rules:
-        existing = db.scalar(select(ReferenceSchedulingRule).where(ReferenceSchedulingRule.semester_id == plan.semester_id, ReferenceSchedulingRule.source_key == rule.source_key))
+        existing = db.scalar(
+            select(ReferenceSchedulingRule).where(
+                ReferenceSchedulingRule.semester_id == plan.semester_id,
+                ReferenceSchedulingRule.source_key == rule.source_key,
+            )
+        )
         if existing is None:
-            db.add(ReferenceSchedulingRule(semester_id=plan.semester_id, scope=rule.scope, grade=rule.grade, subject_name=rule.subject_name, weekday=rule.weekday, period_no=rule.period_no, rule_type=rule.rule_type, source_key=rule.source_key, source_text=rule.source_text, enforced=rule.enforced))
+            db.add(
+                ReferenceSchedulingRule(
+                    semester_id=plan.semester_id,
+                    scope=rule.scope,
+                    grade=rule.grade,
+                    subject_name=rule.subject_name,
+                    weekday=rule.weekday,
+                    period_no=rule.period_no,
+                    rule_type=rule.rule_type,
+                    source_key=rule.source_key,
+                    source_text=rule.source_text,
+                    enforced=rule.enforced,
+                )
+            )
     timetable_name = f"{semester.label}·参考文件草稿"
-    timetable = db.scalar(select(Timetable).where(Timetable.semester_id == plan.semester_id, Timetable.name == timetable_name, Timetable.status == TimetableStatus.draft.value))
+    timetable = db.scalar(
+        select(Timetable).where(
+            Timetable.semester_id == plan.semester_id,
+            Timetable.name == timetable_name,
+            Timetable.status == TimetableStatus.draft.value,
+        )
+    )
     if timetable is None:
         from app.services.scheduling_rules import active_revision_id
 
@@ -912,18 +1238,72 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
         source_key = _source_key(fixed.class_name, fixed.subject, "fixed-class-team", fixed.teacher)
         assignment = assignments.get(source_key)
         if assignment is None:
-            assignment = db.scalar(select(CourseAssignment).where(CourseAssignment.semester_id == plan.semester_id, CourseAssignment.reference_source_key == source_key))
+            assignment = db.scalar(
+                select(CourseAssignment).where(
+                    CourseAssignment.semester_id == plan.semester_id,
+                    CourseAssignment.reference_source_key == source_key,
+                )
+            )
         if assignment is None:
             unit = get_or_create_single_unit(db, classes[fixed.class_name])
-            assignment = CourseAssignment(semester_id=plan.semester_id, scheduling_unit_id=unit.id, subject_id=subjects[fixed.subject].id, periods_per_week=1, reference_source_key=source_key)
+            assignment = CourseAssignment(
+                semester_id=plan.semester_id,
+                scheduling_unit_id=unit.id,
+                subject_id=subjects[fixed.subject].id,
+                periods_per_week=1,
+                reference_source_key=source_key,
+            )
             db.add(assignment)
             db.flush()
             if fixed.teacher and fixed.teacher in teachers:
-                db.add(AssignmentTeacher(course_assignment_id=assignment.id, teacher_id=teachers[fixed.teacher].id, is_lead=True))
-        existing_entry = db.scalar(select(ScheduleEntry).where(ScheduleEntry.timetable_id == timetable.id, ScheduleEntry.course_assignment_id == assignment.id, ScheduleEntry.weekday == fixed.weekday, ScheduleEntry.period_no == fixed.period_no))
+                db.add(
+                    AssignmentTeacher(
+                        course_assignment_id=assignment.id,
+                        teacher_id=teachers[fixed.teacher].id,
+                        is_lead=True,
+                    )
+                )
+        existing_entry = db.scalar(
+            select(ScheduleEntry).where(
+                ScheduleEntry.timetable_id == timetable.id,
+                ScheduleEntry.course_assignment_id == assignment.id,
+                ScheduleEntry.weekday == fixed.weekday,
+                ScheduleEntry.period_no == fixed.period_no,
+            )
+        )
         if existing_entry is None:
-            db.add(ScheduleEntry(timetable_id=timetable.id, course_assignment_id=assignment.id, weekday=fixed.weekday, period_no=fixed.period_no, span=1, locked=True))
-    batch = ReferenceImportBatch(semester_id=plan.semester_id, fingerprint=plan.fingerprint, adapter_version=ADAPTER_VERSION, word_filename=plan.word_filename, xlsx_filename=plan.xlsx_filename, word_sha256=plan.word_sha256, xlsx_sha256=plan.xlsx_sha256, decisions=plan.decisions, summary={"timetable_id": timetable.id, "created_assignments": created, "unchanged_assignments": unchanged})
+            db.add(
+                ScheduleEntry(
+                    timetable_id=timetable.id,
+                    course_assignment_id=assignment.id,
+                    weekday=fixed.weekday,
+                    period_no=fixed.period_no,
+                    span=1,
+                    locked=True,
+                )
+            )
+    batch = ReferenceImportBatch(
+        semester_id=plan.semester_id,
+        fingerprint=plan.fingerprint,
+        adapter_version=ADAPTER_VERSION,
+        word_filename=plan.word_filename,
+        xlsx_filename=plan.xlsx_filename,
+        word_sha256=plan.word_sha256,
+        xlsx_sha256=plan.xlsx_sha256,
+        decisions=plan.decisions,
+        summary={
+            "timetable_id": timetable.id,
+            "created_assignments": created,
+            "unchanged_assignments": unchanged,
+        },
+    )
     db.add(batch)
     db.flush()
-    return {"batch_id": batch.id, "timetable_id": timetable.id, "created": {"assignments": created}, "unchanged": {"assignments": unchanged}, "warnings": plan.warnings, "idempotent": False}
+    return {
+        "batch_id": batch.id,
+        "timetable_id": timetable.id,
+        "created": {"assignments": created},
+        "unchanged": {"assignments": unchanged},
+        "warnings": plan.warnings,
+        "idempotent": False,
+    }

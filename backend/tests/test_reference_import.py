@@ -100,8 +100,18 @@ def test_reference_files_preview_commit_and_repeat_without_overwriting_manual_da
     assert db.query(ReferenceSchedulingRule).count() > 0
     assert db.query(Subject).filter(Subject.name == "心理健康教育").count() == 1
     assert db.query(Teacher).filter(Teacher.name == "金铭").count() == 0
-    assert db.query(Teacher).filter(Teacher.name.in_(["三周八年级", "四周九年级", "八年级主管", "九年级主管"])).count() == 0
-    assert db.query(Teacher).filter(Teacher.name.in_(["王怡凡", "劼唅"]), Teacher.is_active.is_(True)).count() == 2
+    assert (
+        db.query(Teacher)
+        .filter(Teacher.name.in_(["三周八年级", "四周九年级", "八年级主管", "九年级主管"]))
+        .count()
+        == 0
+    )
+    assert (
+        db.query(Teacher)
+        .filter(Teacher.name.in_(["王怡凡", "劼唅"]), Teacher.is_active.is_(True))
+        .count()
+        == 2
+    )
     homerooms = {
         class_unit.name: class_unit.homeroom_teacher.name
         for class_unit in db.query(ClassUnit).all()

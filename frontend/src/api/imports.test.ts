@@ -54,7 +54,7 @@ describe('commitTeacherArrangementImport', () => {
   })
 
   it('submits reimport decisions with the preview fingerprint', async () => {
-    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve({
+    const fetchMock = vi.fn(() => Promise.resolve({
       ok: true,
       json: () => Promise.resolve({ batch_id: 9 }),
     } as Response))

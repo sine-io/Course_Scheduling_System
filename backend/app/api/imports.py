@@ -43,8 +43,10 @@ viewer = core_viewer
 VALID_ENTITIES = {"subjects", "teachers", "classes", "assignments"}
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _FILENAMES = {
-    "subjects": "subjects", "teachers": "teachers",
-    "classes": "classes", "assignments": "assignments",
+    "subjects": "subjects",
+    "teachers": "teachers",
+    "classes": "classes",
+    "assignments": "assignments",
 }
 
 
@@ -71,9 +73,7 @@ def download_setup_template(_: object = Depends(viewer)) -> Response:
     return Response(
         content=combined_import.build_template(),
         media_type=XLSX_MIME,
-        headers={
-            "Content-Disposition": 'attachment; filename="school_setup_template.xlsx"'
-        },
+        headers={"Content-Disposition": 'attachment; filename="school_setup_template.xlsx"'},
     )
 
 
@@ -103,9 +103,7 @@ def _require_setup_semester(db: Session, semester_id: int) -> Semester:
     try:
         return semester_context.require_writable(db, semester_id)
     except semester_context.SemesterContextError as exc:
-        raise HTTPException(
-            exc.status_code, {"code": exc.code, "message": exc.message}
-        ) from exc
+        raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
 
 
 async def _read_setup_workbook(file: UploadFile) -> bytes:
@@ -126,8 +124,7 @@ def _teacher_arrangement_decisions(value: str | None) -> dict[str, str]:
             "导入决策必须是有效 JSON",
         ) from exc
     if not isinstance(result, dict) or not all(
-        isinstance(key, str) and isinstance(item, str)
-        for key, item in result.items()
+        isinstance(key, str) and isinstance(item, str) for key, item in result.items()
     ):
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -216,11 +213,10 @@ async def commit_teacher_arrangement_import(
                 "issues": [issue.as_dict() for issue in plan.issues],
             },
         )
-    if any(
-        row.status == "changed"
-        for rows in plan.rows.values()
-        for row in rows
-    ) and not confirm_changes:
+    if (
+        any(row.status == "changed" for rows in plan.rows.values() for row in rows)
+        and not confirm_changes
+    ):
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {
@@ -267,7 +263,9 @@ def _reference_decisions(value: str | None) -> dict:
     try:
         result = json.loads(value)
     except (TypeError, ValueError) as exc:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "覆盖映射必须是有效 JSON") from exc
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "覆盖映射必须是有效 JSON"
+        ) from exc
     if not isinstance(result, dict):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "覆盖映射必须是 JSON 对象")
     return result
@@ -331,18 +329,28 @@ async def commit_reference_import(
     if plan.fingerprint != fingerprint:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            {"code": "reference_import_preview_stale", "message": "基础数据已发生变化，请重新预览后再提交"},
+            {
+                "code": "reference_import_preview_stale",
+                "message": "基础数据已发生变化，请重新预览后再提交",
+            },
         )
     if plan.errors:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            {"code": "reference_import_conflicts", "message": "参考文件预览仍有冲突，请先处理错误", "errors": plan.errors},
+            {
+                "code": "reference_import_conflicts",
+                "message": "参考文件预览仍有冲突，请先处理错误",
+                "errors": plan.errors,
+            },
         )
     if plan.changes:
         if not confirm_changes:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                {"code": "reference_import_changes_unconfirmed", "message": "参考文件包含新建或固定课位，请确认后再提交"},
+                {
+                    "code": "reference_import_changes_unconfirmed",
+                    "message": "参考文件包含新建或固定课位，请确认后再提交",
+                },
             )
     try:
         result = reference_import.apply_plan(db, plan)
@@ -352,7 +360,10 @@ async def commit_reference_import(
         db.rollback()
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            {"code": "reference_import_write_conflict", "message": str(exc) or "提交时数据发生冲突，请重新预览后再试"},
+            {
+                "code": "reference_import_write_conflict",
+                "message": str(exc) or "提交时数据发生冲突，请重新预览后再试",
+            },
         ) from exc
 
 
@@ -512,8 +523,7 @@ async def upload_import(
                 attempt.id,
                 result="success",
                 detail=(
-                    f"已导入 {result.imported} 位教师并创建 "
-                    f"{result.accounts_created} 个登录账号"
+                    f"已导入 {result.imported} 位教师并创建 {result.accounts_created} 个登录账号"
                 ),
             )
     response = {
