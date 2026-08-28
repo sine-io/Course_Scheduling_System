@@ -72,12 +72,19 @@ class CourseAssignment(Base):
             "semester_id", "reference_source_key",
             name="uq_course_assignments_reference_source",
         ),
+        UniqueConstraint(
+            "semester_id", "task_code", name="uq_course_assignments_semester_task_code"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # semester_id 为去规范化字段,方便以学期为范围查询(随排课单位同属一学期)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
+    )
+    task_code: Mapped[str | None] = mapped_column(String(96), nullable=True, index=True)
+    component: Mapped[str] = mapped_column(
+        String(64), default="基础课", server_default="基础课"
     )
     scheduling_unit_id: Mapped[int] = mapped_column(
         ForeignKey("scheduling_units.id", ondelete="CASCADE"), index=True

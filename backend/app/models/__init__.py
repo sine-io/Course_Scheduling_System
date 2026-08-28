@@ -37,6 +37,11 @@ from app.models.scheduling_rule import (
 )
 from app.models.semester import Semester, SemesterContext, SemesterReadiness, SemesterStatus
 from app.models.substitution import Substitution, SubstitutionType
+from app.models.teacher_arrangement_import import (
+    TeacherArrangementImportBatch,
+    TeacherArrangementImportRecord,
+    TeacherArrangementSourceRecord,
+)
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
 from app.models.user import Role, User, UserRole
 
@@ -53,6 +58,9 @@ __all__ = [
     "PeriodType",
     "ReferenceImportBatch",
     "ReferenceSchedulingRule",
+    "TeacherArrangementImportBatch",
+    "TeacherArrangementImportRecord",
+    "TeacherArrangementSourceRecord",
     "SchedulingRuleSet",
     "SchedulingRuleRevision",
     "SchedulingRule",

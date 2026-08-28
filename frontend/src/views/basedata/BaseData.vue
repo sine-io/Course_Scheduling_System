@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Database, FileUp, RefreshCw, ShieldCheck } from '@lucide/vue'
+import { Database, FileSpreadsheet, RefreshCw, ShieldCheck } from '@lucide/vue'
 import { NAlert, NButton, NSelect, NSpin } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import ManualEntry from './ManualEntry.vue'
 import ReferenceImport from './ReferenceImport.vue'
+import TemplateImport from './TemplateImport.vue'
 import './basedata-workspace.css'
 
 const auth = useAuthStore()
@@ -34,12 +35,20 @@ const canAdminHighRisk = computed(() => (
 const semesterOptions = computed(() =>
   semesters.value.map((s) => ({ label: s.label, value: s.id })),
 )
+const currentSemester = computed(() => (
+  semesters.value.find(semester => semester.id === currentId.value) ?? null
+))
 const initialSection = computed(() => {
   const value = String(route.query.tab ?? '')
-  return ['subjects', 'teachers', 'classes', 'rooms', 'reference'].includes(value)
-    ? value as 'subjects' | 'teachers' | 'classes' | 'rooms' | 'reference'
+  return ['subjects', 'teachers', 'classes', 'rooms', 'template', 'reference'].includes(value)
+    ? value as 'subjects' | 'teachers' | 'classes' | 'rooms' | 'template' | 'reference'
     : 'subjects'
 })
+const manualSection = computed<'subjects' | 'teachers' | 'classes' | 'rooms'>(() => (
+  ['subjects', 'teachers', 'classes', 'rooms'].includes(initialSection.value)
+    ? initialSection.value as 'subjects' | 'teachers' | 'classes' | 'rooms'
+    : 'subjects'
+))
 
 async function loadSemesters() {
   loading.value = true
@@ -80,9 +89,9 @@ onMounted(loadSemesters)
           data-testid="basedata-semester-select"
           :placeholder="'选择学期'"
         />
-        <n-button secondary data-testid="basedata-reference-import" @click="router.push({ query: { ...route.query, tab: 'reference' } })">
-          <template #icon><FileUp :size="16" aria-hidden="true" /></template>
-          {{ '参考文件导入' }}
+        <n-button secondary data-testid="basedata-template-import" @click="router.push({ query: { ...route.query, tab: 'template' } })">
+          <template #icon><FileSpreadsheet :size="16" aria-hidden="true" /></template>
+          {{ '模板导入' }}
         </n-button>
       </div>
     </header>
@@ -115,8 +124,14 @@ onMounted(loadSemesters)
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
         {{ '当前角色仅可查看基础数据，写入操作仅对教务主任开放。' }}
       </n-alert>
+      <TemplateImport
+        v-if="initialSection === 'template' && currentSemester"
+        :key="`template-${currentId}`"
+        :semester="currentSemester"
+        :can-edit="canEdit"
+      />
       <ReferenceImport
-        v-if="initialSection === 'reference'"
+        v-else-if="initialSection === 'reference'"
         :key="`reference-${currentId}`"
         :semester-id="currentId"
         :can-edit="canEdit"
@@ -125,7 +140,7 @@ onMounted(loadSemesters)
         v-else
         :key="`manual-${currentId}-${initialSection}`"
         :semester-id="currentId"
-        :initial-section="initialSection"
+        :initial-section="manualSection"
         :can-edit="canEdit"
         :can-delete="canAdminHighRisk"
         :can-manage-accounts="canAdminHighRisk"

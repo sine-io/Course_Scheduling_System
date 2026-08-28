@@ -19,7 +19,9 @@ describe('downloadTeacherArrangementTemplate', () => {
       configurable: true,
       value: vi.fn(),
     })
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click() {
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function click(
+      this: HTMLAnchorElement,
+    ) {
       downloads.push(this.download)
     })
   })

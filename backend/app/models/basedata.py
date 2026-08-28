@@ -62,11 +62,17 @@ room_subjects = Table(
 
 class Subject(Base):
     __tablename__ = "subjects"
+    __table_args__ = (
+        UniqueConstraint(
+            "semester_id", "school_code", name="uq_subjects_semester_school_code"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
+    school_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(64))
     domain: Mapped[str | None] = mapped_column(String(64), nullable=True)  # 领域/群别
     required_room_type: Mapped[str | None] = mapped_column(String(20), nullable=True)
@@ -80,12 +86,16 @@ class Teacher(Base):
     # 一个账号在同一学期至多绑定一位教师(user_id 为空时不受限,见 M2-0)
     __table_args__ = (
         UniqueConstraint("semester_id", "user_id", name="uq_teachers_semester_user"),
+        UniqueConstraint(
+            "semester_id", "school_code", name="uq_teachers_semester_school_code"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
+    school_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(32))
     id_last4: Mapped[str | None] = mapped_column(String(4), nullable=True)  # 身份证后四位(辅助识别)
     base_periods: Mapped[int] = mapped_column(Integer, default=0)  # 基本课时
@@ -93,6 +103,9 @@ class Teacher(Base):
     admin_reduction: Mapped[int] = mapped_column(Integer, default=0)  # 行政减课节数
     is_external: Mapped[bool] = mapped_column(Boolean, default=False)  # 外聘/企业兼职教师
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # 在职
+    arrangement_status: Mapped[str] = mapped_column(
+        String(20), default="normal", server_default="normal"
+    )
     # 联系信息(均选填,供调课与代课通知与人工联系;挂教师因外聘教师可能无系统账号)
     email: Mapped[str | None] = mapped_column(String(128), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -128,11 +141,17 @@ class TeacherTimeRule(Base):
 
 class Room(Base):
     __tablename__ = "rooms"
+    __table_args__ = (
+        UniqueConstraint(
+            "semester_id", "school_code", name="uq_rooms_semester_school_code"
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
+    school_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(64))
     room_type: Mapped[str] = mapped_column(String(20), default=RoomType.normal.value)
     capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -146,17 +165,22 @@ class ClassUnit(Base):
     # 同学期两个「301」会让教务主任在页面上分不出是哪一班。
     __table_args__ = (
         UniqueConstraint("semester_id", "name", name="uq_class_units_semester_name"),
+        UniqueConstraint(
+            "semester_id", "school_code", name="uq_class_units_semester_school_code"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     semester_id: Mapped[int] = mapped_column(
         ForeignKey("semesters.id", ondelete="CASCADE"), index=True
     )
+    school_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     grade: Mapped[int] = mapped_column(Integer)       # 年级
     name: Mapped[str] = mapped_column(String(32))     # 班名
     track: Mapped[str] = mapped_column(String(20))    # 学制标签
     department: Mapped[str | None] = mapped_column(String(32), nullable=True)  # 专业类别(中职)
     student_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 人数
+    planned_weekly_periods: Mapped[int | None] = mapped_column(Integer, nullable=True)
     homeroom_teacher_id: Mapped[int | None] = mapped_column(
         ForeignKey("teachers.id", ondelete="SET NULL"), nullable=True, index=True
     )

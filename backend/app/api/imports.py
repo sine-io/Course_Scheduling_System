@@ -1,5 +1,6 @@
 """Excel 导入 API:模板下载、上传导入。"""
 
+import hashlib
 import json
 
 from fastapi import (
@@ -29,6 +30,7 @@ from app.services import (
     importer,
     reference_import,
     semester_context,
+    teacher_arrangement_import,
     teacher_arrangement_template,
 )
 
@@ -95,9 +97,9 @@ def download_teacher_arrangement_template(
     )
 
 
-def _require_setup_semester(db: Session, semester_id: int) -> None:
+def _require_setup_semester(db: Session, semester_id: int) -> Semester:
     try:
-        semester_context.require_writable(db, semester_id)
+        return semester_context.require_writable(db, semester_id)
     except semester_context.SemesterContextError as exc:
         raise HTTPException(
             exc.status_code, {"code": exc.code, "message": exc.message}
@@ -109,6 +111,94 @@ async def _read_setup_workbook(file: UploadFile) -> bytes:
     if not content:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "上传文件不能为空")
     return content
+
+
+@router.post("/import/teacher-arrangements/preview")
+async def preview_teacher_arrangement_import(
+    semester_id: int = Query(...),
+    mode: teacher_arrangement_template.TemplateMode = Query(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: object = Depends(viewer),
+) -> dict:
+    """解析版本化教师安排工作簿，零写入返回导入计划。"""
+    semester = _require_setup_semester(db, semester_id)
+    content = await _read_setup_workbook(file)
+    try:
+        return teacher_arrangement_import.build_plan(
+            db, semester, content, mode
+        ).as_dict()
+    except teacher_arrangement_import.InvalidTeacherArrangementWorkbook as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.as_detail()) from exc
+
+
+@router.post("/import/teacher-arrangements/commit")
+async def commit_teacher_arrangement_import(
+    semester_id: int = Query(...),
+    mode: teacher_arrangement_template.TemplateMode = Query(...),
+    file: UploadFile = File(...),
+    fingerprint: str = Form(...),
+    confirm_changes: bool = Form(False),
+    db: Session = Depends(get_db),
+    _: object = Depends(core_editor),
+) -> dict:
+    """重新校验预览指纹，并以一个事务提交教师安排数据。"""
+    semester = _require_setup_semester(db, semester_id)
+    content = await _read_setup_workbook(file)
+    workbook_sha256 = hashlib.sha256(content).hexdigest()
+    committed = teacher_arrangement_import.find_committed_batch(
+        db, semester_id, fingerprint, workbook_sha256
+    )
+    if committed is not None:
+        return teacher_arrangement_import.idempotent_result(committed)
+    try:
+        plan = teacher_arrangement_import.build_plan(db, semester, content, mode)
+    except teacher_arrangement_import.InvalidTeacherArrangementWorkbook as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.as_detail()) from exc
+    if plan.fingerprint != fingerprint:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "teacher_arrangement_preview_stale",
+                "message": "模板或基础数据已发生变化，请重新预览后再提交",
+            },
+        )
+    if not plan.can_commit:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "teacher_arrangement_blockers",
+                "message": "导入预览仍有阻断项，请修正后重新上传",
+                "issues": [issue.as_dict() for issue in plan.issues],
+            },
+        )
+    if any(
+        row.status == "changed"
+        for rows in plan.rows.values()
+        for row in rows
+    ) and not confirm_changes:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "teacher_arrangement_changes_unconfirmed",
+                "message": "工作簿会修改现有数据，请确认变更后再提交",
+            },
+        )
+    try:
+        result = teacher_arrangement_import.apply_plan(
+            db, plan, filename=file.filename or "teacher-arrangement.xlsx"
+        )
+        db.commit()
+        return result
+    except (ValueError, SQLAlchemyError) as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "teacher_arrangement_write_conflict",
+                "message": "提交时发生数据冲突，已撤销本次全部写入，请重新预览",
+            },
+        ) from exc
 
 
 async def _read_reference_file(file: UploadFile, label: str) -> bytes:

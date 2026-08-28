@@ -5,6 +5,67 @@ import { apiErrorFromResponse } from '@/api/client'
 
 export type ImportEntity = 'subjects' | 'teachers' | 'classes' | 'assignments'
 export type TeacherArrangementMode = 'standard' | 'scheduling_ready'
+export type TeacherArrangementEntity =
+  | 'subjects'
+  | 'teachers'
+  | 'classes'
+  | 'assignments'
+  | 'source_records'
+export type TeacherArrangementRowStatus = 'new' | 'changed' | 'unchanged'
+
+export interface TeacherArrangementIssue {
+  code: string
+  severity: 'blocker' | 'warning'
+  sheet: string
+  row: number
+  field: string
+  value: unknown
+  message: string
+  suggestion: string
+}
+
+export interface TeacherArrangementPreviewRow {
+  sheet: string
+  row: number
+  source_key: string
+  identity: string
+  status: TeacherArrangementRowStatus
+  changes: Array<{ field: string, before: unknown, after: unknown }>
+  issues: TeacherArrangementIssue[]
+}
+
+export interface TeacherArrangementPreviewSheet {
+  key: TeacherArrangementEntity
+  label: string
+  rows: TeacherArrangementPreviewRow[]
+}
+
+export interface TeacherArrangementPreview {
+  fingerprint: string
+  template_version: string
+  mode: TeacherArrangementMode
+  semester_id: number
+  can_commit: boolean
+  has_changes: boolean
+  counts: {
+    new: number
+    changed: number
+    unchanged: number
+    blocker: number
+    warning: number
+  }
+  sheets: TeacherArrangementPreviewSheet[]
+  issues: TeacherArrangementIssue[]
+}
+
+export interface TeacherArrangementCommitResult {
+  batch_id: number
+  fingerprint: string
+  created: Record<TeacherArrangementEntity, number>
+  updated: Record<TeacherArrangementEntity, number>
+  unchanged: Record<TeacherArrangementEntity, number>
+  idempotent: boolean
+}
 
 export interface ImportResult {
   imported: number
@@ -159,6 +220,62 @@ export async function downloadTeacherArrangementTemplate(
     `/api/import/teacher-arrangements/template?${params.toString()}`,
     filename,
     '教师安排模板下载失败',
+  )
+}
+
+async function postTeacherArrangementWorkbook<T>(
+  action: 'preview' | 'commit',
+  semesterId: number,
+  mode: TeacherArrangementMode,
+  file: File,
+  extra?: { fingerprint: string, confirmChanges: boolean },
+): Promise<T> {
+  const form = new FormData()
+  form.append('file', file)
+  if (extra) {
+    form.append('fingerprint', extra.fingerprint)
+    form.append('confirm_changes', String(extra.confirmChanges))
+  }
+  const params = new URLSearchParams({ semester_id: String(semesterId), mode })
+  const response = await fetch(
+    `/api/import/teacher-arrangements/${action}?${params.toString()}`,
+    { method: 'POST', credentials: 'include', body: form },
+  )
+  if (!response.ok) {
+    throw await apiErrorFromResponse(
+      response,
+      action === 'preview' ? '教师安排模板预览失败' : '教师安排模板导入失败',
+    )
+  }
+  return response.json() as Promise<T>
+}
+
+export function previewTeacherArrangementImport(
+  semesterId: number,
+  mode: TeacherArrangementMode,
+  file: File,
+): Promise<TeacherArrangementPreview> {
+  return postTeacherArrangementWorkbook<TeacherArrangementPreview>(
+    'preview',
+    semesterId,
+    mode,
+    file,
+  )
+}
+
+export function commitTeacherArrangementImport(
+  semesterId: number,
+  mode: TeacherArrangementMode,
+  file: File,
+  fingerprint: string,
+  confirmChanges: boolean,
+): Promise<TeacherArrangementCommitResult> {
+  return postTeacherArrangementWorkbook<TeacherArrangementCommitResult>(
+    'commit',
+    semesterId,
+    mode,
+    file,
+    { fingerprint, confirmChanges },
   )
 }
 
