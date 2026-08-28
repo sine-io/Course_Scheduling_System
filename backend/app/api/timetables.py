@@ -302,7 +302,8 @@ def check_timetable_publication(
         raise HTTPException(exc.status_code, {"code": exc.code, "message": exc.message}) from exc
     _require_draft(tt)
     try:
-        assert_semester_ready(db, semester)
+        # A failed solver preflight must still allow an explicit completeness review.
+        assert_semester_ready(db, semester, defer_solver_preflight=True)
     except SemesterNotReadyError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -400,7 +401,11 @@ def publish_timetable(
             message="此课表已经发布或归档，请刷新版本列表",
         )
     try:
-        assert_semester_ready(db, semester)
+        assert_semester_ready(
+            db,
+            semester,
+            defer_solver_preflight=bool(confirmation and confirmation.force),
+        )
     except SemesterNotReadyError as exc:
         _reject_publication(
             db,

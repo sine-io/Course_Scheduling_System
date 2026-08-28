@@ -187,7 +187,8 @@ def start_auto_schedule(
     semester = db.get(Semester, tt.semester_id)
     assert semester is not None
     try:
-        assert_semester_ready(db, semester)
+        # The pinned preflight immediately below applies the normal/partial policy.
+        assert_semester_ready(db, semester, defer_solver_preflight=True)
     except SemesterNotReadyError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

@@ -230,11 +230,16 @@ def _ready_import_issues(db: Session, semester: Semester) -> list[dict[str, Any]
     return issues
 
 
-def readiness_report(db: Session, semester: Semester) -> dict[str, Any]:
-    data_issues = [
+def data_readiness_issues(db: Session, semester: Semester) -> list[dict[str, Any]]:
+    """Return readiness blockers that do not depend on solver feasibility."""
+    return [
         *_base_readiness_issues(db, semester),
         *_ready_import_issues(db, semester),
     ]
+
+
+def readiness_report(db: Session, semester: Semester) -> dict[str, Any]:
+    data_issues = data_readiness_issues(db, semester)
     try:
         solver_report = preflight.run(load_problem(db, semester.id))
         solver_issues = [

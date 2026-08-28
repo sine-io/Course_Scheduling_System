@@ -136,10 +136,19 @@ class SemesterNotReadyError(RuntimeError):
         super().__init__("学期排课准备尚未确认，暂不能自动排课或发布课表")
 
 
-def assert_semester_ready(db: Session, semester: Semester) -> None:
-    """所有学期在自动排课和发布前都必须通过准备检查。"""
-    from app.services.calendar import readiness_issues
+def assert_semester_ready(
+    db: Session,
+    semester: Semester,
+    *,
+    defer_solver_preflight: bool = False,
+) -> None:
+    """Require confirmed readiness and all checks not deferred to the caller."""
+    from app.services.calendar import data_readiness_issues, readiness_issues
 
-    issues = readiness_issues(db, semester)
+    issues = (
+        data_readiness_issues(db, semester)
+        if defer_solver_preflight
+        else readiness_issues(db, semester)
+    )
     if semester.readiness != "ready" or issues:
         raise SemesterNotReadyError(semester.id, issues)
