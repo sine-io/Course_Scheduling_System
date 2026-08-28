@@ -13,6 +13,7 @@ from openpyxl import load_workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.db import Base
 from app.models.assignment import AssignmentTeacher, CourseAssignment
 from app.models.basedata import ClassUnit, Subject, Teacher
 from app.models.semester import Semester, SemesterReadiness
@@ -34,7 +35,8 @@ from app.services.teacher_arrangement_template import (
 )
 
 Severity = Literal["blocker", "warning"]
-RowStatus = Literal["new", "changed", "unchanged"]
+RowStatus = Literal["new", "changed", "unchanged", "conflict", "disappeared"]
+DecisionKind = Literal["conflict", "disappeared"]
 
 TEACHER_STATUS_BY_LABEL = {
     "在岗": "normal",
@@ -108,12 +110,38 @@ class PlannedRow:
     status: RowStatus = "new"
     changes: list[dict[str, Any]] = field(default_factory=list)
     issues: list[LocatedIssue] = field(default_factory=list)
+    current_values: dict[str, Any] | None = field(default=None, repr=False)
+    baseline_values: dict[str, Any] | None = field(default=None, repr=False)
+    fields_to_apply: set[str] = field(default_factory=set, repr=False)
+    decision_kind: DecisionKind | None = None
+    decision_selected: str | None = None
+    removal_allowed: bool = False
+    removal_reason: str | None = None
     existing: Any = field(default=None, repr=False)
     applied: Any = field(default=None, repr=False)
+    prior_record: TeacherArrangementImportRecord | None = field(default=None, repr=False)
     references: dict[str, Any] = field(default_factory=dict, repr=False)
 
-    def as_dict(self) -> dict[str, Any]:
+    @property
+    def decision_key(self) -> str:
+        return f"{self.entity}:{self.source_key}"
+
+    @property
+    def unresolved_decision(self) -> bool:
+        return self.decision_kind is not None and self.decision_selected is None
+
+    def effective_values(self) -> dict[str, Any]:
+        if self.current_values is None or self.existing is None:
+            return _jsonable(self.values)
         return {
+            key: _jsonable(
+                value if key in self.fields_to_apply else self.current_values.get(key)
+            )
+            for key, value in self.values.items()
+        }
+
+    def as_dict(self) -> dict[str, Any]:
+        result = {
             "sheet": self.sheet,
             "row": self.row,
             "source_key": self.source_key,
@@ -122,6 +150,22 @@ class PlannedRow:
             "changes": self.changes,
             "issues": [issue.as_dict() for issue in self.issues],
         }
+        if self.decision_kind is not None:
+            result["decision"] = {
+                "key": self.decision_key,
+                "kind": self.decision_kind,
+                "selected": self.decision_selected,
+                "options": (
+                    ["incoming", "current"]
+                    if self.decision_kind == "conflict"
+                    else ["keep", "remove"]
+                ),
+                "removal_allowed": self.removal_allowed,
+                "reason": self.removal_reason,
+            }
+        else:
+            result["decision"] = None
+        return result
 
 
 @dataclass(slots=True)
@@ -135,18 +179,39 @@ class ImportPlan:
 
     @property
     def can_commit(self) -> bool:
-        return not any(issue.severity == "blocker" for issue in self.issues)
+        return not any(issue.severity == "blocker" for issue in self.issues) and not any(
+            row.unresolved_decision
+            for entity_rows in self.rows.values()
+            for row in entity_rows
+        )
+
+    @property
+    def has_unresolved_decisions(self) -> bool:
+        return any(
+            row.unresolved_decision
+            for entity_rows in self.rows.values()
+            for row in entity_rows
+        )
 
     @property
     def has_changes(self) -> bool:
         return any(
-            row.status in {"new", "changed"}
+            row.status in {"new", "changed", "conflict"}
+            or (row.status == "disappeared" and row.decision_selected == "remove")
             for entity_rows in self.rows.values()
             for row in entity_rows
         )
 
     def counts(self) -> dict[str, int]:
-        counts = {"new": 0, "changed": 0, "unchanged": 0, "blocker": 0, "warning": 0}
+        counts = {
+            "new": 0,
+            "changed": 0,
+            "unchanged": 0,
+            "conflict": 0,
+            "disappeared": 0,
+            "blocker": 0,
+            "warning": 0,
+        }
         for entity_rows in self.rows.values():
             for row in entity_rows:
                 counts[row.status] += 1
@@ -543,8 +608,10 @@ def _identify_existing(
 
 
 def _set_status(row: PlannedRow, current: dict[str, Any] | None) -> None:
+    row.current_values = current
     if current is None:
         row.status = "new"
+        row.fields_to_apply = set(row.values)
         return
     changes = []
     for key, after in row.values.items():
@@ -552,6 +619,7 @@ def _set_status(row: PlannedRow, current: dict[str, Any] | None) -> None:
         if _jsonable(before) != _jsonable(after):
             changes.append({"field": key, "before": _jsonable(before), "after": _jsonable(after)})
     row.changes = changes
+    row.fields_to_apply = {change["field"] for change in changes}
     row.status = "changed" if changes else "unchanged"
 
 
@@ -1055,6 +1123,334 @@ def _plan_source_records(
     return result
 
 
+def _subject_current(subject: Subject) -> dict[str, Any]:
+    return {
+        "school_code": subject.school_code,
+        "name": subject.name,
+        "domain": subject.domain,
+        "required_room_type": subject.required_room_type or "normal",
+    }
+
+
+def _teacher_current(teacher: Teacher) -> dict[str, Any]:
+    return {
+        "school_code": teacher.school_code,
+        "name": teacher.name,
+        "base_periods": teacher.base_periods,
+        "admin_title": teacher.admin_title,
+        "admin_reduction": teacher.admin_reduction,
+        "arrangement_status": teacher.arrangement_status,
+        "is_external": teacher.is_external,
+        "is_active": teacher.is_active,
+    }
+
+
+def _class_current(class_unit: ClassUnit) -> dict[str, Any]:
+    return {
+        "school_code": class_unit.school_code,
+        "name": class_unit.name,
+        "grade": class_unit.grade,
+        "track": class_unit.track,
+        "department": class_unit.department,
+        "planned_weekly_periods": class_unit.planned_weekly_periods,
+        "homeroom_teacher": (
+            _object_reference(class_unit.homeroom_teacher)
+            if class_unit.homeroom_teacher
+            else None
+        ),
+    }
+
+
+def _source_record_current(source: TeacherArrangementSourceRecord) -> dict[str, Any]:
+    return {
+        "record_code": source.record_code,
+        "category": source.category,
+        "task_code": source.task_code,
+        "content": source.content,
+        "notes": source.notes,
+    }
+
+
+def _target_current(entity: str, target: Any) -> dict[str, Any]:
+    if entity == "subjects":
+        return _subject_current(target)
+    if entity == "teachers":
+        return _teacher_current(target)
+    if entity == "classes":
+        return _class_current(target)
+    if entity == "assignments":
+        return _assignment_current(target)
+    if entity == "source_records":
+        return _source_record_current(target)
+    raise ValueError(f"不支持的教师安排实体：{entity}")
+
+
+def _latest_import_records(
+    db: Session, semester_id: int
+) -> dict[tuple[str, str], TeacherArrangementImportRecord]:
+    records = list(
+        db.scalars(
+            select(TeacherArrangementImportRecord)
+            .where(TeacherArrangementImportRecord.semester_id == semester_id)
+            .order_by(TeacherArrangementImportRecord.id.desc())
+        )
+    )
+    latest: dict[tuple[str, str], TeacherArrangementImportRecord] = {}
+    for record in records:
+        latest.setdefault((record.entity_type, record.source_key), record)
+    return latest
+
+
+def _record_target(
+    db: Session, record: TeacherArrangementImportRecord
+) -> Any | None:
+    model_by_entity = {
+        "subjects": Subject,
+        "teachers": Teacher,
+        "classes": ClassUnit,
+        "assignments": CourseAssignment,
+        "source_records": TeacherArrangementSourceRecord,
+    }
+    model = model_by_entity.get(record.entity_type)
+    return db.get(model, record.target_id) if model is not None else None
+
+
+def _decision_issue(
+    issues: list[LocatedIssue], row: PlannedRow, selected: str, options: tuple[str, ...]
+) -> None:
+    _issue(
+        issues,
+        code="teacher_arrangement_decision_invalid",
+        sheet=row.sheet,
+        row=row.row,
+        field_name="导入决策",
+        value=selected,
+        message="导入决策值无效",
+        suggestion=f"请选择 {' / '.join(options)}",
+        planned_row=row,
+    )
+
+
+def _reconcile_row(
+    row: PlannedRow,
+    record: TeacherArrangementImportRecord,
+    decisions: dict[str, str],
+    issues: list[LocatedIssue],
+) -> None:
+    if record.outcome != "applied" or row.existing is None:
+        return
+    if row.existing.id != record.target_id or row.current_values is None:
+        return
+    row.prior_record = record
+    row.baseline_values = dict(record.applied_values)
+    fields_to_apply: set[str] = set()
+    conflict_fields: set[str] = set()
+    changes: list[dict[str, Any]] = []
+    for key, incoming in row.values.items():
+        baseline = row.baseline_values.get(key)
+        current = row.current_values.get(key)
+        baseline_json = _jsonable(baseline)
+        current_json = _jsonable(current)
+        incoming_json = _jsonable(incoming)
+        workbook_changed = incoming_json != baseline_json
+        system_changed = current_json != baseline_json
+        if not workbook_changed and not system_changed:
+            continue
+        if current_json == incoming_json:
+            resolution = "same"
+        elif workbook_changed and not system_changed:
+            resolution = "workbook"
+            fields_to_apply.add(key)
+        elif system_changed and not workbook_changed:
+            resolution = "system"
+        else:
+            resolution = "conflict"
+            conflict_fields.add(key)
+        changes.append(
+            {
+                "field": key,
+                "before": current_json,
+                "after": incoming_json if resolution == "workbook" else current_json,
+                "baseline": baseline_json,
+                "current": current_json,
+                "incoming": incoming_json,
+                "resolution": resolution,
+            }
+        )
+
+    row.changes = changes
+    if conflict_fields:
+        row.decision_kind = "conflict"
+        selected = decisions.get(row.decision_key)
+        if selected is not None and selected not in {"incoming", "current"}:
+            _decision_issue(issues, row, selected, ("incoming", "current"))
+            selected = None
+        row.decision_selected = selected
+        if selected == "incoming":
+            fields_to_apply.update(conflict_fields)
+            for change in row.changes:
+                if change["field"] in conflict_fields:
+                    change["after"] = change["incoming"]
+                    change["resolution"] = "incoming"
+        elif selected == "current":
+            for change in row.changes:
+                if change["field"] in conflict_fields:
+                    change["resolution"] = "current"
+        else:
+            row.fields_to_apply = fields_to_apply
+            row.status = "conflict"
+            return
+
+    row.fields_to_apply = fields_to_apply
+    row.status = "changed" if fields_to_apply else "unchanged"
+
+
+_REFERENCE_LABELS = {
+    "assignment_teachers": "教学任务",
+    "course_assignments": "教学任务",
+    "scheduling_unit_members": "排课单位",
+    "timetable_entries": "课表",
+    "teacher_time_rules": "教师时段规则",
+    "teacher_subjects": "教师任教科目",
+    "room_subjects": "场地适用科目",
+    "class_units": "班主任关系",
+    "leave_requests": "请假记录",
+    "affected_periods": "调代课记录",
+    "notifications": "通知记录",
+}
+
+
+def _removal_safety(db: Session, entity: str, target: Any | None) -> tuple[bool, str | None]:
+    if target is None or entity == "source_records":
+        return True, None
+    owned_children = {
+        "assignments": {"assignment_teachers", "block_rules"},
+    }.get(entity, set())
+    target_table = target.__table__
+    for table in Base.metadata.tables.values():
+        if table.name in owned_children:
+            continue
+        for foreign_key in table.foreign_keys:
+            if foreign_key.column.table is not target_table:
+                continue
+            referenced = db.execute(
+                select(foreign_key.parent)
+                .where(foreign_key.parent == target.id)
+                .limit(1)
+            ).first()
+            if referenced is not None:
+                label = _REFERENCE_LABELS.get(table.name, table.name)
+                return False, f"仍被{label}引用，只能保留"
+    return True, None
+
+
+def _add_disappeared_rows(
+    db: Session,
+    rows: dict[str, list[PlannedRow]],
+    latest_records: dict[tuple[str, str], TeacherArrangementImportRecord],
+    decisions: dict[str, str],
+    issues: list[LocatedIssue],
+) -> None:
+    current_keys = {
+        (entity, row.source_key)
+        for entity, entity_rows in rows.items()
+        for row in entity_rows
+    }
+    for (entity, source_key), record in latest_records.items():
+        if entity not in PLAN_ENTITY_KEYS or (entity, source_key) in current_keys:
+            continue
+        if record.outcome != "applied":
+            continue
+        target = _record_target(db, record)
+        current_values = _target_current(entity, target) if target is not None else None
+        removal_allowed, removal_reason = _removal_safety(db, entity, target)
+        row = PlannedRow(
+            entity=entity,
+            sheet=record.sheet_name,
+            row=record.row_number,
+            source_key=source_key,
+            identity=source_key.removeprefix("code:").removeprefix("name:"),
+            values=dict(record.applied_values),
+            raw_values=dict(record.raw_values),
+            status="disappeared",
+            current_values=current_values,
+            baseline_values=dict(record.applied_values),
+            decision_kind="disappeared",
+            removal_allowed=removal_allowed,
+            removal_reason=removal_reason,
+            existing=target,
+            prior_record=record,
+        )
+        if current_values is not None and _jsonable(current_values) != _jsonable(
+            record.applied_values
+        ):
+            row.changes = [
+                {
+                    "field": key,
+                    "before": _jsonable(record.applied_values.get(key)),
+                    "after": _jsonable(current_values.get(key)),
+                    "baseline": _jsonable(record.applied_values.get(key)),
+                    "current": _jsonable(current_values.get(key)),
+                    "incoming": None,
+                    "resolution": "disappeared",
+                }
+                for key in record.applied_values
+                if _jsonable(record.applied_values.get(key))
+                != _jsonable(current_values.get(key))
+            ]
+        selected = decisions.get(row.decision_key)
+        if selected is not None and selected not in {"keep", "remove"}:
+            _decision_issue(issues, row, selected, ("keep", "remove"))
+            selected = None
+        row.decision_selected = selected
+        if selected == "remove" and not removal_allowed:
+            _issue(
+                issues,
+                code="teacher_arrangement_remove_unsafe",
+                sheet=row.sheet,
+                row=row.row,
+                field_name="移除决策",
+                value=row.identity,
+                message="该来源数据当前不能安全移除",
+                suggestion=removal_reason or "请保留该项并先解除关联",
+                planned_row=row,
+            )
+        rows[entity].append(row)
+
+
+def _reconcile_import_history(
+    db: Session,
+    semester_id: int,
+    rows: dict[str, list[PlannedRow]],
+    decisions: dict[str, str],
+    issues: list[LocatedIssue],
+) -> None:
+    latest_records = _latest_import_records(db, semester_id)
+    for entity, entity_rows in rows.items():
+        for row in entity_rows:
+            record = latest_records.get((entity, row.source_key))
+            if record is not None:
+                _reconcile_row(row, record, decisions, issues)
+    _add_disappeared_rows(db, rows, latest_records, decisions, issues)
+    allowed_keys = {
+        row.decision_key
+        for entity_rows in rows.values()
+        for row in entity_rows
+        if row.decision_kind is not None
+    }
+    for unknown_key in sorted(set(decisions) - allowed_keys):
+        _issue(
+            issues,
+            code="teacher_arrangement_decision_unknown",
+            sheet="导入决策",
+            row=0,
+            field_name="决策键",
+            value=unknown_key,
+            message="决策项不属于当前预览",
+            suggestion="请重新预览并只提交当前显示的决策",
+        )
+
+
 def _database_snapshot(db: Session, semester_id: int) -> dict[str, Any]:
     subjects = list(db.scalars(select(Subject).where(Subject.semester_id == semester_id)))
     teachers = list(db.scalars(select(Teacher).where(Teacher.semester_id == semester_id)))
@@ -1069,6 +1465,7 @@ def _database_snapshot(db: Session, semester_id: int) -> dict[str, Any]:
             )
         )
     )
+    import_history = _latest_import_records(db, semester_id)
     return {
         "subjects": [
             [
@@ -1123,6 +1520,18 @@ def _database_snapshot(db: Session, semester_id: int) -> dict[str, Any]:
             ]
             for item in sorted(source_records, key=lambda item: item.id)
         ],
+        "teacher_arrangement_history": [
+            [
+                record.id,
+                record.batch_id,
+                record.entity_type,
+                record.source_key,
+                record.target_id,
+                record.outcome,
+                record.applied_values,
+            ]
+            for record in sorted(import_history.values(), key=lambda item: item.id)
+        ],
     }
 
 
@@ -1134,7 +1543,7 @@ def _fingerprint(
     database_snapshot: dict[str, Any],
 ) -> str:
     payload = {
-        "plan_version": 1,
+        "plan_version": 2,
         "template_version": TEMPLATE_VERSION,
         "workbook_sha256": workbook_sha256,
         "semester_id": semester_id,
@@ -1150,6 +1559,7 @@ def build_plan(
     semester: Semester,
     content: bytes,
     mode: TemplateMode,
+    decisions: dict[str, str] | None = None,
 ) -> ImportPlan:
     workbook = _load_workbook(content, semester, mode)
     issues: list[LocatedIssue] = []
@@ -1221,6 +1631,7 @@ def build_plan(
     rows["source_records"] = _plan_source_records(
         db, semester.id, raw_by_entity.get("source_records", []), issues
     )
+    _reconcile_import_history(db, semester.id, rows, decisions or {}, issues)
     workbook_sha256 = hashlib.sha256(content).hexdigest()
     return ImportPlan(
         semester_id=semester.id,
@@ -1245,19 +1656,22 @@ def _applied_target(target: PlannedRow | Any | None) -> Any:
 
 def _apply_subjects(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
     for row in rows:
+        if row.status == "disappeared":
+            continue
         subject = row.existing or Subject(semester_id=semester_id)
         if row.existing is None:
             db.add(subject)
-        subject.school_code = row.values["school_code"]
-        subject.name = row.values["name"]
-        subject.domain = row.values["domain"]
-        subject.required_room_type = row.values["required_room_type"]
+        for key in ("school_code", "name", "domain", "required_room_type"):
+            if key in row.fields_to_apply:
+                setattr(subject, key, row.values[key])
         row.applied = subject
     db.flush()
 
 
 def _apply_teachers(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
     for row in rows:
+        if row.status == "disappeared":
+            continue
         teacher = row.existing or Teacher(semester_id=semester_id)
         if row.existing is None:
             db.add(teacher)
@@ -1271,100 +1685,161 @@ def _apply_teachers(db: Session, semester_id: int, rows: list[PlannedRow]) -> No
             "is_external",
             "is_active",
         ):
-            setattr(teacher, key, row.values[key])
+            if key in row.fields_to_apply:
+                setattr(teacher, key, row.values[key])
         row.applied = teacher
     db.flush()
 
 
 def _apply_classes(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
     for row in rows:
+        if row.status == "disappeared":
+            continue
         class_unit = row.existing or ClassUnit(semester_id=semester_id)
         if row.existing is None:
             db.add(class_unit)
-        class_unit.school_code = row.values["school_code"]
-        class_unit.name = row.values["name"]
-        class_unit.grade = row.values["grade"]
-        class_unit.track = row.values["track"]
-        class_unit.department = row.values["department"]
-        class_unit.planned_weekly_periods = row.values["planned_weekly_periods"]
-        homeroom_teacher = _applied_target(row.references.get("homeroom_teacher"))
-        class_unit.homeroom_teacher = homeroom_teacher
+        for key in (
+            "school_code",
+            "name",
+            "grade",
+            "track",
+            "department",
+            "planned_weekly_periods",
+        ):
+            if key in row.fields_to_apply:
+                setattr(class_unit, key, row.values[key])
+        if "homeroom_teacher" in row.fields_to_apply:
+            homeroom_teacher = _applied_target(row.references.get("homeroom_teacher"))
+            class_unit.homeroom_teacher = homeroom_teacher
         row.applied = class_unit
     db.flush()
 
 
 def _apply_assignments(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
     for row in rows:
-        class_unit = _applied_target(row.references["class"])
-        subject = _applied_target(row.references["subject"])
-        unit = get_or_create_single_unit(db, class_unit)
-        unit.name = class_unit.name
+        if row.status == "disappeared":
+            continue
         assignment = row.existing or CourseAssignment(semester_id=semester_id)
+        if "task_code" in row.fields_to_apply:
+            assignment.task_code = row.values["task_code"]
+        if "component" in row.fields_to_apply:
+            assignment.component = row.values["component"]
+        if "class_ref" in row.fields_to_apply:
+            class_unit = _applied_target(row.references["class"])
+            unit = get_or_create_single_unit(db, class_unit)
+            unit.name = class_unit.name
+            assignment.scheduling_unit = unit
+        if "subject_ref" in row.fields_to_apply:
+            subject = _applied_target(row.references["subject"])
+            assignment.subject = subject
+            assignment.required_room_type = subject.required_room_type
+        if "weekly_periods" in row.fields_to_apply:
+            assignment.periods_per_week = row.values["weekly_periods"]
+        if {"lead_teacher", "co_teachers"} & row.fields_to_apply:
+            lead = _applied_target(row.references.get("lead_teacher"))
+            desired_links: list[tuple[Teacher, bool]] = []
+            if lead is not None:
+                desired_links.append((lead, True))
+            for teacher_target in row.references.get("co_teachers", []):
+                teacher = _applied_target(teacher_target)
+                desired_links.append((teacher, False))
+            desired_by_teacher_id = {
+                teacher.id: (teacher, is_lead) for teacher, is_lead in desired_links
+            }
+            existing_by_teacher_id = {
+                link.teacher_id: link
+                for link in assignment.teachers
+                if link.teacher_id is not None
+            }
+            for link in list(assignment.teachers):
+                desired = desired_by_teacher_id.get(link.teacher_id)
+                if desired is None:
+                    assignment.teachers.remove(link)
+                else:
+                    link.is_lead = desired[1]
+            for teacher_id, (teacher, is_lead) in desired_by_teacher_id.items():
+                if teacher_id not in existing_by_teacher_id:
+                    assignment.teachers.append(
+                        AssignmentTeacher(teacher=teacher, is_lead=is_lead)
+                    )
         if row.existing is None:
             db.add(assignment)
-        assignment.task_code = row.values["task_code"]
-        assignment.component = row.values["component"]
-        assignment.scheduling_unit = unit
-        assignment.subject = subject
-        assignment.periods_per_week = row.values["weekly_periods"]
-        assignment.required_room_type = subject.required_room_type
-        lead = _applied_target(row.references.get("lead_teacher"))
-        desired_links: list[tuple[Teacher, bool]] = []
-        if lead is not None:
-            desired_links.append((lead, True))
-        for teacher_target in row.references.get("co_teachers", []):
-            teacher = _applied_target(teacher_target)
-            desired_links.append((teacher, False))
-        desired_by_teacher_id = {
-            teacher.id: (teacher, is_lead) for teacher, is_lead in desired_links
-        }
-        existing_by_teacher_id = {
-            link.teacher_id: link for link in assignment.teachers if link.teacher_id is not None
-        }
-        for link in list(assignment.teachers):
-            desired = desired_by_teacher_id.get(link.teacher_id)
-            if desired is None:
-                assignment.teachers.remove(link)
-            else:
-                link.is_lead = desired[1]
-        for teacher_id, (teacher, is_lead) in desired_by_teacher_id.items():
-            if teacher_id not in existing_by_teacher_id:
-                assignment.teachers.append(
-                    AssignmentTeacher(teacher=teacher, is_lead=is_lead)
-                )
         row.applied = assignment
     db.flush()
 
 
 def _apply_source_records(db: Session, semester_id: int, rows: list[PlannedRow]) -> None:
     for row in rows:
+        if row.status == "disappeared":
+            continue
         source = row.existing or TeacherArrangementSourceRecord(semester_id=semester_id)
         if row.existing is None:
             db.add(source)
         for key in ("record_code", "category", "task_code", "content", "notes"):
-            setattr(source, key, row.values[key])
+            if key in row.fields_to_apply:
+                setattr(source, key, row.values[key])
         row.applied = source
     db.flush()
 
 
-def _result_counts(plan: ImportPlan) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+def _apply_disappeared(db: Session, plan: ImportPlan) -> None:
+    removal_order = (
+        "assignments",
+        "source_records",
+        "classes",
+        "teachers",
+        "subjects",
+    )
+    for entity in removal_order:
+        for row in plan.rows[entity]:
+            if row.status != "disappeared":
+                continue
+            if row.decision_selected == "keep":
+                row.applied = row.existing
+                continue
+            if row.decision_selected != "remove":
+                raise ValueError("消失来源尚未完成保留或移除决策")
+            if not row.removal_allowed:
+                raise ValueError("消失来源当前不能安全移除")
+            if row.existing is not None:
+                db.delete(row.existing)
+        db.flush()
+
+
+def _result_counts(
+    plan: ImportPlan,
+) -> tuple[
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+]:
     created = {key: 0 for key in PLAN_ENTITY_KEYS}
     updated = {key: 0 for key in PLAN_ENTITY_KEYS}
     unchanged = {key: 0 for key in PLAN_ENTITY_KEYS}
+    removed = {key: 0 for key in PLAN_ENTITY_KEYS}
+    kept = {key: 0 for key in PLAN_ENTITY_KEYS}
     for entity, rows in plan.rows.items():
         for row in rows:
             if row.status == "new":
                 created[entity] += 1
             elif row.status == "changed":
                 updated[entity] += 1
+            elif row.status == "disappeared":
+                if row.decision_selected == "remove":
+                    removed[entity] += 1
+                elif row.decision_selected == "keep":
+                    kept[entity] += 1
             else:
                 unchanged[entity] += 1
-    return created, updated, unchanged
+    return created, updated, unchanged, removed, kept
 
 
 def apply_plan(db: Session, plan: ImportPlan, *, filename: str) -> dict[str, Any]:
     if not plan.can_commit:
         raise ValueError("导入计划仍有阻断项")
+    _apply_disappeared(db, plan)
     _apply_subjects(db, plan.semester_id, plan.rows["subjects"])
     _apply_teachers(db, plan.semester_id, plan.rows["teachers"])
     _apply_classes(db, plan.semester_id, plan.rows["classes"])
@@ -1375,7 +1850,7 @@ def apply_plan(db: Session, plan: ImportPlan, *, filename: str) -> dict[str, Any
     if semester is not None:
         semester.readiness = SemesterReadiness.draft.value
 
-    created, updated, unchanged = _result_counts(plan)
+    created, updated, unchanged, removed, kept = _result_counts(plan)
     batch = TeacherArrangementImportBatch(
         semester_id=plan.semester_id,
         fingerprint=plan.fingerprint,
@@ -1390,11 +1865,26 @@ def apply_plan(db: Session, plan: ImportPlan, *, filename: str) -> dict[str, Any
         "created": created,
         "updated": updated,
         "unchanged": unchanged,
+        "removed": removed,
+        "kept": kept,
         "fingerprint": plan.fingerprint,
     }
     batch.summary = summary
     for entity, rows in plan.rows.items():
         for row in rows:
+            outcome = "applied"
+            target_id = row.applied.id if row.applied is not None else None
+            applied_values = row.effective_values()
+            if row.status == "disappeared":
+                outcome = "removed" if row.decision_selected == "remove" else "kept"
+                target_id = row.prior_record.target_id if row.prior_record else target_id
+                applied_values = (
+                    {}
+                    if outcome == "removed"
+                    else _jsonable(row.current_values or row.baseline_values or {})
+                )
+            if target_id is None:
+                raise ValueError("导入记录缺少目标标识")
             db.add(
                 TeacherArrangementImportRecord(
                     batch_id=batch.id,
@@ -1403,8 +1893,9 @@ def apply_plan(db: Session, plan: ImportPlan, *, filename: str) -> dict[str, Any
                     source_key=row.source_key,
                     sheet_name=row.sheet,
                     row_number=row.row,
-                    target_id=row.applied.id,
-                    applied_values=_jsonable(row.values),
+                    target_id=target_id,
+                    outcome=outcome,
+                    applied_values=applied_values,
                     raw_values=_jsonable(row.raw_values),
                 )
             )

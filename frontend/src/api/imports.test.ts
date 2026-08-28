@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { downloadTeacherArrangementTemplate } from './imports'
+import {
+  commitTeacherArrangementImport,
+  downloadTeacherArrangementTemplate,
+} from './imports'
 
 describe('downloadTeacherArrangementTemplate', () => {
   const downloads: string[] = []
@@ -42,5 +45,44 @@ describe('downloadTeacherArrangementTemplate', () => {
       { credentials: 'include' },
     )
     expect(downloads).toEqual([filename])
+  })
+})
+
+describe('commitTeacherArrangementImport', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('submits reimport decisions with the preview fingerprint', async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, _init?: RequestInit) => Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ batch_id: 9 }),
+    } as Response))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['xlsx'], '教师安排.xlsx')
+
+    await commitTeacherArrangementImport(
+      17,
+      'standard',
+      file,
+      'fingerprint',
+      true,
+      false,
+      {
+        'teachers:code:T-001': 'incoming',
+        'source_records:SRC-001': 'keep',
+      },
+    )
+
+    const [url, init] = fetchMock.mock.calls[0]!
+    const form = init!.body as FormData
+    expect(url).toBe('/api/import/teacher-arrangements/commit?semester_id=17&mode=standard')
+    expect(form.get('fingerprint')).toBe('fingerprint')
+    expect(form.get('confirm_changes')).toBe('true')
+    expect(form.get('confirm_warnings')).toBe('false')
+    expect(form.get('decisions')).toBe(JSON.stringify({
+      'teachers:code:T-001': 'incoming',
+      'source_records:SRC-001': 'keep',
+    }))
   })
 })

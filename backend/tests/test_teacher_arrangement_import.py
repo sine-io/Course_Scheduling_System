@@ -1,6 +1,7 @@
 """标准教师安排模板导入的公开 API 契约测试。"""
 
 import io
+import json
 
 import pytest
 from openpyxl import load_workbook
@@ -49,6 +50,12 @@ def set_row(workbook, sheet_name: str, values: dict[str, object], row: int = 4) 
     columns = {cell.value: index for index, cell in enumerate(sheet[1], start=1)}
     for header, value in values.items():
         sheet.cell(row=row, column=columns[header]).value = value
+
+
+def clear_data_row(workbook, sheet_name: str, row: int = 4) -> None:
+    sheet = workbook[sheet_name]
+    for column in range(1, sheet.max_column + 1):
+        sheet.cell(row=row, column=column).value = None
 
 
 def minimal_standard_workbook(
@@ -164,6 +171,8 @@ def test_standard_preview_is_zero_write_and_commit_creates_scheduling_data(impor
         "new": 5,
         "changed": 0,
         "unchanged": 0,
+        "conflict": 0,
+        "disappeared": 0,
         "blocker": 0,
         "warning": 0,
     }
@@ -498,3 +507,274 @@ def test_compound_periods_and_ambiguous_teacher_have_precise_locations(import_en
     assert ambiguous["sheet"] == "教学任务"
     assert ambiguous["row"] == 4
     assert ambiguous["field"] == "主讲教师"
+
+
+def test_reimport_merges_workbook_changes_without_overwriting_local_changes(import_env):
+    client, db, semester_id = import_env
+    original = minimal_standard_workbook(client, semester_id)
+    first_preview = post_workbook(client, "preview", semester_id, original).json()
+    first_commit = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        original,
+        data={"fingerprint": first_preview["fingerprint"]},
+    )
+    assert first_commit.status_code == 200, first_commit.json()
+
+    subject = db.query(Subject).one()
+    subject.domain = "校内人工调整"
+    db.commit()
+    workbook = load_workbook(io.BytesIO(original))
+    set_row(workbook, "教师", {"基础周课时": 20})
+    output = io.BytesIO()
+    workbook.save(output)
+
+    response = post_workbook(client, "preview", semester_id, output.getvalue())
+
+    assert response.status_code == 200, response.json()
+    preview = response.json()
+    assert preview["counts"]["changed"] == 1
+    assert preview["counts"]["conflict"] == 0
+    subject_row = next(
+        row
+        for sheet in preview["sheets"]
+        if sheet["key"] == "subjects"
+        for row in sheet["rows"]
+    )
+    assert subject_row["status"] == "unchanged"
+    assert next(
+        change for change in subject_row["changes"] if change["field"] == "domain"
+    )["resolution"] == "system"
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "confirm_changes": "true",
+        },
+    )
+    assert committed.status_code == 200, committed.json()
+    db.expire_all()
+    assert db.query(Subject).one().domain == "校内人工调整"
+    assert db.query(Teacher).one().base_periods == 20
+
+
+def test_divergent_reimport_requires_and_applies_conflict_decision(import_env):
+    client, db, semester_id = import_env
+    original = minimal_standard_workbook(client, semester_id)
+    first_preview = post_workbook(client, "preview", semester_id, original).json()
+    assert post_workbook(
+        client,
+        "commit",
+        semester_id,
+        original,
+        data={"fingerprint": first_preview["fingerprint"]},
+    ).status_code == 200
+
+    teacher = db.query(Teacher).one()
+    teacher.base_periods = 19
+    db.commit()
+    workbook = load_workbook(io.BytesIO(original))
+    set_row(workbook, "教师", {"基础周课时": 20})
+    output = io.BytesIO()
+    workbook.save(output)
+
+    response = post_workbook(client, "preview", semester_id, output.getvalue())
+
+    assert response.status_code == 200, response.json()
+    preview = response.json()
+    assert preview["can_commit"] is False
+    assert preview["counts"]["conflict"] == 1
+    conflict = next(
+        row
+        for sheet in preview["sheets"]
+        for row in sheet["rows"]
+        if row["status"] == "conflict"
+    )
+    assert conflict["decision"] == {
+        "key": "teachers:code:T-001",
+        "kind": "conflict",
+        "selected": None,
+        "options": ["incoming", "current"],
+        "removal_allowed": False,
+        "reason": None,
+    }
+    change = next(item for item in conflict["changes"] if item["field"] == "base_periods")
+    assert (change["baseline"], change["current"], change["incoming"]) == (18, 19, 20)
+    rejected = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={"fingerprint": preview["fingerprint"]},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "teacher_arrangement_decisions_required"
+
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "decisions": json.dumps({conflict["decision"]["key"]: "incoming"}),
+            "confirm_changes": "true",
+        },
+    )
+    assert committed.status_code == 200, committed.json()
+    db.expire_all()
+    assert db.query(Teacher).one().base_periods == 20
+
+
+def test_disappeared_source_record_requires_decision_and_can_be_removed(import_env):
+    client, db, semester_id = import_env
+    original = minimal_standard_workbook(client, semester_id)
+    first_preview = post_workbook(client, "preview", semester_id, original).json()
+    assert post_workbook(
+        client,
+        "commit",
+        semester_id,
+        original,
+        data={"fingerprint": first_preview["fingerprint"]},
+    ).status_code == 200
+    original_target_id = db.query(TeacherArrangementSourceRecord).one().id
+    workbook = load_workbook(io.BytesIO(original))
+    clear_data_row(workbook, "来源记录")
+    output = io.BytesIO()
+    workbook.save(output)
+
+    preview = post_workbook(client, "preview", semester_id, output.getvalue()).json()
+
+    assert preview["counts"]["disappeared"] == 1
+    disappeared = next(
+        row
+        for sheet in preview["sheets"]
+        for row in sheet["rows"]
+        if row["status"] == "disappeared"
+    )
+    assert disappeared["decision"]["kind"] == "disappeared"
+    assert disappeared["decision"]["options"] == ["keep", "remove"]
+    assert disappeared["decision"]["removal_allowed"] is True
+    rejected = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={"fingerprint": preview["fingerprint"]},
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "teacher_arrangement_decisions_required"
+
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "decisions": json.dumps({disappeared["decision"]["key"]: "remove"}),
+        },
+    )
+    assert committed.status_code == 200, committed.json()
+    assert committed.json()["removed"]["source_records"] == 1
+    assert db.query(TeacherArrangementSourceRecord).count() == 0
+    latest_record = db.query(TeacherArrangementImportRecord).order_by(
+        TeacherArrangementImportRecord.id.desc()
+    ).first()
+    assert latest_record is not None
+    assert latest_record.target_id == original_target_id
+    assert latest_record.outcome == "removed"
+
+    after = post_workbook(client, "preview", semester_id, output.getvalue()).json()
+    assert after["counts"]["disappeared"] == 0
+
+
+def test_disappeared_keep_detaches_source_without_deleting_target(import_env):
+    client, db, semester_id = import_env
+    original = minimal_standard_workbook(client, semester_id)
+    first_preview = post_workbook(client, "preview", semester_id, original).json()
+    assert post_workbook(
+        client,
+        "commit",
+        semester_id,
+        original,
+        data={"fingerprint": first_preview["fingerprint"]},
+    ).status_code == 200
+    workbook = load_workbook(io.BytesIO(original))
+    clear_data_row(workbook, "来源记录")
+    output = io.BytesIO()
+    workbook.save(output)
+    preview = post_workbook(client, "preview", semester_id, output.getvalue()).json()
+    disappeared = next(
+        row
+        for sheet in preview["sheets"]
+        for row in sheet["rows"]
+        if row["status"] == "disappeared"
+    )
+
+    committed = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "decisions": json.dumps({disappeared["decision"]["key"]: "keep"}),
+        },
+    )
+
+    assert committed.status_code == 200, committed.json()
+    assert committed.json()["kept"]["source_records"] == 1
+    assert db.query(TeacherArrangementSourceRecord).count() == 1
+    latest_record = db.query(TeacherArrangementImportRecord).order_by(
+        TeacherArrangementImportRecord.id.desc()
+    ).first()
+    assert latest_record is not None and latest_record.outcome == "kept"
+    after = post_workbook(client, "preview", semester_id, output.getvalue()).json()
+    assert after["counts"]["disappeared"] == 0
+
+
+def test_disappeared_referenced_teacher_cannot_be_removed(import_env):
+    client, db, semester_id = import_env
+    original = minimal_standard_workbook(client, semester_id)
+    first_preview = post_workbook(client, "preview", semester_id, original).json()
+    assert post_workbook(
+        client,
+        "commit",
+        semester_id,
+        original,
+        data={"fingerprint": first_preview["fingerprint"]},
+    ).status_code == 200
+    workbook = load_workbook(io.BytesIO(original))
+    clear_data_row(workbook, "教师")
+    output = io.BytesIO()
+    workbook.save(output)
+
+    preview = post_workbook(client, "preview", semester_id, output.getvalue()).json()
+
+    disappeared = next(
+        row
+        for sheet in preview["sheets"]
+        for row in sheet["rows"]
+        if row["status"] == "disappeared"
+    )
+    assert disappeared["source_key"] == "code:T-001"
+    assert disappeared["decision"]["removal_allowed"] is False
+    assert "引用" in disappeared["decision"]["reason"]
+    rejected = post_workbook(
+        client,
+        "commit",
+        semester_id,
+        output.getvalue(),
+        data={
+            "fingerprint": preview["fingerprint"],
+            "decisions": json.dumps({disappeared["decision"]["key"]: "remove"}),
+        },
+    )
+    assert rejected.status_code == 409
+    assert rejected.json()["detail"]["code"] == "teacher_arrangement_blockers"
+    assert db.query(Teacher).count() == 1

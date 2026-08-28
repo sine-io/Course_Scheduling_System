@@ -11,7 +11,32 @@ export type TeacherArrangementEntity =
   | 'classes'
   | 'assignments'
   | 'source_records'
-export type TeacherArrangementRowStatus = 'new' | 'changed' | 'unchanged'
+export type TeacherArrangementRowStatus =
+  | 'new'
+  | 'changed'
+  | 'unchanged'
+  | 'conflict'
+  | 'disappeared'
+export type TeacherArrangementDecisionValue = 'incoming' | 'current' | 'keep' | 'remove'
+
+export interface TeacherArrangementDecision {
+  key: string
+  kind: 'conflict' | 'disappeared'
+  selected: TeacherArrangementDecisionValue | null
+  options: TeacherArrangementDecisionValue[]
+  removal_allowed: boolean
+  reason: string | null
+}
+
+export interface TeacherArrangementChange {
+  field: string
+  before: unknown
+  after: unknown
+  baseline?: unknown
+  current?: unknown
+  incoming?: unknown
+  resolution?: 'same' | 'workbook' | 'system' | 'conflict' | 'incoming' | 'current' | 'disappeared'
+}
 
 export interface TeacherArrangementIssue {
   code: string
@@ -30,8 +55,9 @@ export interface TeacherArrangementPreviewRow {
   source_key: string
   identity: string
   status: TeacherArrangementRowStatus
-  changes: Array<{ field: string, before: unknown, after: unknown }>
+  changes: TeacherArrangementChange[]
   issues: TeacherArrangementIssue[]
+  decision: TeacherArrangementDecision | null
 }
 
 export interface TeacherArrangementPreviewSheet {
@@ -51,6 +77,8 @@ export interface TeacherArrangementPreview {
     new: number
     changed: number
     unchanged: number
+    conflict: number
+    disappeared: number
     blocker: number
     warning: number
   }
@@ -64,6 +92,8 @@ export interface TeacherArrangementCommitResult {
   created: Record<TeacherArrangementEntity, number>
   updated: Record<TeacherArrangementEntity, number>
   unchanged: Record<TeacherArrangementEntity, number>
+  removed: Record<TeacherArrangementEntity, number>
+  kept: Record<TeacherArrangementEntity, number>
   idempotent: boolean
 }
 
@@ -228,7 +258,12 @@ async function postTeacherArrangementWorkbook<T>(
   semesterId: number,
   mode: TeacherArrangementMode,
   file: File,
-  extra?: { fingerprint: string, confirmChanges: boolean, confirmWarnings: boolean },
+  extra?: {
+    fingerprint: string
+    confirmChanges: boolean
+    confirmWarnings: boolean
+    decisions: Record<string, TeacherArrangementDecisionValue>
+  },
 ): Promise<T> {
   const form = new FormData()
   form.append('file', file)
@@ -236,6 +271,7 @@ async function postTeacherArrangementWorkbook<T>(
     form.append('fingerprint', extra.fingerprint)
     form.append('confirm_changes', String(extra.confirmChanges))
     form.append('confirm_warnings', String(extra.confirmWarnings))
+    form.append('decisions', JSON.stringify(extra.decisions))
   }
   const params = new URLSearchParams({ semester_id: String(semesterId), mode })
   const response = await fetch(
@@ -271,13 +307,14 @@ export function commitTeacherArrangementImport(
   fingerprint: string,
   confirmChanges: boolean,
   confirmWarnings: boolean,
+  decisions: Record<string, TeacherArrangementDecisionValue> = {},
 ): Promise<TeacherArrangementCommitResult> {
   return postTeacherArrangementWorkbook<TeacherArrangementCommitResult>(
     'commit',
     semesterId,
     mode,
     file,
-    { fingerprint, confirmChanges, confirmWarnings },
+    { fingerprint, confirmChanges, confirmWarnings, decisions },
   )
 }
 

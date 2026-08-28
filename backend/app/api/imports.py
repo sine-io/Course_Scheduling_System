@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import logging
 
 from fastapi import (
     APIRouter,
@@ -35,6 +36,7 @@ from app.services import (
 )
 
 router = APIRouter(tags=["import"])
+logger = logging.getLogger(__name__)
 
 viewer = core_viewer
 
@@ -113,11 +115,33 @@ async def _read_setup_workbook(file: UploadFile) -> bytes:
     return content
 
 
+def _teacher_arrangement_decisions(value: str | None) -> dict[str, str]:
+    if not value:
+        return {}
+    try:
+        result = json.loads(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "导入决策必须是有效 JSON",
+        ) from exc
+    if not isinstance(result, dict) or not all(
+        isinstance(key, str) and isinstance(item, str)
+        for key, item in result.items()
+    ):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "导入决策必须是字符串键值的 JSON 对象",
+        )
+    return result
+
+
 @router.post("/import/teacher-arrangements/preview")
 async def preview_teacher_arrangement_import(
     semester_id: int = Query(...),
     mode: teacher_arrangement_template.TemplateMode = Query(...),
     file: UploadFile = File(...),
+    decisions: str | None = Form(None),
     db: Session = Depends(get_db),
     _: object = Depends(viewer),
 ) -> dict:
@@ -126,7 +150,11 @@ async def preview_teacher_arrangement_import(
     content = await _read_setup_workbook(file)
     try:
         return teacher_arrangement_import.build_plan(
-            db, semester, content, mode
+            db,
+            semester,
+            content,
+            mode,
+            _teacher_arrangement_decisions(decisions),
         ).as_dict()
     except teacher_arrangement_import.InvalidTeacherArrangementWorkbook as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.as_detail()) from exc
@@ -140,6 +168,7 @@ async def commit_teacher_arrangement_import(
     fingerprint: str = Form(...),
     confirm_changes: bool = Form(False),
     confirm_warnings: bool = Form(False),
+    decisions: str | None = Form(None),
     db: Session = Depends(get_db),
     _: object = Depends(core_editor),
 ) -> dict:
@@ -153,7 +182,13 @@ async def commit_teacher_arrangement_import(
     if committed is not None:
         return teacher_arrangement_import.idempotent_result(committed)
     try:
-        plan = teacher_arrangement_import.build_plan(db, semester, content, mode)
+        plan = teacher_arrangement_import.build_plan(
+            db,
+            semester,
+            content,
+            mode,
+            _teacher_arrangement_decisions(decisions),
+        )
     except teacher_arrangement_import.InvalidTeacherArrangementWorkbook as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, exc.as_detail()) from exc
     if plan.fingerprint != fingerprint:
@@ -162,6 +197,14 @@ async def commit_teacher_arrangement_import(
             {
                 "code": "teacher_arrangement_preview_stale",
                 "message": "模板或基础数据已发生变化，请重新预览后再提交",
+            },
+        )
+    if plan.has_unresolved_decisions:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "code": "teacher_arrangement_decisions_required",
+                "message": "请先处理所有冲突与消失来源项",
             },
         )
     if not plan.can_commit:
@@ -201,6 +244,7 @@ async def commit_teacher_arrangement_import(
         return result
     except (ValueError, SQLAlchemyError) as exc:
         db.rollback()
+        logger.exception("教师安排模板提交失败")
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {

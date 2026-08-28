@@ -17,6 +17,8 @@ import {
   previewTeacherArrangementImport,
 } from '@/api/imports'
 import type {
+  TeacherArrangementDecision,
+  TeacherArrangementDecisionValue,
   TeacherArrangementIssue,
   TeacherArrangementCommitResult,
   TeacherArrangementMode,
@@ -41,7 +43,15 @@ const previewing = ref(false)
 const committing = ref(false)
 const confirmChanges = ref(false)
 const confirmWarnings = ref(false)
-type ReviewFilter = 'blocker' | 'warning' | 'new' | 'changed' | 'unchanged' | 'disappeared'
+const decisions = ref<Record<string, TeacherArrangementDecisionValue>>({})
+type ReviewFilter =
+  | 'blocker'
+  | 'warning'
+  | 'conflict'
+  | 'new'
+  | 'changed'
+  | 'unchanged'
+  | 'disappeared'
 interface ReviewItem {
   key: string
   kind: 'issue' | 'row'
@@ -54,6 +64,7 @@ interface ReviewItem {
   value: unknown
   status?: string
   changes: TeacherArrangementPreviewRow['changes']
+  decision: TeacherArrangementDecision | null
 }
 const activeFilter = ref<ReviewFilter>('new')
 const selectedReviewKey = ref<string | null>(null)
@@ -61,11 +72,24 @@ const selectedReviewKey = ref<string | null>(null)
 const allRows = computed(() => (
   preview.value?.sheets.flatMap(sheet => sheet.rows.map(row => ({ ...row, label: sheet.label }))) ?? []
 ))
+const decisionRows = computed(() => allRows.value.filter(row => row.decision !== null))
+const unresolvedDecisionCount = computed(() => decisionRows.value.filter(row => (
+  row.decision && !decisions.value[row.decision.key] && !row.decision.selected
+)).length)
+const pendingChangeCount = computed(() => (
+  (preview.value?.counts.changed ?? 0)
+  + decisionRows.value.filter(row => (
+    row.decision?.kind === 'conflict'
+    && (decisions.value[row.decision.key] ?? row.decision.selected) === 'incoming'
+  )).length
+))
 const canCommit = computed(() => Boolean(
   props.canEdit
   && file.value
-  && preview.value?.can_commit
-  && (!preview.value.counts.changed || confirmChanges.value)
+  && preview.value
+  && !preview.value.counts.blocker
+  && !unresolvedDecisionCount.value
+  && (!pendingChangeCount.value || confirmChanges.value)
   && (!preview.value.counts.warning || confirmWarnings.value),
 ))
 const completedStep = computed(() => {
@@ -77,6 +101,7 @@ const completedStep = computed(() => {
 const filterDefinitions: Array<{ key: ReviewFilter, label: string }> = [
   { key: 'blocker', label: '阻断' },
   { key: 'warning', label: '警告' },
+  { key: 'conflict', label: '冲突' },
   { key: 'new', label: '新增' },
   { key: 'changed', label: '变更' },
   { key: 'unchanged', label: '不变' },
@@ -85,10 +110,11 @@ const filterDefinitions: Array<{ key: ReviewFilter, label: string }> = [
 const filterCounts = computed<Record<ReviewFilter, number>>(() => ({
   blocker: preview.value?.counts.blocker ?? 0,
   warning: preview.value?.counts.warning ?? 0,
+  conflict: preview.value?.counts.conflict ?? 0,
   new: preview.value?.counts.new ?? 0,
   changed: preview.value?.counts.changed ?? 0,
   unchanged: preview.value?.counts.unchanged ?? 0,
-  disappeared: 0,
+  disappeared: preview.value?.counts.disappeared ?? 0,
 }))
 const reviewItems = computed<ReviewItem[]>(() => {
   if (!preview.value) return []
@@ -106,9 +132,9 @@ const reviewItems = computed<ReviewItem[]>(() => {
         suggestion: issue.suggestion,
         value: issue.value,
         changes: [],
+        decision: null,
       }))
   }
-  if (activeFilter.value === 'disappeared') return []
   return allRows.value
     .filter(row => row.status === activeFilter.value)
     .map(row => ({
@@ -118,11 +144,12 @@ const reviewItems = computed<ReviewItem[]>(() => {
       row: row.row,
       field: '识别项',
       title: row.identity,
-      message: `${statusLabel(row.status)}数据`,
-      suggestion: row.status === 'changed' ? '核对字段差异后确认更新' : '无需处理',
+      message: rowMessage(row.status),
+      suggestion: rowSuggestion(row.status),
       value: row.identity,
       status: row.status,
       changes: row.changes,
+      decision: row.decision,
     }))
 })
 const selectedReview = computed(() => (
@@ -138,6 +165,7 @@ watch(mode, () => {
   error.value = null
   confirmChanges.value = false
   confirmWarnings.value = false
+  decisions.value = {}
 })
 
 watch(preview, (value) => {
@@ -146,13 +174,24 @@ watch(preview, (value) => {
     ? 'blocker'
     : value.counts.warning
       ? 'warning'
-      : value.counts.new
-        ? 'new'
-        : value.counts.changed
-          ? 'changed'
-          : 'unchanged'
+      : value.counts.conflict
+        ? 'conflict'
+        : value.counts.disappeared
+          ? 'disappeared'
+          : value.counts.new
+            ? 'new'
+            : value.counts.changed
+              ? 'changed'
+              : 'unchanged'
   selectedReviewKey.value = null
   confirmWarnings.value = false
+  confirmChanges.value = false
+  decisions.value = Object.fromEntries(
+    value.sheets
+      .flatMap(sheet => sheet.rows)
+      .filter(row => row.decision?.selected)
+      .map(row => [row.decision!.key, row.decision!.selected!]),
+  )
 })
 
 function chooseFile(event: Event) {
@@ -163,6 +202,7 @@ function chooseFile(event: Event) {
   error.value = null
   confirmChanges.value = false
   confirmWarnings.value = false
+  decisions.value = {}
 }
 
 async function downloadTemplate() {
@@ -208,6 +248,7 @@ async function commitWorkbook() {
       preview.value.fingerprint,
       confirmChanges.value,
       confirmWarnings.value,
+      decisions.value,
     )
   } catch (cause) {
     error.value = apiErrorMessage(cause, '模板导入失败，请重新预览后再试。')
@@ -217,12 +258,38 @@ async function commitWorkbook() {
 }
 
 function statusLabel(status: string) {
-  return { new: '新增', changed: '变更', unchanged: '不变' }[status] ?? status
+  return {
+    new: '新增',
+    changed: '变更',
+    unchanged: '不变',
+    conflict: '冲突',
+    disappeared: '来源中消失',
+  }[status] ?? status
+}
+
+function rowMessage(status: string) {
+  if (status === 'conflict') return '系统值与模板值存在冲突'
+  if (status === 'disappeared') return '该来源行已不在本次模板中'
+  return `${statusLabel(status)}数据`
+}
+
+function rowSuggestion(status: string) {
+  if (status === 'conflict') return '选择使用模板值或保留系统值'
+  if (status === 'disappeared') return '选择保留为手工数据或安全移除'
+  return status === 'changed' ? '核对字段差异后确认更新' : '无需处理'
 }
 
 function selectFilter(filter: ReviewFilter) {
   activeFilter.value = filter
   selectedReviewKey.value = null
+}
+
+function chooseDecision(key: string, value: TeacherArrangementDecisionValue) {
+  decisions.value = { ...decisions.value, [key]: value }
+}
+
+function selectedDecision(decision: TeacherArrangementDecision) {
+  return decisions.value[decision.key] ?? decision.selected
 }
 
 function displayValue(value: unknown) {
@@ -369,8 +436,11 @@ function exportIssues() {
           <h3 id="template-preview-heading">导入预览</h3>
           <p>模板 v{{ preview.template_version }} · {{ file?.name }}</p>
         </div>
-        <n-tag :type="preview.can_commit ? 'success' : 'error'" :bordered="false">
-          {{ preview.can_commit ? '可提交' : '需修正' }}
+        <n-tag
+          :type="preview.counts.blocker ? 'error' : unresolvedDecisionCount ? 'warning' : 'success'"
+          :bordered="false"
+        >
+          {{ preview.counts.blocker ? '需修正' : unresolvedDecisionCount ? '待决策' : '可提交' }}
         </n-tag>
       </div>
 
@@ -378,6 +448,8 @@ function exportIssues() {
         <div data-testid="preview-count-new"><span>新增</span><strong>{{ preview.counts.new }}</strong></div>
         <div><span>变更</span><strong>{{ preview.counts.changed }}</strong></div>
         <div><span>不变</span><strong>{{ preview.counts.unchanged }}</strong></div>
+        <div class="danger"><span>冲突</span><strong>{{ preview.counts.conflict }}</strong></div>
+        <div class="warning"><span>消失</span><strong>{{ preview.counts.disappeared }}</strong></div>
         <div class="danger"><span>阻断</span><strong>{{ preview.counts.blocker }}</strong></div>
         <div class="warning"><span>警告</span><strong>{{ preview.counts.warning }}</strong></div>
       </div>
@@ -436,18 +508,71 @@ function exportIssues() {
             <div><dt>结果</dt><dd>{{ selectedReview.message }}</dd></div>
             <div><dt>处理建议</dt><dd>{{ selectedReview.suggestion }}</dd></div>
           </dl>
+          <div
+            v-if="selectedReview.decision"
+            class="template-review-decision"
+            :data-kind="selectedReview.decision.kind"
+          >
+            <strong>{{ selectedReview.decision.kind === 'conflict' ? '选择采用值' : '处理消失项' }}</strong>
+            <div role="group" aria-label="选择导入决策">
+              <template v-if="selectedReview.decision.kind === 'conflict'">
+                <button
+                  type="button"
+                  data-testid="decision-incoming"
+                  :aria-pressed="selectedDecision(selectedReview.decision) === 'incoming'"
+                  @click="chooseDecision(selectedReview.decision.key, 'incoming')"
+                >
+                  使用模板值
+                </button>
+                <button
+                  type="button"
+                  data-testid="decision-current"
+                  :aria-pressed="selectedDecision(selectedReview.decision) === 'current'"
+                  @click="chooseDecision(selectedReview.decision.key, 'current')"
+                >
+                  保留系统值
+                </button>
+              </template>
+              <template v-else>
+                <button
+                  type="button"
+                  data-testid="decision-keep"
+                  :aria-pressed="selectedDecision(selectedReview.decision) === 'keep'"
+                  @click="chooseDecision(selectedReview.decision.key, 'keep')"
+                >
+                  保留为手工数据
+                </button>
+                <button
+                  type="button"
+                  data-testid="decision-remove"
+                  :disabled="!selectedReview.decision.removal_allowed"
+                  :aria-pressed="selectedDecision(selectedReview.decision) === 'remove'"
+                  :title="selectedReview.decision.reason ?? undefined"
+                  @click="chooseDecision(selectedReview.decision.key, 'remove')"
+                >
+                  安全移除
+                </button>
+              </template>
+            </div>
+            <small v-if="selectedReview.decision.reason">
+              {{ selectedReview.decision.reason }}
+            </small>
+          </div>
           <div v-if="selectedReview.changes.length" class="template-review-changes">
             <div v-for="change in selectedReview.changes" :key="change.field">
               <strong>{{ change.field }}</strong>
-              <span>{{ displayValue(change.before) }} → {{ displayValue(change.after) }}</span>
+              <span v-if="change.baseline !== undefined">
+                上次 {{ displayValue(change.baseline) }} · 系统 {{ displayValue(change.current) }} · 模板 {{ displayValue(change.incoming) }}
+              </span>
+              <span v-else>{{ displayValue(change.before) }} → {{ displayValue(change.after) }}</span>
             </div>
           </div>
         </aside>
       </div>
 
-      <label v-if="preview.counts.changed" class="template-import-confirm">
-        <input v-model="confirmChanges" type="checkbox">
-        <span>确认使用模板中的值更新 {{ preview.counts.changed }} 条现有数据</span>
+      <label v-if="pendingChangeCount" class="template-import-confirm">
+        <input v-model="confirmChanges" data-testid="confirm-changes" type="checkbox">
+        <span>确认使用模板中的值更新 {{ pendingChangeCount }} 条现有数据</span>
       </label>
       <label v-if="preview.counts.warning" class="template-import-confirm warning-confirm">
         <input v-model="confirmWarnings" data-testid="confirm-warnings" type="checkbox">
@@ -458,6 +583,10 @@ function exportIssues() {
         <span v-if="preview.counts.blocker">
           <AlertTriangle :size="16" aria-hidden="true" />
           修正阻断项后重新上传
+        </span>
+        <span v-else-if="unresolvedDecisionCount">
+          <AlertTriangle :size="16" aria-hidden="true" />
+          还有 {{ unresolvedDecisionCount }} 项需要选择处理方式
         </span>
         <span v-else>
           <CheckCircle2 :size="16" aria-hidden="true" />

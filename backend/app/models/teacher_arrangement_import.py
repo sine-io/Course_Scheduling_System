@@ -61,6 +61,9 @@ class TeacherArrangementImportRecord(Base):
     sheet_name: Mapped[str] = mapped_column(String(31))
     row_number: Mapped[int] = mapped_column(Integer)
     target_id: Mapped[int] = mapped_column(Integer)
+    outcome: Mapped[str] = mapped_column(
+        String(16), default="applied", server_default="applied"
+    )
     applied_values: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     raw_values: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     created_at: Mapped[datetime] = mapped_column(

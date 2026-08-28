@@ -30,7 +30,15 @@ const preview = {
   semester_id: 17,
   can_commit: true,
   has_changes: true,
-  counts: { new: 5, changed: 0, unchanged: 0, blocker: 0, warning: 0 },
+  counts: {
+    new: 5,
+    changed: 0,
+    unchanged: 0,
+    conflict: 0,
+    disappeared: 0,
+    blocker: 0,
+    warning: 0,
+  },
   sheets: [
     {
       key: 'assignments' as const,
@@ -44,6 +52,7 @@ const preview = {
           status: 'new' as const,
           changes: [],
           issues: [],
+          decision: null,
         },
       ],
     },
@@ -54,7 +63,15 @@ const preview = {
 const warningPreview = {
   ...preview,
   can_commit: true,
-  counts: { new: 5, changed: 0, unchanged: 0, blocker: 0, warning: 1 },
+  counts: {
+    new: 5,
+    changed: 0,
+    unchanged: 0,
+    conflict: 0,
+    disappeared: 0,
+    blocker: 0,
+    warning: 1,
+  },
   issues: [
     {
       code: 'assignment_teacher_missing',
@@ -67,6 +84,79 @@ const warningPreview = {
       suggestion: '填写教师学校编码或目标学期内唯一姓名',
     },
   ],
+}
+
+const decisionPreview = {
+  ...preview,
+  can_commit: false,
+  counts: {
+    new: 0,
+    changed: 0,
+    unchanged: 3,
+    conflict: 1,
+    disappeared: 1,
+    blocker: 0,
+    warning: 0,
+  },
+  sheets: [
+    {
+      key: 'teachers' as const,
+      label: '教师',
+      rows: [
+        {
+          sheet: '教师',
+          row: 4,
+          source_key: 'code:T-001',
+          identity: 'T-001',
+          status: 'conflict' as const,
+          changes: [
+            {
+              field: 'base_periods',
+              before: 19,
+              after: 19,
+              baseline: 18,
+              current: 19,
+              incoming: 20,
+              resolution: 'conflict',
+            },
+          ],
+          issues: [],
+          decision: {
+            key: 'teachers:code:T-001',
+            kind: 'conflict' as const,
+            selected: null,
+            options: ['incoming', 'current'] as const,
+            removal_allowed: false,
+            reason: null,
+          },
+        },
+      ],
+    },
+    {
+      key: 'source_records' as const,
+      label: '来源记录',
+      rows: [
+        {
+          sheet: '来源记录',
+          row: 4,
+          source_key: 'SRC-001',
+          identity: 'SRC-001',
+          status: 'disappeared' as const,
+          changes: [],
+          issues: [],
+          decision: {
+            key: 'source_records:SRC-001',
+            kind: 'disappeared' as const,
+            selected: null,
+            options: ['keep', 'remove'] as const,
+            removal_allowed: true,
+            reason: null,
+          },
+        },
+      ],
+    },
+  ],
+  issues: [],
 }
 
 function mountWorkspace(canEdit = true) {
@@ -161,6 +251,7 @@ describe('TemplateImport', () => {
       'preview-fingerprint',
       false,
       false,
+      {},
     )
     expect(wrapper.get('[data-testid="template-import-success"]').text()).toContain('已导入')
     wrapper.unmount()
@@ -221,7 +312,65 @@ describe('TemplateImport', () => {
       'preview-fingerprint',
       false,
       true,
+      {},
     )
+    wrapper.unmount()
+  })
+
+  it('requires conflict and disappeared decisions before committing a reimport', async () => {
+    mocks.previewTeacherArrangementImport.mockResolvedValueOnce(decisionPreview)
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '教师安排重导入.xlsx')
+
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="review-filter-conflict"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="decision-incoming"]').text()).toContain('模板')
+    await wrapper.get('[data-testid="decision-incoming"]').trigger('click')
+
+    await wrapper.get('[data-testid="review-filter-disappeared"]').trigger('click')
+    expect(wrapper.get('[data-testid="decision-keep"]').text()).toContain('保留')
+    await wrapper.get('[data-testid="decision-keep"]').trigger('click')
+    expect(wrapper.get('[data-testid="template-commit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="confirm-changes"]').setValue(true)
+    await wrapper.get('[data-testid="template-commit"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.commitTeacherArrangementImport).toHaveBeenCalledWith(
+      17,
+      'standard',
+      file,
+      'preview-fingerprint',
+      true,
+      false,
+      {
+        'teachers:code:T-001': 'incoming',
+        'source_records:SRC-001': 'keep',
+      },
+    )
+    wrapper.unmount()
+  })
+
+  it('keeps the workbook ready for a fresh preview after a stale commit', async () => {
+    mocks.commitTeacherArrangementImport.mockRejectedValueOnce(new Error('预览已过期，请重新预览'))
+    const wrapper = mountWorkspace()
+    const file = new File(['xlsx'], '教师安排标准模板.xlsx')
+
+    await chooseWorkbook(wrapper, file)
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="template-commit"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('预览已过期，请重新预览')
+    await wrapper.get('[data-testid="template-preview"]').trigger('click')
+    await flushPromises()
+    expect(mocks.previewTeacherArrangementImport).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('预览已过期，请重新预览')
     wrapper.unmount()
   })
 })
