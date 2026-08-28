@@ -54,10 +54,14 @@ describe('commitTeacherArrangementImport', () => {
   })
 
   it('submits reimport decisions with the preview fingerprint', async () => {
-    const fetchMock = vi.fn(() => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({ batch_id: 9 }),
-    } as Response))
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void input
+      void init
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ batch_id: 9 }),
+      } as Response)
+    })
     vi.stubGlobal('fetch', fetchMock)
     const file = new File(['xlsx'], '教师安排.xlsx')
 
