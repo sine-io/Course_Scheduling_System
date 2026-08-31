@@ -14,7 +14,10 @@ async function bootstrap() {
   const app = createApp(App)
   const pinia = createPinia()
   app.use(pinia)
-  await useAppConfigStore(pinia).load()
+  // Throwaway prototypes are self-contained and must remain reviewable without a backend.
+  if (!window.location.pathname.startsWith('/prototype/')) {
+    await useAppConfigStore(pinia).load()
+  }
   app.use(router)
   app.use(naive)
 

@@ -12,6 +12,13 @@ import { useAuthStore } from '@/stores/auth'
 const ALL_DAILY_ROLES = [...DAILY_USER_ROLES]
 const CORE_VIEW_ROLE_LIST = [...CORE_VIEW_ROLES]
 const DAILY_OPERATOR_ROLE_LIST = [...DAILY_OPERATOR_ROLES]
+const templateImportPrototypeComponent = () => import('@/views/prototypes/TemplateImportPrototype.vue')
+const templateImportPrototypeMeta = { public: true, prototype: true }
+/* Paike flow prototype routes are disabled. Uncomment these declarations and
+ * the route block below when the prototype needs to be reviewed again.
+const paikeFlowPrototypeComponent = () => import('@/views/prototypes/PaikeFlowPrototype.vue')
+const paikeFlowPrototypeMeta = { public: true, prototype: true }
+*/
 
 const routes = [
   {
@@ -20,6 +27,52 @@ const routes = [
     component: () => import('@/views/Login.vue'),
     meta: { public: true },
   },
+  {
+    // Throwaway UI prototype: public, isolated, and backed only by in-memory sample data.
+    path: '/prototype/template-import',
+    name: 'template-import-prototype',
+    component: templateImportPrototypeComponent,
+    meta: templateImportPrototypeMeta,
+  },
+  {
+    path: '/prototype/template-import/a',
+    redirect: { name: 'template-import-prototype', query: { variant: 'A' } },
+  },
+  {
+    path: '/prototype/template-import/b',
+    redirect: { name: 'template-import-prototype', query: { variant: 'B' } },
+  },
+  {
+    path: '/prototype/template-import/c',
+    redirect: { name: 'template-import-prototype', query: { variant: 'C' } },
+  },
+  /* Paike flow prototype routes are disabled. See the declarations above.
+  {
+    // Throwaway UI prototype: intentionally public so it can be reviewed without a seeded session.
+    path: '/prototype/paike-flow',
+    name: 'paike-flow-prototype',
+    component: paikeFlowPrototypeComponent,
+    meta: paikeFlowPrototypeMeta,
+  },
+  {
+    path: '/prototype/paike-flow/a',
+    name: 'paike-flow-prototype-a',
+    component: paikeFlowPrototypeComponent,
+    meta: paikeFlowPrototypeMeta,
+  },
+  {
+    path: '/prototype/paike-flow/b',
+    name: 'paike-flow-prototype-b',
+    component: paikeFlowPrototypeComponent,
+    meta: paikeFlowPrototypeMeta,
+  },
+  {
+    path: '/prototype/paike-flow/c',
+    name: 'paike-flow-prototype-c',
+    component: paikeFlowPrototypeComponent,
+    meta: paikeFlowPrototypeMeta,
+  },
+  */
   {
     path: '/change-password',
     name: 'change-password',
@@ -186,6 +239,10 @@ export const router = createRouter({
 const AUTH_PAGES = new Set(['login', 'change-password'])
 
 router.beforeEach(async (to) => {
+  if (to.meta.public && to.meta.prototype) {
+    return true
+  }
+
   const auth = useAuthStore()
   if (!auth.loaded) {
     await auth.fetchMe()
