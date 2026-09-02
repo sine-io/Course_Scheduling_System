@@ -4,6 +4,10 @@ import { useAuthStore } from '@/stores/auth'
 import { router } from './index'
 
 describe('router role boundaries', () => {
+  it('does not register the removed workspace home route', () => {
+    expect(router.resolve('/workspace/home').matched).toHaveLength(0)
+  })
+
   it('allows a pure teacher who must change their password to reach the change-password page', async () => {
     setActivePinia(createPinia())
     const auth = useAuthStore()
@@ -37,9 +41,6 @@ describe('router role boundaries', () => {
 
     await router.push('/scheduling/auto')
     expect(router.currentRoute.value.name).toBe('auto-schedule')
-
-    await router.push('/workspace/home')
-    expect(router.currentRoute.value.name).toBe('workspace-home')
   }, 10_000)
 
   it('keeps pure teachers on personal daily pages and blocks management links', async () => {
@@ -68,8 +69,6 @@ describe('router role boundaries', () => {
     await router.push('/substitution-stats')
     expect(router.currentRoute.value.name).toBe('substitution-stats')
     await router.push('/scheduling/workbench')
-    expect(router.currentRoute.value.name).toBe('timetable-query')
-    await router.push('/workspace/home')
     expect(router.currentRoute.value.name).toBe('timetable-query')
   })
 

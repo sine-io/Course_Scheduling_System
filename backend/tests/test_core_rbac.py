@@ -61,6 +61,14 @@ def test_core_viewer_can_read_drafts_and_templates_but_teacher_cannot(env):
     assert client.get(f"/api/export/school.xlsx?semester_id={semester_id}").status_code == 403
 
 
+def test_removed_workspace_overview_endpoint_is_not_registered(env):
+    client, _db = env
+
+    response = client.get("/api/workspace-overview", params={"semester_id": 1})
+
+    assert response.status_code == 404
+
+
 def test_core_writes_and_publish_are_director_or_admin_only(env):
     client, db = env
     make_user(db, "director", PW, roles=[Role.director])

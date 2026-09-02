@@ -62,7 +62,6 @@ function makeRouter() {
         name: 'dashboard',
         component: { template: '<main data-testid="page">仪表盘内容</main>' },
       },
-      { path: '/workspace/home', name: 'workspace-home', component: { template: '<main />' } },
       { path: '/timetable-query', name: 'timetable-query', component: { template: '<main />' } },
       { path: '/notifications', name: 'notifications', component: { template: '<main />' } },
       { path: '/leaves', name: 'leaves', component: { template: '<main />' } },
@@ -123,8 +122,8 @@ describe('MainLayout', () => {
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
     expect(wrapper.find('[data-testid="shell-breadcrumb"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
-    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('工作空间')
-    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('首页总览')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('工作空间')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('首页总览')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('系统管理')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('学期准备')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课主流程')
@@ -165,9 +164,10 @@ describe('MainLayout', () => {
     expect(teacherLayout.wrapper.find('.app-nav-common').exists()).toBe(false)
 
     const managementGroups = wrapper.findAll('.app-nav-group')
-    expect(managementGroups[0].text()).toContain('工作空间')
-    expect(managementGroups[1].text()).toContain('学期准备')
-    expect(managementGroups[1].text()).toContain('仪表盘')
+    expect(managementGroups[0].text()).toContain('学期准备')
+    expect(wrapper.get('[data-nav-key="dashboard"]').text()).toContain('仪表盘')
+    expect(wrapper.get('[data-nav-key="dashboard"]').classes()).toContain('app-nav-dashboard-link')
+    expect(managementGroups[0].text()).not.toContain('仪表盘')
   })
 
   it('opens the mobile drawer, moves focus into it, and restores focus on escape', async () => {

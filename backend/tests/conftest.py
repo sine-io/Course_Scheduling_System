@@ -33,7 +33,6 @@ from app.api import (
     substitution_stats,
     substitutions,
     timetables,
-    workspace_overview,
 )
 from app.api import (
     settings as settings_api,
@@ -101,7 +100,6 @@ def env():
     application.include_router(notifications.router, prefix="/api")
     application.include_router(settings_api.router, prefix="/api")
     application.include_router(backups.router, prefix="/api")
-    application.include_router(workspace_overview.router, prefix="/api")
 
     @application.get("/api/_protected")
     def _protected(user: User = Depends(get_active_user)) -> dict:

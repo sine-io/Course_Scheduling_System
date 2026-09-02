@@ -15,7 +15,6 @@ const ROLE_CASES: RoleCase[] = [
     username: 'e2e_director',
     password: 'e2edirector1234',
     links: [
-      { label: '首页总览', href: '/workspace/home' },
       { label: '仪表盘', href: '/' },
       { label: '教学任务', href: '/scheduling/assignments' },
       { label: '自动排课', href: '/scheduling/auto' },
@@ -40,14 +39,13 @@ const ROLE_CASES: RoleCase[] = [
       { label: '通知', href: '/notifications' },
       { label: '我的代课课时', href: '/substitution-stats' },
     ],
-    forbidden: ['首页总览', '排课工作台', '系统管理'],
+    forbidden: ['工作空间', '首页总览', '排课工作台', '系统管理'],
   },
   {
     title: '系统管理员',
     username: 'e2e_admin',
     password: 'e2eadmin1234',
     links: [
-      { label: '首页总览', href: '/workspace/home' },
       { label: '仪表盘', href: '/' },
       { label: '系统管理', href: '/settings/system' },
       { label: '备份恢复', href: '/settings/backup' },
@@ -70,11 +68,7 @@ test.describe('角色导航与页面兼容', () => {
       await page.goto('/')
 
       const nav = page.getByTestId('shell-nav')
-      if (roleCase.title === '教师') {
-        await expect(nav).not.toContainText('工作空间')
-      } else {
-        await expect(nav).toContainText('工作空间')
-      }
+      await expect(nav).not.toContainText('工作空间')
       await expect(nav).toContainText('学期准备')
       await expect(nav).toContainText('日常运行')
       await expect(nav).not.toContainText('常用')
