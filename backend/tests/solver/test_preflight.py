@@ -283,10 +283,11 @@ def test_partial_mode_only_blocks_on_structural_errors():
     report = preflight.PreflightReport((
         _issue("class_overload"), _issue("teacher_overload"), _issue("room_supply"),
         _issue("block_infeasible"), _issue("group_shape_mismatch"),
+        _issue("assignment_without_teacher"),
     ))
-    assert len(preflight.blocking_errors(report, allow_partial=False)) == 5
+    assert len(preflight.blocking_errors(report, allow_partial=False)) == 6
     codes = {i.code for i in preflight.blocking_errors(report, allow_partial=True)}
-    assert codes == {"block_infeasible", "group_shape_mismatch"}
+    assert codes == {"assignment_without_teacher", "block_infeasible", "group_shape_mismatch"}
 
 
 def test_partial_mode_blocks_when_a_room_type_has_no_room_at_all():

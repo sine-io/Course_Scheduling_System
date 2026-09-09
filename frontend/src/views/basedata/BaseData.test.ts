@@ -28,9 +28,9 @@ const semester = {
 const ManualEntryStub = {
   name: 'ManualEntry',
   props: [
-    'semesterId', 'canEdit', 'canDelete', 'canManageAccounts', 'showReadonlyNotice',
+    'semesterId', 'canEdit', 'canDelete', 'canManageAccounts', 'showClasses', 'showReadonlyNotice',
   ],
-  template: '<div data-testid="manual-entry-stub">{{ semesterId }}/{{ String(canEdit) }}/{{ String(canDelete) }}/{{ String(canManageAccounts) }}/{{ String(showReadonlyNotice) }}</div>',
+  template: '<div data-testid="manual-entry-stub">{{ semesterId }}/{{ String(canEdit) }}/{{ String(canDelete) }}/{{ String(canManageAccounts) }}/{{ String(showClasses) }}/{{ String(showReadonlyNotice) }}</div>',
 }
 
 const TemplateImportStub = {
@@ -85,7 +85,7 @@ describe('BaseData', () => {
   it('进入页面后直接展示手工录入，不再渲染外层或批量导入切换', async () => {
     const wrapper = await mountBaseData(['director'])
 
-    expect(wrapper.get('[data-testid="manual-entry-stub"]').text()).toBe('8/true/false/false/false')
+    expect(wrapper.get('[data-testid="manual-entry-stub"]').text()).toBe('8/true/false/false/false/false')
     expect(wrapper.find('[data-testid="entry-mode"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="combined-import-panel"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('批量导入')
@@ -105,14 +105,14 @@ describe('BaseData', () => {
   it('系统管理员在手工录入中保留删除和账号绑定能力', async () => {
     const wrapper = await mountBaseData(['admin'])
 
-    expect(wrapper.get('[data-testid="manual-entry-stub"]').text()).toBe('8/true/true/true/false')
+    expect(wrapper.get('[data-testid="manual-entry-stub"]').text()).toBe('8/true/true/true/false/false')
   })
 
   it('只读角色只显示一条页面级权限提示', async () => {
     const wrapper = await mountBaseData(['teacher'])
 
     expect(wrapper.get('[data-testid="basedata-readonly"]').text()).toContain('仅可查看基础数据')
-    expect(wrapper.get('[data-testid="manual-entry-stub"]').text()).toBe('8/false/false/false/false')
+    expect(wrapper.get('[data-testid="manual-entry-stub"]').text()).toBe('8/false/false/false/false/false')
     expect(wrapper.findAll('[data-testid="basedata-readonly"]')).toHaveLength(1)
   })
 })

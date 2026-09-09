@@ -35,6 +35,7 @@ from app.models.period import Period, PeriodTable, PeriodType
 from app.models.reference_import import ReferenceImportBatch, ReferenceSchedulingRule
 from app.models.semester import Semester
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
+from app.services import scheduling_inputs
 from app.services.assignments import get_or_create_single_unit
 
 ADAPTER_VERSION = "reference-v2"
@@ -1223,6 +1224,7 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
             Timetable.status == TimetableStatus.draft.value,
         )
     )
+    timetable_created = timetable is None
     if timetable is None:
         from app.services.scheduling_rules import active_revision_id
 
@@ -1282,6 +1284,9 @@ def apply_plan(db: Session, plan: ReferencePlan) -> dict[str, Any]:
                     locked=True,
                 )
             )
+    db.flush()
+    if timetable_created:
+        scheduling_inputs.stamp(db, timetable)
     batch = ReferenceImportBatch(
         semester_id=plan.semester_id,
         fingerprint=plan.fingerprint,

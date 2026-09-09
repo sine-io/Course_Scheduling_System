@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  AlertTriangle, CheckCircle2, Clock3, FileWarning, Play, RefreshCw, ShieldCheck, SlidersHorizontal,
+  AlertTriangle, ArrowLeft, CheckCircle2, Clock3, FileWarning, Play, RefreshCw, ShieldCheck, SlidersHorizontal,
   Square, XCircle,
 } from '@lucide/vue'
 import {
@@ -8,8 +8,9 @@ import {
   NSelect, NSpin, NTag, NText, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage, type ApiError } from '@/api/client'
+import { confirmSemesterReadiness } from '@/api/calendar'
 import { listSemesters } from '@/api/semesters'
 import type { SemesterListItem } from '@/api/semesters'
 import {
@@ -18,14 +19,22 @@ import {
 import type {
   ConstraintConfig, PreflightIssue, PreflightReport, RelaxableOption, SolveJob,
 } from '@/api/solver'
-import { listTimetables } from '@/api/timetables'
+import { createTimetable, listTimetables } from '@/api/timetables'
 import type { TimetableBrief } from '@/api/timetables'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling-workspace.css'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  embeddedSemesterId?: number
+}>(), {
+  embedded: false,
+  embeddedSemesterId: undefined,
+})
 const message = useMessage()
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
@@ -41,6 +50,7 @@ const minutes = ref(10) // timeout 默认 10 分钟
 
 const check = ref<PreflightReport | null>(null)
 const constraints = ref<ConstraintConfig | null>(null)
+const advancedOpen = ref(false)
 const job = ref<SolveJob | null>(null)
 const blockingIssues = ref<PreflightIssue[]>([])
 const starting = ref(false)
@@ -173,6 +183,7 @@ async function onSemesterChange(id: number) {
   stopPolling()
   try {
     await reload()
+    if (!props.embedded) await router.replace({ query: { ...route.query, semester: String(id) } })
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取自动排课设置，请重试。')
   } finally {
@@ -228,7 +239,13 @@ async function loadPage() {
     ;[semesters.value, relaxable.value] = await Promise.all([listSemesters(), listRelaxable()])
     if (semesters.value.length) {
       const saved = readActiveJob()
-      sid.value = semesters.value.find((semester) => semester.id === saved?.semesterId)?.id
+      const rawSemester = Array.isArray(route.query.semester) ? route.query.semester[0] : route.query.semester
+      const requestedSemesterId = props.embedded && props.embeddedSemesterId
+        ? props.embeddedSemesterId
+        : Number(rawSemester)
+      sid.value = (props.embedded ? props.embeddedSemesterId : undefined)
+        ?? semesters.value.find((semester) => semester.id === requestedSemesterId)?.id
+        ?? semesters.value.find((semester) => semester.id === saved?.semesterId)?.id
         ?? semesters.value.find((semester) => semester.is_current)?.id
         ?? semesterContext.currentSemesterId
         ?? semesters.value[0].id
@@ -270,11 +287,36 @@ async function poll(generation = pollGeneration) {
 }
 
 async function onStart() {
-  if (!canEdit.value || !sourceId.value || running.value || starting.value) return
+  if (!canEdit.value || !sid.value || running.value || starting.value) return
   starting.value = true
   blockingIssues.value = []
   try {
-    const { job_id } = await startAutoSchedule(sourceId.value, minutes.value * 60, {
+    // 工作台允许先保存科目节数，但开始排课必须再次确认教师任课等结构性数据。
+    const report = await preflight(sid.value)
+    check.value = report
+    if (!report.ok) {
+      blockingIssues.value = report.issues.filter((issue) => issue.level === 'error')
+      message.error('数据未通过排课前置检查')
+      return
+    }
+
+    // 将原先需要单独访问“排课准备”页面的确认并入排课工作台，保留同一套
+    // 数据检查和审计记录；已确认的学期不会重复写入确认记录。
+    const selectedSemester = semesters.value.find((semester) => semester.id === sid.value)
+    if (selectedSemester?.readiness !== 'ready') {
+      await confirmSemesterReadiness(sid.value)
+      if (selectedSemester) selectedSemester.readiness = 'ready'
+    }
+
+    let source = sourceId.value
+    if (!source) {
+      const created = await createTimetable(sid.value, `${report.semester_label} · 排课草稿`)
+      source = created.id
+      sourceId.value = source
+      drafts.value = (await listTimetables(sid.value)).filter((t) => t.status === 'draft')
+    }
+
+    const { job_id } = await startAutoSchedule(source, minutes.value * 60, {
       allowPartial: allowPartial.value,
       relax: allowPartial.value ? relax.value : [],
     })
@@ -326,19 +368,36 @@ async function onCancel() {
 }
 
 function openResult() {
-  router.push({ name: 'versions' })
+  const resultId = job.value?.result_timetable_id
+  if (resultId) router.push({ name: 'workbench', query: { timetable: String(resultId) } })
+  else router.push({ name: 'versions' })
+}
+
+function returnToFlow() {
+  router.push({
+    name: 'scheduling-flow',
+    query: { step: 'start', ...(sid.value ? { semester: String(sid.value) } : {}) },
+  })
 }
 </script>
 
 <template>
-  <div class="scheduling-page auto-schedule-page" data-testid="auto-schedule-page">
-    <header class="scheduling-page-header">
+  <div
+    class="scheduling-page auto-schedule-page"
+    :class="{ 'scheduling-page-embedded': props.embedded }"
+    data-testid="auto-schedule-page"
+  >
+    <header v-if="!props.embedded" class="scheduling-page-header">
       <div>
         <p class="scheduling-eyebrow">{{ '求解作业' }}</p>
         <h1>{{ '自动排课' }}</h1>
         <p>{{ '先核对数据准备度和约束，再启动可追踪、可取消的排课任务。' }}</p>
       </div>
       <div class="scheduling-header-actions">
+        <n-button quaternary data-testid="as-back-flow" @click="returnToFlow">
+          <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
+          {{ '返回开始排课' }}
+        </n-button>
         <n-select
           v-if="semesters.length"
           v-accessible-select="'选择工作学期'"
@@ -370,7 +429,7 @@ function openResult() {
       <Clock3 :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建可用学期' }}</strong>
       <span>{{ '先创建学期和作息时间表，再启动自动排课。' }}</span>
-      <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+      <n-button v-if="!props.embedded" type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
     </section>
 
     <template v-else>
@@ -384,7 +443,7 @@ function openResult() {
           <div>
             <p class="scheduling-eyebrow">{{ '启动前核对' }}</p>
             <h2>{{ '排课前置检查' }}</h2>
-            <p>{{ check.class_count }} {{ '班' }} · {{ check.teacher_count }} {{ '位教师' }} · {{ check.assignment_count }} {{ '条教学任务' }} · {{ '共' }} {{ check.total_periods }} {{ '节' }}</p>
+            <p>{{ check.class_count }} {{ '班' }} · {{ check.teacher_count }} {{ '位教师' }} · {{ check.assignment_count }} {{ '项课程' }} · {{ '共' }} {{ check.total_periods }} {{ '节' }}</p>
           </div>
           <FileWarning :size="20" class="scheduling-heading-icon" aria-hidden="true" />
         </header>
@@ -408,12 +467,21 @@ function openResult() {
         <header class="scheduling-panel-heading compact-heading">
           <div>
             <p class="scheduling-eyebrow">{{ '求解边界' }}</p>
-            <h2>{{ '当前约束配置' }}</h2>
-            <p>{{ '这些设置由学期配置维护，自动排课会按当前值求解。' }}</p>
+            <h2>{{ '高级约束' }}</h2>
+            <p>{{ advancedOpen ? '这些设置由学期配置维护，自动排课会按当前值求解。' : '常规排课无需调整这些设置。' }}</p>
           </div>
-          <SlidersHorizontal :size="20" class="scheduling-heading-icon" aria-hidden="true" />
+          <n-button
+            text
+            size="small"
+            data-testid="as-advanced-toggle"
+            :aria-expanded="advancedOpen"
+            @click="advancedOpen = !advancedOpen"
+          >
+            <template #icon><SlidersHorizontal :size="16" aria-hidden="true" /></template>
+            {{ advancedOpen ? '收起' : '查看' }}
+          </n-button>
         </header>
-        <div v-if="constraints" class="auto-constraint-grid">
+        <div v-if="advancedOpen && constraints" class="auto-constraint-grid">
           <div class="auto-constraint-item"><span>{{ '同科目每日上限' }}</span><strong>{{ constraints.daily_subject_cap }} {{ '节' }}</strong></div>
           <div class="auto-constraint-item"><span>{{ '教师每日上限' }}</span><strong>{{ constraints.teacher_daily_max }} {{ '节' }}</strong></div>
           <div class="auto-constraint-item"><span>{{ '教师连续上课上限' }}</span><strong>{{ constraints.teacher_consecutive_max }} {{ '节' }}</strong></div>
@@ -421,7 +489,7 @@ function openResult() {
             <span>{{ constraints.weight_names[code] ?? code }}</span><strong>{{ weight === 0 ? '关闭' : weight }}</strong>
           </div>
         </div>
-        <div v-else class="scheduling-inline-empty" data-testid="as-constraints-loading">
+        <div v-else-if="advancedOpen" class="scheduling-inline-empty" data-testid="as-constraints-loading">
           <n-spin size="small" /><span>{{ '正在读取约束配置' }}</span>
         </div>
       </section>
@@ -431,16 +499,16 @@ function openResult() {
           <div>
             <p class="scheduling-eyebrow">{{ '任务控制' }}</p>
             <h2>{{ '开始排课' }}</h2>
-            <p>{{ '结果会写成新草稿，来源草稿保持不变。' }}</p>
+            <p>{{ '可直接开始；没有来源草稿时系统会自动创建排课草稿，结果会写成新草稿。' }}</p>
           </div>
           <Play :size="20" class="scheduling-heading-icon" aria-hidden="true" />
         </header>
         <div class="auto-start-fields">
           <label class="scheduling-field auto-source-field">
-            <span>{{ '来源草稿' }}</span>
+            <span>{{ '来源草稿（可选）' }}</span>
             <n-select
               v-model:value="sourceId" v-accessible-select="'选择来源草稿'" :options="draftOptions"
-              :placeholder="'选择草稿'" data-testid="as-source" :disabled="!canEdit || running || restoringJob"
+              :placeholder="'不选则创建排课草稿'" data-testid="as-source" :disabled="!canEdit || running || restoringJob"
             />
           </label>
           <label class="scheduling-field auto-minutes-field">
@@ -453,7 +521,7 @@ function openResult() {
             </n-input-number>
           </label>
           <n-button
-            type="primary" :loading="starting || restoringJob" :disabled="!canEdit || !sourceId || running || restoringJob"
+            type="primary" :loading="starting || restoringJob" :disabled="!canEdit || running || restoringJob"
             data-testid="as-start" @click="onStart"
           >
             <template #icon><Play :size="16" aria-hidden="true" /></template>
@@ -540,9 +608,9 @@ function openResult() {
         <n-alert v-if="job.status === 'finished'" type="success" data-testid="as-done">
           <template #icon><CheckCircle2 :size="17" aria-hidden="true" /></template>
           {{ '已生成新草稿' }}「{{ job.result_name }}」
-          <n-button text type="primary" @click="openResult">{{ '前往版本与发布' }}</n-button>
+          <n-button text type="primary" @click="openResult">{{ '打开课程表调整' }}</n-button>
         </n-alert>
-        <n-alert v-if="unscheduled.length" type="warning" :title="'以下教学任务未能排入，请人工处理'" data-testid="as-unscheduled">
+        <n-alert v-if="unscheduled.length" type="warning" :title="'以下课程未能排入，请人工处理'" data-testid="as-unscheduled">
           <div class="scheduling-table-scroll auto-report-scroll" tabindex="0" aria-label="未排课程列表，可横向滚动">
             <table class="scheduling-data-table">
               <thead><tr><th>{{ '科目' }}</th><th>{{ '班级' }}</th><th>{{ '未排节数' }}</th><th>{{ '原因' }}</th></tr></thead>
@@ -573,6 +641,7 @@ function openResult() {
 
 <style scoped>
 .auto-schedule-page { max-width: 1440px; }
+.auto-schedule-page.scheduling-page-embedded { width: 100%; max-width: none; }
 .auto-start-fields { display: grid; grid-template-columns: minmax(190px, 1fr) minmax(140px, 190px) auto; align-items: end; gap: 14px; }
 .auto-start-fields > .n-button { min-height: 40px; }
 .auto-start-note { margin: 12px 0 0; color: var(--app-text-muted); font-size: 13px; line-height: 1.55; }

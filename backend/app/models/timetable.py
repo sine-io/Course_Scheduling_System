@@ -57,6 +57,9 @@ class Timetable(Base):
     publication_checked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    assignment_input_fingerprint: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
 
     # 部分排课产出时,solver 留下的未排列表(M6-3)。
     # 「哪些教学任务还缺节数」可由 completeness 从 DB 重算,不必存;但**排不下的原因**只有

@@ -83,6 +83,7 @@ def _room_supply(problem: Problem, room_id: int) -> int:
 # 「部分排课」也救不了——少排几节课不能让一个 4 连堂塞进 3 连续节次。
 STRUCTURAL_CODES = frozenset({
     "assignment_without_class",
+    "assignment_without_teacher",
     "no_period_table",
     "group_shape_mismatch",
     "block_infeasible",
@@ -111,6 +112,7 @@ def blocking_errors(report: PreflightReport, *, allow_partial: bool) -> tuple[Is
 def run(problem: Problem) -> PreflightReport:
     issues: list[Issue] = []
 
+    _check_assignments(problem, issues)
     _check_period_tables(problem, issues)
     _check_groups(problem, issues)
     _check_teachers(problem, issues)
@@ -120,6 +122,19 @@ def run(problem: Problem) -> PreflightReport:
 
     order = {"error": 0, "warning": 1}
     return PreflightReport(tuple(sorted(issues, key=lambda i: (order[i.level], i.code))))
+
+
+def _check_assignments(problem: Problem, issues: list[Issue]) -> None:
+    """教师任课可在“科目节数”之后补齐，但不能绕过开始排课的边界。"""
+    for assignment in problem.assignments:
+        if assignment.teacher_ids:
+            continue
+        issues.append(Issue(
+            "error", "assignment_without_teacher",
+            f"课程「{assignment.subject_name}」尚未指定授课教师，请先完成“教师任课”后再开始排课",
+            "assignment", assignment.id,
+            {"periods_per_week": assignment.periods_per_week},
+        ))
 
 
 def _check_period_tables(problem: Problem, issues: list[Issue]) -> None:

@@ -189,6 +189,103 @@ def test_class_vocational_department_and_homeroom(scheduler_env):
     assert cu["homeroom_teacher"]["name"] == "班主任甲"
 
 
+def test_class_batch_preview_edit_commit_and_exact_retry(scheduler_env):
+    """批量设置先预览，确认后一次写入；精确重试不重复创建。"""
+    client, sid = scheduler_env
+    preview = client.post(
+        f"/api/class-units/batch/preview?semester_id={sid}",
+        json={"grade": 7, "track": "junior_high", "start_number": 1, "end_number": 2},
+    )
+    assert preview.status_code == 200, preview.text
+    data = preview.json()
+    assert data["grade_label"] == "七年级"
+    assert [row["name"] for row in data["candidates"]] == ["七年级1班", "七年级2班"]
+    assert client.get(f"/api/class-units?semester_id={sid}").json() == []
+
+    body = {
+        "grade": 7,
+        "track": "junior_high",
+        "preview_fingerprint": data["fingerprint"],
+        "candidates": [
+            {
+                "row_id": 1,
+                "name": "七年级实验班",
+                "department": None,
+                "student_count": 36,
+                "homeroom_teacher_id": None,
+            },
+            {
+                "row_id": 2,
+                "name": "七年级2班",
+                "department": None,
+                "student_count": 40,
+                "homeroom_teacher_id": None,
+            },
+        ],
+    }
+    saved = client.post(f"/api/class-units/batch?semester_id={sid}", json=body)
+    assert saved.status_code == 201, saved.text
+    assert saved.json()["idempotent"] is False
+    assert len(saved.json()["classes"]) == 2
+    assert len(client.get(f"/api/class-units?semester_id={sid}").json()) == 2
+
+    retried = client.post(f"/api/class-units/batch?semester_id={sid}", json=body)
+    assert retried.status_code == 201, retried.text
+    assert retried.json()["idempotent"] is True
+    assert len(client.get(f"/api/class-units?semester_id={sid}").json()) == 2
+
+
+def test_class_batch_conflict_blocks_the_whole_batch(scheduler_env):
+    client, sid = scheduler_env
+    existing = client.post(
+        f"/api/class-units?semester_id={sid}",
+        json={"grade": 7, "name": "七年级1班", "track": "junior_high"},
+    )
+    assert existing.status_code == 201
+    preview = client.post(
+        f"/api/class-units/batch/preview?semester_id={sid}",
+        json={"grade": 7, "track": "junior_high", "start_number": 1, "end_number": 2},
+    ).json()
+    response = client.post(
+        f"/api/class-units/batch?semester_id={sid}",
+        json={
+            "grade": 7,
+            "track": "junior_high",
+            "preview_fingerprint": preview["fingerprint"],
+            "candidates": [
+                {
+                    "row_id": 1,
+                    "name": "七年级1班",
+                    "department": None,
+                    "student_count": None,
+                    "homeroom_teacher_id": None,
+                },
+                {
+                    "row_id": 2,
+                    "name": "七年级2班",
+                    "department": None,
+                    "student_count": None,
+                    "homeroom_teacher_id": None,
+                },
+            ],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "class_batch_conflict"
+    assert [item["name"] for item in client.get(f"/api/class-units?semester_id={sid}").json()] == [
+        "七年级1班"
+    ]
+
+
+def test_class_batch_rejects_grade_track_mismatch(scheduler_env):
+    client, sid = scheduler_env
+    response = client.post(
+        f"/api/class-units/batch/preview?semester_id={sid}",
+        json={"grade": 1, "track": "junior_high", "start_number": 1, "end_number": 2},
+    )
+    assert response.status_code == 422
+
+
 def test_room_crud_with_capacity(scheduler_env):
     client, sid = scheduler_env
     r = client.post(

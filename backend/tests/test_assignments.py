@@ -64,6 +64,26 @@ def test_single_assignment(env2):
     assert a["teachers"][0]["is_lead"] is True
 
 
+def test_subject_periods_can_be_saved_before_teacher_assignment(env2):
+    """五步流程先保存科目节数，再在“教师任课”步骤补齐教师。"""
+    client, sid = env2
+    c = _class(client, sid, 3, "301")
+    s = _subject(client, sid, "语文")
+
+    created = _create_assignment(
+        client, sid, class_id=c["id"], subject_id=s["id"], periods_per_week=5,
+        teachers=[],
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["teachers"] == []
+
+    report = client.get(f"/api/solver/preflight?semester_id={sid}").json()
+    issue = next(item for item in report["issues"] if item["code"] == "assignment_without_teacher")
+    assert report["ok"] is False
+    assert issue["subject_type"] == "assignment"
+    assert "教师任课" in issue["message"]
+
+
 def test_group_five_courses(env2):
     """创建由 3 个班组成的高二选修课程走班分组，并维护 5 条教学任务。"""
     client, sid = env2

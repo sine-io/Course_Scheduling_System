@@ -58,7 +58,8 @@ class AssignmentIn(BaseModel):
     scheduling_unit_id: int | None = None
     subject_id: int
     periods_per_week: int = Field(ge=1, le=40)
-    teachers: list[AssignmentTeacherIn] = Field(min_length=1)
+    # “科目节数”先于“教师任课”录入时，教师可以暂缺；排课前置检查会阻止未任课课程进入求解。
+    teachers: list[AssignmentTeacherIn] = Field(default_factory=list)
     block_rules: list[BlockRuleIn] = []
     required_room_type: RoomType | None = None
     room_id: int | None = None

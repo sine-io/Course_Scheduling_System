@@ -1,6 +1,6 @@
 """基础数据(教师/科目/教室/场地/班级)schema。"""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.validators import is_valid_email
 from app.models.basedata import ClassTrack, RoomType, TeacherRuleType
@@ -141,3 +141,78 @@ class ClassUnitOut(BaseModel):
     homeroom_teacher_id: int | None
     homeroom_teacher: SubjectBrief | None = None  # 借用 {id,name} 结构显示班主任
     period_table_id: int | None = None
+
+
+class ClassBatchCandidateIn(BaseModel):
+    """一行待保存的班级候选。年级和学段由批次固定，不在行内重复。"""
+
+    row_id: int = Field(ge=1, le=10000)
+    name: str = Field(min_length=1, max_length=32)
+    department: str | None = Field(default=None, max_length=32)
+    student_count: int | None = Field(default=None, ge=0)
+    homeroom_teacher_id: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _strip_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("班级名称不能为空")
+        return value
+
+
+class ClassBatchPreviewIn(BaseModel):
+    grade: int = Field(ge=1, le=12)
+    track: ClassTrack
+    start_number: int = Field(ge=1, le=1000)
+    end_number: int = Field(ge=1, le=1000)
+
+    @model_validator(mode="after")
+    def _validate_range_and_track(self):
+        if self.end_number < self.start_number:
+            raise ValueError("结束班号不能小于起始班号")
+        if self.end_number - self.start_number + 1 > 100:
+            raise ValueError("一次最多生成 100 个班级")
+        allowed = {
+            ClassTrack.elementary: range(1, 7),
+            ClassTrack.junior_high: range(7, 10),
+            ClassTrack.senior_high: range(10, 13),
+            ClassTrack.comprehensive: range(10, 13),
+            ClassTrack.vocational: range(1, 4),
+        }
+        if self.grade not in allowed[self.track]:
+            raise ValueError("年级与学段不匹配")
+        return self
+
+
+class ClassBatchCandidateOut(ClassBatchCandidateIn):
+    default_name: str
+    conflict: str | None = None
+
+
+class ClassBatchPreviewOut(BaseModel):
+    semester_id: int
+    grade: int
+    track: ClassTrack
+    grade_label: str
+    fingerprint: str
+    candidates: list[ClassBatchCandidateOut]
+
+
+class ClassBatchCommitIn(BaseModel):
+    grade: int = Field(ge=1, le=12)
+    track: ClassTrack
+    preview_fingerprint: str = Field(min_length=64, max_length=64)
+    candidates: list[ClassBatchCandidateIn] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def _validate_candidates(self):
+        if len({candidate.row_id for candidate in self.candidates}) != len(self.candidates):
+            raise ValueError("候选班级行号不能重复")
+        return self
+
+
+class ClassBatchCommitOut(BaseModel):
+    semester_id: int
+    idempotent: bool
+    classes: list[ClassUnitOut]

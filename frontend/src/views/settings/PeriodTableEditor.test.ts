@@ -39,7 +39,7 @@ const fakeTable = {
   ],
 }
 
-async function mountEditor() {
+async function mountEditor(componentProps: Record<string, unknown> = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -49,7 +49,9 @@ async function mountEditor() {
   })
   await router.push('/settings/period-tables/1')
   await router.isReady()
-  const Host = { render: () => h(NMessageProvider, null, { default: () => h(PeriodTableEditor) }) }
+  const Host = {
+    render: () => h(NMessageProvider, null, { default: () => h(PeriodTableEditor, componentProps) }),
+  }
   return mount(Host, { global: { plugins: [createPinia(), router] } })
 }
 
@@ -88,6 +90,17 @@ describe('PeriodTableEditor', () => {
 
     expect(wrapper.get('[data-testid="period-table-error"]').text()).toContain('作息表暂时不可用')
     expect(wrapper.find('[data-testid="period-table-retry"]').exists()).toBe(true)
+  })
+
+  it('嵌入工作台时使用传入的作息表并将返回动作交给父页面', async () => {
+    const onBack = vi.fn()
+    const wrapper = await mountEditor({ embedded: true, embeddedTableId: 9, onBack })
+    await flushPromises()
+
+    expect(mocks.getPeriodTable).toHaveBeenCalledWith(9)
+    expect(wrapper.get('[data-testid="period-table-back"]').text()).toContain('返回排课工作台')
+    await wrapper.get('[data-testid="period-table-back"]').trigger('click')
+    expect(onBack).toHaveBeenCalledOnce()
   })
 
   it('把宽表限制在独立工作面内滚动，并保留新增行入口', async () => {

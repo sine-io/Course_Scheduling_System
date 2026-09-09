@@ -4,8 +4,12 @@
 所有资源以 semester_id 为范围。
 """
 
+import hashlib
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api import high_risk_http
@@ -13,6 +17,7 @@ from app.core.auth import get_active_user, require_roles
 from app.core.db import get_db
 from app.core.permissions import can_edit_core, core_editor, core_viewer
 from app.models.basedata import (
+    ClassTrack,
     ClassUnit,
     Room,
     Subject,
@@ -25,6 +30,12 @@ from app.models.period import PeriodTable
 from app.models.user import Role, User, UserRole
 from app.schemas.basedata import (
     BindableAccount,
+    ClassBatchCandidateIn,
+    ClassBatchCandidateOut,
+    ClassBatchCommitIn,
+    ClassBatchCommitOut,
+    ClassBatchPreviewIn,
+    ClassBatchPreviewOut,
     ClassUnitIn,
     ClassUnitOut,
     RoomIn,
@@ -590,6 +601,205 @@ def list_class_units(
     if q:
         stmt = stmt.where(ClassUnit.name.contains(q))
     return db.scalars(stmt.order_by(ClassUnit.grade, ClassUnit.name)).all()
+
+
+_GRADE_LABELS: dict[ClassTrack, dict[int, str]] = {
+    ClassTrack.elementary: {
+        1: "一年级", 2: "二年级", 3: "三年级", 4: "四年级", 5: "五年级", 6: "六年级",
+    },
+    ClassTrack.junior_high: {7: "七年级", 8: "八年级", 9: "九年级"},
+    ClassTrack.senior_high: {10: "高一", 11: "高二", 12: "高三"},
+    ClassTrack.comprehensive: {10: "高一", 11: "高二", 12: "高三"},
+    ClassTrack.vocational: {1: "中职一年级", 2: "中职二年级", 3: "中职三年级"},
+}
+
+
+def _grade_label(track: ClassTrack, grade: int) -> str:
+    try:
+        return _GRADE_LABELS[track][grade]
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "年级与学段不匹配") from exc
+
+
+def _class_batch_fingerprint(db: Session, semester_id: int, grade: int, track: ClassTrack) -> str:
+    """冻结预览时的班级集合，防止提交覆盖预览后的并发修改。"""
+    rows = db.execute(
+        select(ClassUnit.id, ClassUnit.name, ClassUnit.grade, ClassUnit.track)
+        .where(ClassUnit.semester_id == semester_id)
+        .order_by(ClassUnit.id)
+    ).all()
+    payload = {
+        "semester_id": semester_id,
+        "grade": grade,
+        "track": track.value,
+        "classes": [list(row) for row in rows],
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode()
+    ).hexdigest()
+
+
+def _batch_conflicts(
+    db: Session,
+    semester_id: int,
+    track: ClassTrack,
+    candidates: list[ClassBatchCandidateIn],
+) -> list[dict[str, object]]:
+    """返回所有可在提交前一次展示的冲突，不改变数据库。"""
+    conflicts: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate.name in seen:
+            conflicts.append({
+                "row_id": candidate.row_id,
+                "name": candidate.name,
+                "message": f"批次内班级名称重复：{candidate.name}",
+            })
+        seen.add(candidate.name)
+        if track != ClassTrack.vocational and candidate.department:
+            conflicts.append({
+                "row_id": candidate.row_id,
+                "name": candidate.name,
+                "message": "非中职班级不能填写专业",
+            })
+
+    existing = db.scalars(
+        select(ClassUnit).where(
+            ClassUnit.semester_id == semester_id,
+            ClassUnit.name.in_([candidate.name for candidate in candidates]),
+        )
+    ).all()
+    for class_unit in existing:
+        candidate = next(item for item in candidates if item.name == class_unit.name)
+        conflicts.append({
+            "row_id": candidate.row_id,
+            "name": candidate.name,
+            "message": f"本学期已有班级「{candidate.name}」",
+        })
+    return conflicts
+
+
+@router.post("/class-units/batch/preview", response_model=ClassBatchPreviewOut)
+def preview_class_batch(
+    body: ClassBatchPreviewIn,
+    semester_id: int = Query(...),
+    db: Session = Depends(get_db),
+    _: object = Depends(editor),
+) -> ClassBatchPreviewOut:
+    """按年级组生成可编辑的班级候选，不写入数据库。"""
+    _require_writable(db, semester_id)
+    grade_label = _grade_label(body.track, body.grade)
+    existing_names = set(db.scalars(
+        select(ClassUnit.name).where(ClassUnit.semester_id == semester_id)
+    ).all())
+    candidates = []
+    for number in range(body.start_number, body.end_number + 1):
+        name = f"{grade_label}{number}班"
+        candidates.append(ClassBatchCandidateOut(
+            row_id=number,
+            name=name,
+            default_name=name,
+            conflict=f"本学期已有班级「{name}」" if name in existing_names else None,
+        ))
+    return ClassBatchPreviewOut(
+        semester_id=semester_id,
+        grade=body.grade,
+        track=body.track,
+        grade_label=grade_label,
+        fingerprint=_class_batch_fingerprint(db, semester_id, body.grade, body.track),
+        candidates=candidates,
+    )
+
+
+@router.post(
+    "/class-units/batch",
+    response_model=ClassBatchCommitOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def commit_class_batch(
+    body: ClassBatchCommitIn,
+    semester_id: int = Query(...),
+    db: Session = Depends(get_db),
+    _: object = Depends(editor),
+) -> ClassBatchCommitOut:
+    """一次事务提交班级候选；完整重试返回已有班级而不重复创建。"""
+    _require_writable(db, semester_id)
+    _grade_label(body.track, body.grade)
+    existing = {
+        item.name: item
+        for item in db.scalars(
+            select(ClassUnit).where(
+                ClassUnit.semester_id == semester_id,
+                ClassUnit.name.in_([candidate.name for candidate in body.candidates]),
+            )
+        ).all()
+    }
+    exact_retry = existing and len(existing) == len(body.candidates) and all(
+        (item := existing.get(candidate.name)) is not None
+        and item.grade == body.grade
+        and item.track == body.track.value
+        and item.department == (
+            candidate.department if body.track == ClassTrack.vocational else None
+        )
+        and item.student_count == candidate.student_count
+        and item.homeroom_teacher_id == candidate.homeroom_teacher_id
+        for candidate in body.candidates
+    )
+    if exact_retry:
+        return ClassBatchCommitOut(
+            semester_id=semester_id,
+            idempotent=True,
+            classes=[existing[candidate.name] for candidate in body.candidates],
+        )
+
+    current_fingerprint = _class_batch_fingerprint(db, semester_id, body.grade, body.track)
+    if body.preview_fingerprint != current_fingerprint:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "class_batch_preview_stale",
+                "message": "班级数据在预览后发生变化，请重新预览后再保存",
+            },
+        )
+
+    conflicts = _batch_conflicts(db, semester_id, body.track, body.candidates)
+    if conflicts:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "class_batch_conflict",
+                "message": "批量班级存在冲突，未保存任何班级",
+                "conflicts": conflicts,
+            },
+        )
+
+    for candidate in body.candidates:
+        _validate_homeroom(db, semester_id, candidate.homeroom_teacher_id)
+
+    created = [ClassUnit(
+        semester_id=semester_id,
+        grade=body.grade,
+        name=candidate.name,
+        track=body.track.value,
+        department=candidate.department if body.track == ClassTrack.vocational else None,
+        student_count=candidate.student_count,
+        homeroom_teacher_id=candidate.homeroom_teacher_id,
+    ) for candidate in body.candidates]
+    db.add_all(created)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail={
+                "code": "class_batch_conflict",
+                "message": "班级数据在保存时发生变化，未保存任何班级，请重新预览",
+            },
+        ) from exc
+    for class_unit in created:
+        db.refresh(class_unit)
+    return ClassBatchCommitOut(semester_id=semester_id, idempotent=False, classes=created)
 
 
 def _require_unique_class_name(

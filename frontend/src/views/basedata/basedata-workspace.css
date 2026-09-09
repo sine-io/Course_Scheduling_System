@@ -122,6 +122,58 @@
 .basedata-modal--wide { width: min(640px, calc(100vw - 32px)); }
 .basedata-modal--rules { width: min(760px, calc(100vw - 32px)); }
 
+.basedata-batch-intro {
+  margin: 0;
+  color: var(--app-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.basedata-batch-preview-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+}
+
+.basedata-batch-preview-heading > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.basedata-batch-preview-heading span {
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
+.basedata-batch-table-scroll {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+}
+
+.basedata-batch-table { min-width: 680px; }
+.basedata-batch-table .n-input-number { width: 92px; }
+.basedata-batch-table .n-select { min-width: 128px; }
+
+.basedata-batch-row-error,
+.basedata-batch-conflict,
+.basedata-batch-ok {
+  display: block;
+  max-width: 220px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.basedata-batch-row-error,
+.basedata-batch-conflict { color: var(--app-danger-pressed); }
+.basedata-batch-ok { color: var(--app-success-pressed); }
+
 .basedata-form {
   display: grid;
   min-width: 0;
@@ -275,4 +327,5 @@
   .basedata-modal-actions .n-button { flex: 1 1 140px; }
   .reference-import-files { grid-template-columns: minmax(0, 1fr); }
   .reference-import-heading { flex-direction: column; }
+  .basedata-batch-preview-heading { align-items: flex-start; flex-direction: column; }
 }

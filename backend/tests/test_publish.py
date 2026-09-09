@@ -5,7 +5,9 @@ from datetime import UTC, datetime
 import pytest
 
 from app.models.basedata import Teacher
+from app.models.timetable import Timetable
 from app.models.user import Role
+from app.services import scheduling_inputs
 from tests.api_helpers import publish_checked_timetable
 from tests.conftest import make_user
 from tests.dates import SEM_END, SEM_START
@@ -113,6 +115,21 @@ def test_publication_check_marks_complete_current_draft_as_checked(env3):
     versions = client.get(f"/api/timetables?semester_id={sid}").json()
     assert versions[0]["status"] == "draft"
     assert versions[0]["publication_state"] == "checked"
+
+
+def test_publication_check_does_not_replace_the_draft_input_snapshot(env3):
+    client, sid, tid, db = env3
+    draft = db.get(Timetable, tid)
+    original_fingerprint = draft.assignment_input_fingerprint
+    _one_period_course(client, sid)
+    assert scheduling_inputs.is_current(db, draft) is False
+
+    response = client.post(f"/api/timetables/{tid}/publication-check")
+
+    assert response.status_code == 200, response.text
+    db.refresh(draft)
+    assert draft.assignment_input_fingerprint == original_fingerprint
+    assert scheduling_inputs.is_current(db, draft) is False
 
 
 def test_director_can_read_completeness_and_record_publication_check(env3):

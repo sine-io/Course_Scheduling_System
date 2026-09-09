@@ -129,5 +129,23 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('backup')
     await router.push('/settings/system?section=accounts')
     expect(router.currentRoute.value.name).toBe('account-permissions')
+
+    await router.push('/basedata?tab=classes&semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.query).toEqual({ step: 'classes', semester: '8' })
+
+    await router.push('/basedata?tab=classes&semester=invalid')
+    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.query).toEqual({ step: 'classes' })
+  })
+
+  it('keeps the scheduling flow prototype public and normalizes variant aliases', async () => {
+    await router.push('/prototype/paike-flow/b')
+    expect(router.currentRoute.value.name).toBe('paike-flow-prototype')
+    expect(router.currentRoute.value.query.variant).toBe('B')
+
+    await router.push('/prototype/paike-flow?variant=C')
+    expect(router.currentRoute.value.name).toBe('paike-flow-prototype')
+    expect(router.currentRoute.value.query.variant).toBe('C')
   })
 })

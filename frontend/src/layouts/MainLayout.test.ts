@@ -70,6 +70,7 @@ function makeRouter() {
       { path: '/settings/calendar', name: 'calendar', component: { template: '<main />' } },
       { path: '/basedata', name: 'basedata', component: { template: '<main />' } },
       { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main />' } },
+      { path: '/scheduling/flow', name: 'scheduling-flow', component: { template: '<main />' } },
       { path: '/scheduling/settings', name: 'scheduling-settings', component: { template: '<main />' } },
       { path: '/scheduling/workbench', name: 'workbench', component: { template: '<main />' } },
       { path: '/scheduling/auto', name: 'auto-schedule', component: { template: '<main />' } },
@@ -121,8 +122,8 @@ describe('MainLayout', () => {
     expect(wrapper.find('[data-testid="app-shell"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
     expect(wrapper.find('[data-testid="shell-breadcrumb"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
-    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('工作空间')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('课程表调整')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('工作空间')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('首页总览')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('系统管理')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('学期准备')
@@ -148,7 +149,9 @@ describe('MainLayout', () => {
 
     const combinedLayout = await mountLayout(combinedUser)
     const combinedNav = combinedLayout.wrapper.get('[data-testid="shell-nav"]').text()
-    expect(combinedNav).toContain('教学任务')
+    expect(combinedNav).not.toContain('科目与任课')
+    expect(combinedNav).not.toContain('自动排课')
+    expect(combinedNav).not.toContain('排课规则')
     expect(combinedNav).toContain('系统管理')
 
     const teacherLayout = await mountLayout(teacher)
@@ -157,17 +160,18 @@ describe('MainLayout', () => {
     expect(teacherNav).toContain('请假登记')
     expect(teacherNav).toContain('通知')
     expect(teacherNav).toContain('我的代课课时')
-    expect(teacherNav).not.toContain('排课工作台')
-    expect(teacherNav).not.toContain('工作空间')
+    expect(teacherNav).not.toContain('课程表调整')
+    expect(teacherNav).toContain('工作空间')
     expect(teacherNav).not.toContain('首页总览')
     expect(teacherNav).not.toContain('系统管理')
     expect(teacherLayout.wrapper.find('.app-nav-common').exists()).toBe(false)
 
     const managementGroups = wrapper.findAll('.app-nav-group')
-    expect(managementGroups[0].text()).toContain('学期准备')
+    expect(managementGroups[0].text()).toContain('工作空间')
     expect(wrapper.get('[data-nav-key="dashboard"]').text()).toContain('仪表盘')
     expect(wrapper.get('[data-nav-key="dashboard"]').classes()).toContain('app-nav-dashboard-link')
-    expect(managementGroups[0].text()).not.toContain('仪表盘')
+    expect(managementGroups[0].text()).toContain('仪表盘')
+    expect(managementGroups[1].text()).toContain('学期准备')
   })
 
   it('opens the mobile drawer, moves focus into it, and restores focus on escape', async () => {

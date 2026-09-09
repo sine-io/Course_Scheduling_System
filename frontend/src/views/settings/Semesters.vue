@@ -20,6 +20,17 @@ import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './settings-workspace.css'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  embeddedSemesterId?: number
+}>(), {
+  embedded: false,
+  embeddedSemesterId: undefined,
+})
+const emit = defineEmits<{
+  changed: []
+  editPeriodTable: [id: number]
+}>()
 const message = useMessage()
 const route = useRoute()
 const router = useRouter()
@@ -56,6 +67,11 @@ const semesterOptions = computed(() => semesters.value.map((semester) => ({
   label: semester.label,
   value: semester.id,
 })))
+const visibleSemesters = computed(() => (
+  props.embedded
+    ? semesters.value.filter((semester) => semester.id === props.embeddedSemesterId)
+    : semesters.value
+))
 const canManageSemesters = computed(() => (
   !auth.user || auth.hasRole('admin') || auth.hasRole('director')
 ))
@@ -79,7 +95,9 @@ async function fetchSemesters() {
   await semesterContext.load()
   const items = await listSemesters()
   semesters.value = await Promise.all(items.map((item: SemesterListItem) => getSemester(item.id)))
-  const queryId = Number(route.query.semester)
+  const queryId = props.embedded && props.embeddedSemesterId
+    ? props.embeddedSemesterId
+    : Number(route.query.semester)
   const querySemester = semesters.value.find((semester) => semester.id === queryId)
   const currentSemester = semesters.value.find((semester) => semester.id === semesterContext.currentSemesterId)
   const previouslySelected = semesters.value.find((semester) => semester.id === selectedSemesterId.value)
@@ -128,6 +146,7 @@ async function onCreateSemester() {
     })
     message.success('学期已创建')
     await refreshData()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
@@ -142,6 +161,7 @@ async function onDeleteSemester(id: number) {
     await deleteSemester(id, highRiskConfirmation(`semester:${id}`))
     message.success('学期已删除')
     await refreshData()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
@@ -178,6 +198,7 @@ async function onAddTable() {
     showAddTable.value = false
     message.success('作息时间表已新增')
     await refreshData()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '作息时间表'))
   } finally {
@@ -193,6 +214,7 @@ async function onDeleteTable(id: number) {
     await deletePeriodTable(id, highRiskConfirmation(`period-table:${id}`))
     message.success('作息时间表已删除')
     await refreshData()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '作息时间表'))
   } finally {
@@ -203,11 +225,15 @@ async function onDeleteTable(id: number) {
 function editTable(id: number) {
   const owner = semesters.value.find((semester) => semester.period_tables.some((table) => table.id === id))
   if (!owner || !canWriteSemester(owner.id)) return
+  if (props.embedded) {
+    emit('editPeriodTable', id)
+    return
+  }
   router.push({ name: 'period-table-editor', params: { id } })
 }
 
 async function selectSemester(id: number | null) {
-  if (!id) return
+  if (!id || props.embedded) return
   selectedSemesterId.value = id
   await router.replace({ query: { ...route.query, semester: String(id) } })
 }
@@ -273,6 +299,7 @@ async function onCopy() {
     showCopy.value = false
     message.success('已复制到新学期')
     await refreshData()
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
@@ -293,8 +320,8 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
 </script>
 
 <template>
-  <div class="settings-page">
-    <header class="settings-page-header">
+  <div class="settings-page" :class="{ 'settings-page-embedded': props.embedded }" data-testid="semesters-page">
+    <header v-if="!props.embedded" class="settings-page-header">
       <div>
         <p class="settings-eyebrow">{{ '学期配置' }}</p>
         <h1>{{ '学期与作息时间表' }}</h1>
@@ -333,7 +360,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
     </section>
 
     <template v-else>
-      <section v-if="canManageSemesters" class="settings-panel" data-testid="semester-create-panel">
+      <section v-if="canManageSemesters && !props.embedded" class="settings-panel" data-testid="semester-create-panel">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '新建工作面' }}</p>
@@ -372,7 +399,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
         </div>
       </section>
 
-      <section v-if="!refreshing && !semesters.length" class="settings-panel settings-empty" data-testid="semesters-empty">
+      <section v-if="!refreshing && !visibleSemesters.length" class="settings-panel settings-empty" data-testid="semesters-empty">
         <n-empty :description="'尚未创建任何学期'" />
       </section>
 
@@ -382,7 +409,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
           <strong>{{ '正在更新学期列表' }}</strong>
         </div>
         <article
-          v-for="semester in semesters" v-else :key="semester.id"
+          v-for="semester in visibleSemesters" v-else :key="semester.id"
           class="settings-item"
           :data-testid="`semester-${semester.id}`"
           :data-selected="selectedSemesterId === semester.id"
@@ -401,7 +428,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
               </div>
               <p>{{ semester.start_date || '未设置开始日期' }} - {{ semester.end_date || '未设置结束日期' }}</p>
             </div>
-            <div class="settings-command-group">
+            <div v-if="!props.embedded" class="settings-command-group">
               <n-button size="small" @click="router.push({ name: 'calendar', query: { semester: String(semester.id) } })">
                 <template #icon><CalendarDays :size="14" aria-hidden="true" /></template>
                 {{ '校历与排课准备' }}
@@ -431,7 +458,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
             <div class="settings-subsection-header">
               <div>
                 <h3>{{ '作息时间表' }}</h3>
-                <p>{{ '维护排课使用的节次和时段；编辑会进入独立的宽表工作面。' }}</p>
+                <p>{{ props.embedded ? '维护当前学期排课使用的节次和时段。' : '维护排课使用的节次和时段；编辑会进入独立的宽表工作面。' }}</p>
               </div>
               <n-button v-if="canManageSemesters" size="small" dashed :disabled="addingTable || deletingTableId !== null || !canWriteSemester(semester.id)" @click="openAddTable(semester.id)">
                 <template #icon><Plus :size="14" aria-hidden="true" /></template>
@@ -448,7 +475,13 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                   <span>{{ `共 ${table.periods.length} 格` }}<template v-if="table.is_default"> · {{ '默认作息表' }}</template></span>
                 </div>
                 <div class="settings-command-group">
-                  <n-button v-if="canManageSemesters" size="small" :disabled="!canWriteSemester(semester.id)" @click="editTable(table.id)">
+                  <n-button
+                    v-if="canManageSemesters"
+                    size="small"
+                    :data-testid="`period-table-edit-${table.id}`"
+                    :disabled="!canWriteSemester(semester.id)"
+                    @click="editTable(table.id)"
+                  >
                     <template #icon><Pencil :size="14" aria-hidden="true" /></template>
                     {{ '编辑' }}
                   </n-button>

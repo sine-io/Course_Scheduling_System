@@ -51,7 +51,11 @@ function makeRouter() {
   })
 }
 
-async function mountSemesters(options: Record<string, unknown> = {}, role = 'director') {
+async function mountSemesters(
+  options: Record<string, unknown> = {},
+  role = 'director',
+  componentProps: Record<string, unknown> = {},
+) {
   const pinia = createPinia()
   const auth = useAuthStore(pinia)
   auth.user = {
@@ -64,7 +68,7 @@ async function mountSemesters(options: Record<string, unknown> = {}, role = 'dir
   const router = makeRouter()
   await router.push('/settings/semesters')
   await router.isReady()
-  const Host = { render: () => h(NMessageProvider, null, { default: () => h(Semesters) }) }
+  const Host = { render: () => h(NMessageProvider, null, { default: () => h(Semesters, componentProps) }) }
   return mount(Host, {
     global: {
       plugins: [pinia, router],
@@ -177,5 +181,32 @@ describe('Semesters', () => {
     expect(preference.text()).toContain('排课偏好设置')
     expect(preference.attributes('role')).toBe('checkbox')
     expect(preference.attributes('aria-checked')).toBe('true')
+  })
+
+  it('嵌入排课工作台时只显示指定学期并把作息编辑交给父页面', async () => {
+    const table = {
+      id: 12,
+      semester_id: semester.id,
+      name: '标准作息',
+      num_weekdays: 5,
+      is_default: true,
+      periods: [],
+    }
+    const editPeriodTable = vi.fn()
+    mocks.listSemesters.mockResolvedValue([semester])
+    mocks.getSemester.mockResolvedValue({ ...semester, period_tables: [table] })
+
+    const wrapper = await mountSemesters({}, 'director', {
+      embedded: true,
+      embeddedSemesterId: semester.id,
+      onEditPeriodTable: editPeriodTable,
+    })
+    await flushPromises()
+
+    expect(wrapper.find('.settings-page-header').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="semester-create-panel"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="semester-1"]').text()).toContain('标准作息')
+    await wrapper.get('[data-testid="period-table-edit-12"]').trigger('click')
+    expect(editPeriodTable).toHaveBeenCalledWith(12)
   })
 })

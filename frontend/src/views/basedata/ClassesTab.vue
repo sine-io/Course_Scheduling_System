@@ -3,15 +3,14 @@ import { AlertTriangle, Pencil, Plus, RefreshCw, Save, Trash2, X } from '@lucide
 import {
   NAlert, NButton, NEmpty, NInput, NInputNumber, NModal, NPopconfirm, NSelect, NSpin, useMessage,
 } from 'naive-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { apiErrorMessage } from '@/api/client'
 import {
-  TRACK_LABELS, createClassUnit, deleteClassUnit, listClassUnits, listTeachers, updateClassUnit,
+  TRACK_LABELS, commitClassBatch, createClassUnit, deleteClassUnit, listClassUnits, listTeachers,
+  previewClassBatch, updateClassUnit,
 } from '@/api/basedata'
-import type { ClassTrack, ClassUnit, Teacher } from '@/api/basedata'
+import type { ClassBatchCandidate, ClassTrack, ClassUnit, Teacher } from '@/api/basedata'
 import { highRiskConfirmation } from '@/api/highRisk'
-import { getSemester } from '@/api/semesters'
-import type { PeriodTable } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import './basedata-workspace.css'
 
@@ -24,7 +23,6 @@ const message = useMessage()
 
 const items = ref<ClassUnit[]>([])
 const teachers = ref<Teacher[]>([])
-const periodTables = ref<PeriodTable[]>([])
 const search = ref('')
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -46,17 +44,6 @@ const trackOptions = computed(() => (Object.keys(TRACK_LABELS) as ClassTrack[]).
   value: track,
 })))
 const teacherOptions = computed(() => teachers.value.map((teacher) => ({ label: teacher.name, value: teacher.id })))
-const showPeriodTable = computed(() => periodTables.value.length >= 2)
-const periodTableOptions = computed(() =>
-  periodTables.value.map((table) => ({
-    label: table.name + (table.is_default ? '（默认）' : ''),
-    value: table.id,
-  })),
-)
-function tableName(id: number | null): string {
-  if (id === null) return '默认'
-  return periodTables.value.find((table) => table.id === id)?.name ?? '—'
-}
 async function reload() {
   loading.value = true
   loadError.value = null
@@ -73,14 +60,12 @@ async function loadInitialData() {
   loading.value = true
   loadError.value = null
   try {
-    const [classItems, teacherItems, semester] = await Promise.all([
+    const [classItems, teacherItems] = await Promise.all([
       listClassUnits(props.semesterId, search.value || undefined),
       listTeachers(props.semesterId),
-      getSemester(props.semesterId),
     ])
     items.value = classItems
     teachers.value = teacherItems
-    periodTables.value = semester.period_tables
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取班级，请重试。')
   } finally {
@@ -112,6 +97,140 @@ const form = ref<{
 
 const showDepartment = computed(() => form.value.track === 'vocational')
 
+const gradeLabels: Record<ClassTrack, Record<number, string>> = {
+  elementary: { 1: '一年级', 2: '二年级', 3: '三年级', 4: '四年级', 5: '五年级', 6: '六年级' },
+  junior_high: { 7: '七年级', 8: '八年级', 9: '九年级' },
+  senior_high: { 10: '高一', 11: '高二', 12: '高三' },
+  comprehensive: { 10: '高一', 11: '高二', 12: '高三' },
+  vocational: { 1: '中职一年级', 2: '中职二年级', 3: '中职三年级' },
+}
+const batchGradeOptions = computed(() => Object.entries(gradeLabels[batchForm.value.track]).map(([value, label]) => ({
+  label,
+  value: Number(value),
+})))
+
+const batchForm = ref<{
+  grade: number
+  track: ClassTrack
+  start_number: number
+  end_number: number
+}>({
+  grade: 1,
+  track: 'elementary',
+  start_number: 1,
+  end_number: 3,
+})
+const batchShow = ref(false)
+const batchLoading = ref(false)
+const batchSaving = ref(false)
+const batchError = ref<string | null>(null)
+const batchPreviewFingerprint = ref<string | null>(null)
+const batchRows = ref<ClassBatchCandidate[]>([])
+const batchExistingNames = computed(() => new Set(items.value.map((item) => item.name)))
+const batchRowConflict = (row: ClassBatchCandidate) => {
+  const sameName = batchRows.value.some((other) => other.row_id !== row.row_id && other.name.trim() === row.name.trim())
+  if (sameName) return `批次内班级名称重复：${row.name}`
+  if (batchExistingNames.value.has(row.name.trim())) return `本学期已有班级「${row.name.trim()}」`
+  if (row.name === row.default_name) return row.conflict
+  return null
+}
+const batchReady = computed(() => (
+  Boolean(batchPreviewFingerprint.value)
+  && batchRows.value.length > 0
+  && batchRows.value.every((row) => row.name.trim() && !batchRowConflict(row))
+))
+
+watch(() => batchForm.value.track, (track) => {
+  const firstGrade = Number(Object.keys(gradeLabels[track])[0])
+  if (!gradeLabels[track][batchForm.value.grade]) batchForm.value.grade = firstGrade
+  batchPreviewFingerprint.value = null
+  batchRows.value = []
+})
+watch(() => batchForm.value.grade, () => {
+  batchPreviewFingerprint.value = null
+  batchRows.value = []
+})
+watch(() => [batchForm.value.start_number, batchForm.value.end_number], () => {
+  batchPreviewFingerprint.value = null
+  batchRows.value = []
+})
+
+function openBatch() {
+  if (!props.canEdit) return
+  batchForm.value = { grade: 1, track: 'elementary', start_number: 1, end_number: 3 }
+  batchError.value = null
+  batchPreviewFingerprint.value = null
+  batchRows.value = []
+  batchShow.value = true
+}
+function closeBatch() {
+  if (!batchSaving.value && !batchLoading.value) batchShow.value = false
+}
+async function previewBatch() {
+  if (!props.canEdit || batchLoading.value || batchSaving.value) return
+  batchError.value = null
+  if (batchForm.value.end_number < batchForm.value.start_number) {
+    batchError.value = '结束班号不能小于起始班号'
+    return
+  }
+  if (batchForm.value.end_number - batchForm.value.start_number + 1 > 100) {
+    batchError.value = '一次最多生成 100 个班级'
+    return
+  }
+  batchLoading.value = true
+  try {
+    const preview = await previewClassBatch(props.semesterId, batchForm.value)
+    batchPreviewFingerprint.value = preview.fingerprint
+    batchRows.value = preview.candidates.map((row) => ({ ...row }))
+  } catch (error) {
+    batchError.value = apiErrorMessage(error, '暂时无法生成班级候选，请重试。')
+  } finally {
+    batchLoading.value = false
+  }
+}
+function addBatchRow() {
+  const rowId = Math.max(0, ...batchRows.value.map((row) => row.row_id)) + 1
+  batchRows.value.push({
+    row_id: rowId,
+    name: '',
+    default_name: '',
+    department: null,
+    student_count: null,
+    homeroom_teacher_id: null,
+    conflict: null,
+  })
+}
+function removeBatchRow(rowId: number) {
+  batchRows.value = batchRows.value.filter((row) => row.row_id !== rowId)
+}
+async function saveBatch() {
+  if (!props.canEdit || !batchReady.value || batchSaving.value || !batchPreviewFingerprint.value) return
+  batchSaving.value = true
+  batchError.value = null
+  try {
+    const result = await commitClassBatch(props.semesterId, {
+      grade: batchForm.value.grade,
+      track: batchForm.value.track,
+      preview_fingerprint: batchPreviewFingerprint.value,
+      candidates: batchRows.value.map((row) => ({
+        row_id: row.row_id,
+        name: row.name.trim(),
+        department: batchForm.value.track === 'vocational' ? row.department || null : null,
+        student_count: row.student_count,
+        homeroom_teacher_id: row.homeroom_teacher_id,
+      })),
+    })
+    batchShow.value = false
+    message.success(result.idempotent ? '班级已存在，未重复创建' : `已保存 ${result.classes.length} 个班级`)
+    await reload()
+    emit('changed')
+  } catch (error) {
+    batchError.value = apiErrorMessage(error, '批量保存失败，未写入任何班级。')
+  } finally {
+    batchSaving.value = false
+  }
+}
+
 function openCreate() {
   if (!props.canEdit) return
   editingId.value = null
@@ -136,7 +255,7 @@ function openEdit(classUnit: ClassUnit) {
     department: classUnit.department ?? '',
     student_count: classUnit.student_count,
     homeroom_teacher_id: classUnit.homeroom_teacher_id,
-    period_table_id: classUnit.period_table_id ?? null,
+    period_table_id: classUnit.period_table_id,
   }
   show.value = true
 }
@@ -158,7 +277,7 @@ async function save() {
     department: showDepartment.value ? form.value.department || null : null,
     student_count: form.value.student_count,
     homeroom_teacher_id: form.value.homeroom_teacher_id,
-    period_table_id: showPeriodTable.value ? form.value.period_table_id : null,
+    period_table_id: form.value.period_table_id,
   }
   try {
     if (editingId.value) await updateClassUnit(editingId.value, body)
@@ -204,6 +323,10 @@ async function remove(classUnit: ClassUnit) {
         />
       </div>
       <div v-if="canEdit" class="basedata-toolbar-actions">
+        <n-button secondary data-testid="class-add-batch" @click="openBatch">
+          <template #icon><Plus :size="16" aria-hidden="true" /></template>
+          {{ '批量设置班级' }}
+        </n-button>
         <n-button type="primary" data-testid="class-add" @click="openCreate">
           <template #icon><Plus :size="16" aria-hidden="true" /></template>
           {{ '新增班级' }}
@@ -241,7 +364,6 @@ async function remove(classUnit: ClassUnit) {
             <th>{{ '学段' }}</th>
             <th>{{ '专业' }}</th>
             <th>{{ '班主任' }}</th>
-            <th v-if="showPeriodTable">{{ '作息时间表' }}</th>
             <th>{{ '人数' }}</th>
             <th v-if="canEdit">{{ '操作' }}</th>
           </tr>
@@ -253,7 +375,6 @@ async function remove(classUnit: ClassUnit) {
             <td>{{ trackLabel(classUnit.track) }}</td>
             <td>{{ classUnit.department || '—' }}</td>
             <td>{{ classUnit.homeroom_teacher?.name || '—' }}</td>
-            <td v-if="showPeriodTable">{{ tableName(classUnit.period_table_id) }}</td>
             <td>{{ classUnit.student_count ?? '—' }}</td>
             <td v-if="canEdit">
               <div class="basedata-command-group">
@@ -330,17 +451,6 @@ async function remove(classUnit: ClassUnit) {
             :placeholder="'（未指定）'"
           />
         </div>
-        <div v-if="showPeriodTable" class="basedata-field">
-          <span class="basedata-field-label">{{ '作息时间表' }}</span>
-          <n-select
-            v-model:value="form.period_table_id"
-            v-accessible-select="'作息时间表'"
-            data-testid="class-period-table"
-            :options="periodTableOptions"
-            clearable
-            :placeholder="'使用学期默认设置'"
-          />
-        </div>
         <div class="basedata-field">
           <span class="basedata-field-label">{{ '人数（可选）' }}</span>
           <n-input-number
@@ -359,6 +469,93 @@ async function remove(classUnit: ClassUnit) {
             {{ '保存' }}
           </n-button>
         </div>
+      </div>
+    </n-modal>
+
+    <n-modal v-if="canEdit" v-model:show="batchShow" preset="card" class="basedata-modal basedata-modal--wide" :title="'批量设置班级'">
+      <div class="basedata-form">
+        <p class="basedata-batch-intro">{{ '按同一学段和年级生成候选，确认前可逐行修改或删除。' }}</p>
+        <div class="basedata-form-row">
+          <div class="basedata-field">
+            <span class="basedata-field-label">{{ '学段' }}</span>
+            <n-select v-model:value="batchForm.track" v-accessible-select="'批量学段'" :options="trackOptions" data-testid="class-batch-track" />
+          </div>
+          <div class="basedata-field">
+            <span class="basedata-field-label">{{ '年级' }}</span>
+            <n-select v-model:value="batchForm.grade" v-accessible-select="'批量年级'" :options="batchGradeOptions" data-testid="class-batch-grade" />
+          </div>
+        </div>
+        <div class="basedata-form-row">
+          <div class="basedata-field">
+            <span class="basedata-field-label">{{ '起始班号' }}</span>
+            <n-input-number v-model:value="batchForm.start_number" :min="1" :max="1000" data-testid="class-batch-start" :input-props="{ 'aria-label': '起始班号' }" />
+          </div>
+          <div class="basedata-field">
+            <span class="basedata-field-label">{{ '结束班号' }}</span>
+            <n-input-number v-model:value="batchForm.end_number" :min="1" :max="1000" data-testid="class-batch-end" :input-props="{ 'aria-label': '结束班号' }" />
+          </div>
+        </div>
+        <n-alert v-if="batchError" type="error" data-testid="class-batch-error">{{ batchError }}</n-alert>
+        <div class="basedata-modal-actions">
+          <n-button type="primary" :loading="batchLoading" data-testid="class-batch-preview" @click="previewBatch">
+            <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+            {{ '生成候选' }}
+          </n-button>
+        </div>
+
+        <template v-if="batchPreviewFingerprint">
+          <div class="basedata-batch-preview-heading">
+            <div>
+              <strong>{{ `${gradeLabels[batchForm.track][batchForm.grade]}候选班级` }}</strong>
+              <span>{{ `共 ${batchRows.length} 个，可编辑后一次保存` }}</span>
+            </div>
+            <n-button size="small" secondary data-testid="class-batch-add-row" @click="addBatchRow">
+              <template #icon><Plus :size="14" aria-hidden="true" /></template>
+              {{ '添加一行' }}
+            </n-button>
+          </div>
+          <div class="basedata-batch-table-scroll" data-testid="class-batch-table-scroll" tabindex="0" aria-label="班级候选列表，可横向滚动">
+            <table class="basedata-data-table basedata-batch-table" data-testid="class-batch-table">
+              <thead>
+                <tr>
+                  <th>{{ '班级名称' }}</th>
+                  <th>{{ '人数' }}</th>
+                  <th>{{ '班主任' }}</th>
+                  <th v-if="batchForm.track === 'vocational'">{{ '专业' }}</th>
+                  <th>{{ '状态' }}</th>
+                  <th>{{ '操作' }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in batchRows" :key="row.row_id">
+                  <td>
+                    <n-input v-model:value="row.name" size="small" :data-testid="`class-batch-name-${row.row_id}`" :status="batchRowConflict(row) ? 'error' : undefined" :input-props="{ 'aria-label': '班级名称' }" />
+                    <span v-if="batchRowConflict(row)" class="basedata-batch-row-error">{{ batchRowConflict(row) }}</span>
+                  </td>
+                  <td><n-input-number v-model:value="row.student_count" size="small" :min="0" :input-props="{ 'aria-label': '人数' }" /></td>
+                  <td><n-select v-model:value="row.homeroom_teacher_id" v-accessible-select="'班主任'" size="small" clearable :options="teacherOptions" :placeholder="'未指定'" /></td>
+                  <td v-if="batchForm.track === 'vocational'"><n-input v-model:value="row.department" size="small" :placeholder="'可选'" :input-props="{ 'aria-label': '专业' }" /></td>
+                  <td><span :class="batchRowConflict(row) ? 'basedata-batch-conflict' : 'basedata-batch-ok'">{{ batchRowConflict(row) || '可保存' }}</span></td>
+                  <td>
+                    <n-button size="small" type="error" ghost :title="'删除候选行'" :aria-label="'删除候选行'" @click="removeBatchRow(row.row_id)">
+                      <template #icon><Trash2 :size="14" aria-hidden="true" /></template>
+                    </n-button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="basedata-modal-actions">
+            <n-button quaternary :disabled="batchSaving" @click="closeBatch">
+              <template #icon><X :size="15" aria-hidden="true" /></template>
+              {{ '取消' }}
+            </n-button>
+            <n-button type="primary" :loading="batchSaving" :disabled="!batchReady" data-testid="class-batch-save" @click="saveBatch">
+              <template #icon><Save :size="15" aria-hidden="true" /></template>
+              {{ '确认保存' }}
+            </n-button>
+          </div>
+        </template>
       </div>
     </n-modal>
   </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  ArrowUpRight, Bell, BookOpen, CalendarDays, ClipboardClock, ClipboardList, DoorOpen,
-  GraduationCap, RefreshCw, Table2, Users,
+  ArrowUpRight, Bell, BookOpen, CalendarDays, ClipboardClock, DoorOpen,
+  GraduationCap, History, ListChecks, RefreshCw, Table2, Users,
 } from '@lucide/vue'
 import { NButton, NEmpty, NSpin, NStatistic, NTag } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
@@ -33,7 +33,7 @@ const dashboardIntro = computed(() => (
     : '查看当前学期，并从快捷入口进入个人教务工作。'
 ))
 const dashboardHeaderRoute = computed(() => (
-  canManageCore.value ? { name: 'workbench' } : { name: 'timetable-query' }
+  canManageCore.value ? { name: 'scheduling-flow' } : { name: 'timetable-query' }
 ))
 const dashboardHeaderLabel = computed(() => (
   canManageCore.value ? '进入排课工作台' : '进入课表查询'
@@ -47,9 +47,9 @@ const dashboardShortcuts = computed(() => {
     ]
   }
   return [
-    { key: 'workbench', label: '排课工作台', description: '继续处理排课草稿。', route: { name: 'workbench' }, icon: BookOpen },
-    { key: 'assignments', label: '教学任务', description: '维护课程与课时。', route: { name: 'assignments' }, icon: ClipboardList },
-    { key: 'daily-board', label: '今日看板', description: '查看调课与代课安排。', route: { name: 'daily-board' }, icon: CalendarDays },
+    { key: 'scheduling-flow', label: '开始排课', description: '统一管理班级、课时、科目节数、教师任课并生成课表草稿。', route: { name: 'scheduling-flow' }, icon: ListChecks },
+    { key: 'workbench', label: '课程表调整', description: '检查或调整排课草稿。', route: { name: 'workbench' }, icon: BookOpen },
+    { key: 'versions', label: '版本与发布', description: '检查课表版本、完整性和发布记录。', route: { name: 'versions' }, icon: History },
   ]
 })
 
@@ -137,7 +137,7 @@ onMounted(loadDashboard)
         <p>{{ dashboardIntro }}</p>
       </div>
       <RouterLink v-if="semester" class="dashboard-header-link" :to="dashboardHeaderRoute">
-        <component :is="canManageCore ? BookOpen : Table2" :size="16" aria-hidden="true" />
+        <component :is="canManageCore ? ListChecks : Table2" :size="16" aria-hidden="true" />
         {{ dashboardHeaderLabel }}
         <ArrowUpRight :size="15" aria-hidden="true" />
       </RouterLink>

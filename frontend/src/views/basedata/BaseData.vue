@@ -38,15 +38,16 @@ const semesterOptions = computed(() =>
 const currentSemester = computed(() => (
   semesters.value.find(semester => semester.id === currentId.value) ?? null
 ))
-const initialSection = computed(() => {
+type BaseDataSection = 'subjects' | 'teachers' | 'rooms' | 'template' | 'reference'
+const initialSection = computed<BaseDataSection>(() => {
   const value = String(route.query.tab ?? '')
-  return ['subjects', 'teachers', 'classes', 'rooms', 'template', 'reference'].includes(value)
-    ? value as 'subjects' | 'teachers' | 'classes' | 'rooms' | 'template' | 'reference'
+  return ['subjects', 'teachers', 'rooms', 'template', 'reference'].includes(value)
+    ? value as BaseDataSection
     : 'subjects'
 })
-const manualSection = computed<'subjects' | 'teachers' | 'classes' | 'rooms'>(() => (
-  ['subjects', 'teachers', 'classes', 'rooms'].includes(initialSection.value)
-    ? initialSection.value as 'subjects' | 'teachers' | 'classes' | 'rooms'
+const manualSection = computed<'subjects' | 'teachers' | 'rooms'>(() => (
+  ['subjects', 'teachers', 'rooms'].includes(initialSection.value)
+    ? initialSection.value as 'subjects' | 'teachers' | 'rooms'
     : 'subjects'
 ))
 
@@ -78,7 +79,7 @@ onMounted(loadSemesters)
       <div>
         <p class="basedata-eyebrow">{{ '基础档案' }}</p>
         <h1>{{ '基础数据' }}</h1>
-        <p>{{ '按学期维护教师、班级、科目与教室/场地，保持排课所需的基础信息一致。' }}</p>
+        <p>{{ '按学期维护教师、科目与教室/场地，保持排课所需的基础信息一致。班级请在“开始排课”中设置。' }}</p>
       </div>
       <div class="basedata-header-actions">
         <n-select
@@ -115,7 +116,7 @@ onMounted(loadSemesters)
     <section v-else-if="!currentId" class="basedata-state" data-testid="basedata-empty">
       <Database :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建任何学期' }}</strong>
-      <span>{{ '请先在“学期与作息时间表”中创建学期，再维护教师、班级、科目和教室/场地。' }}</span>
+      <span>{{ '请先在“学期与作息时间表”中创建学期，再维护教师、科目和教室/场地。班级请在“开始排课”中设置。' }}</span>
       <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
     </section>
 
@@ -144,6 +145,7 @@ onMounted(loadSemesters)
         :can-edit="canEdit"
         :can-delete="canAdminHighRisk"
         :can-manage-accounts="canAdminHighRisk"
+        :show-classes="false"
         :show-readonly-notice="false"
       />
     </section>

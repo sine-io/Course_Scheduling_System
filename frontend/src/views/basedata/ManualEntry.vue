@@ -24,6 +24,7 @@ const props = withDefaults(
     canDelete?: boolean
     canManageAccounts?: boolean
     initialSection?: ManualSection
+    showClasses?: boolean
     showReadonlyNotice?: boolean
   }>(),
   {
@@ -31,6 +32,7 @@ const props = withDefaults(
     canDelete: false,
     canManageAccounts: false,
     initialSection: 'subjects',
+    showClasses: true,
     showReadonlyNotice: true,
   },
 )
@@ -39,7 +41,11 @@ const message = useMessage()
 const entryId = useId()
 const sectionPanelId = `${entryId}-panel`
 
-const activeSection = ref<ManualSection>(props.initialSection)
+function normalizeSection(section: ManualSection): ManualSection {
+  return section === 'classes' && !props.showClasses ? 'subjects' : section
+}
+
+const activeSection = ref<ManualSection>(normalizeSection(props.initialSection))
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 const childRevision = ref(0)
@@ -52,7 +58,10 @@ const quickBusy = ref(false)
 const quickError = ref<string | null>(null)
 
 watch(() => props.initialSection, (section) => {
-  activeSection.value = section
+  activeSection.value = normalizeSection(section)
+})
+watch(() => props.showClasses, (showClasses) => {
+  if (!showClasses && activeSection.value === 'classes') activeSection.value = 'subjects'
 })
 
 const commonSubjects = [
@@ -85,12 +94,12 @@ function canonicalCommonSubjectName(name: string): string {
   return commonSubjectCanonicalNames[name.trim()] ?? name.trim()
 }
 
-const sectionMeta: Array<{ key: ManualSection; label: string; required: boolean }> = [
+const sectionMeta = computed<Array<{ key: ManualSection; label: string; required: boolean }>>(() => [
   { key: 'subjects', label: '科目', required: true },
   { key: 'teachers', label: '教师', required: true },
-  { key: 'classes', label: '班级', required: true },
+  ...(props.showClasses ? [{ key: 'classes' as const, label: '班级', required: true }] : []),
   { key: 'rooms', label: '教室/场地', required: false },
-]
+])
 
 const subjectNames = computed(() => new Set(
   subjectList.value.map((item) => canonicalCommonSubjectName(item.name)),
@@ -109,11 +118,11 @@ function sectionCount(section: ManualSection): number {
 }
 
 function sectionComplete(section: ManualSection): boolean {
-  return !sectionMeta.find((item) => item.key === section)?.required || sectionCount(section) > 0
+  return !sectionMeta.value.find((item) => item.key === section)?.required || sectionCount(section) > 0
 }
 
 function sectionStatus(section: ManualSection): string {
-  const meta = sectionMeta.find((item) => item.key === section)
+  const meta = sectionMeta.value.find((item) => item.key === section)
   if (meta?.required && sectionCount(section) === 0) return '待补充'
   return '已完成'
 }
@@ -125,7 +134,7 @@ async function loadCounts() {
     const [subjects, teachers, classes, rooms] = await Promise.all([
       listSubjects(props.semesterId),
       listTeachers(props.semesterId),
-      listClassUnits(props.semesterId),
+      props.showClasses ? listClassUnits(props.semesterId) : Promise.resolve([]),
       listRooms(props.semesterId),
     ])
     subjectList.value = subjects
@@ -153,18 +162,18 @@ function sectionTabId(section: ManualSection): string {
 async function handleSectionKeydown(event: KeyboardEvent, index: number) {
   let nextIndex: number | null = null
   if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    nextIndex = (index + 1) % sectionMeta.length
+    nextIndex = (index + 1) % sectionMeta.value.length
   } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    nextIndex = (index - 1 + sectionMeta.length) % sectionMeta.length
+    nextIndex = (index - 1 + sectionMeta.value.length) % sectionMeta.value.length
   } else if (event.key === 'Home') {
     nextIndex = 0
   } else if (event.key === 'End') {
-    nextIndex = sectionMeta.length - 1
+    nextIndex = sectionMeta.value.length - 1
   }
   if (nextIndex === null) return
 
   event.preventDefault()
-  const section = sectionMeta[nextIndex]?.key
+  const section = sectionMeta.value[nextIndex]?.key
   if (!section) return
   selectSection(section)
   await nextTick()
@@ -237,7 +246,7 @@ async function handleChildChanged() {
       <div class="manual-entry-heading">
         <div>
           <h2 id="manual-entry-title">{{ '按引用关系逐项录入' }}</h2>
-          <p>{{ '先建立科目，再补教师和班级；教室/场地可以最后再补。每一步都会显示当前已完成数量。' }}</p>
+          <p>{{ showClasses ? '先建立科目，再补教师和班级；教室/场地可以最后再补。每一步都会显示当前已完成数量。' : '先建立科目，再补教师；教室/场地可以最后再补。每一步都会显示当前已完成数量。' }}</p>
         </div>
         <n-tag type="info" size="small">{{ '不会创建教师登录账号' }}</n-tag>
       </div>
@@ -352,7 +361,7 @@ async function handleChildChanged() {
         />
       </template>
 
-      <template v-else-if="activeSection === 'classes'">
+      <template v-else-if="showClasses && activeSection === 'classes'">
         <n-alert v-if="!counts.teachers" type="warning" data-testid="manual-classes-dependency">
           {{ '班主任可以稍后补充；如果现在已有教师，录入班级时可以直接选择。' }}
         </n-alert>

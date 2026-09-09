@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {
-  AlertTriangle, CheckCircle2, ClipboardList, Clock3, Layers3, Pencil, Plus, RefreshCw,
+  AlertTriangle, ArrowLeft, CheckCircle2, ClipboardList, Clock3, Layers3, Pencil, Plus, RefreshCw,
   Save, ShieldCheck, Trash2, UsersRound,
 } from '@lucide/vue'
 import {
@@ -8,7 +8,7 @@ import {
   NRadioButton, NRadioGroup, NSelect, NSpin, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import {
   createAssignment, createGroup, deleteAssignment, deleteGroup, listAssignments, listGroups,
@@ -25,10 +25,27 @@ import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './scheduling-workspace.css'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  embeddedSemesterId?: number
+  embeddedMode?: 'periods' | 'teachers'
+}>(), {
+  embedded: false,
+  embeddedSemesterId: undefined,
+  embeddedMode: 'periods',
+})
+const emit = defineEmits<{ changed: [] }>()
 const message = useMessage()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
+const route = useRoute()
 const router = useRouter()
+
+const managementMode = computed<'periods' | 'teachers'>(() => (
+  props.embedded
+    ? props.embeddedMode
+    : (route.query.mode === 'teachers' ? 'teachers' : 'periods')
+))
 
 const semesters = ref<SemesterListItem[]>([])
 const sid = ref<number | null>(null)
@@ -85,8 +102,9 @@ async function onSemesterChange(id: number) {
   sid.value = id
   try {
     await Promise.all([loadBase(id), reloadAll(id)])
+    if (!props.embedded) await router.replace({ query: { ...route.query, semester: String(id) } })
   } catch (error) {
-    loadError.value = apiErrorMessage(error, '暂时无法读取教学任务，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取课程设置，请重试。')
   } finally {
     loading.value = false
   }
@@ -97,9 +115,17 @@ async function loadPage() {
   loadError.value = null
   try {
     await semesterContext.load()
-    semesters.value = await listSemesters()
-    if (semesters.value.length) {
-      sid.value = semesters.value.find((semester) => semester.is_current)?.id
+    semesters.value = props.embedded && props.embeddedSemesterId
+      ? []
+      : await listSemesters()
+    if (props.embedded && props.embeddedSemesterId) {
+      sid.value = props.embeddedSemesterId
+      await Promise.all([loadBase(sid.value), reloadAll(sid.value)])
+    } else if (semesters.value.length) {
+      const rawSemester = Array.isArray(route.query.semester) ? route.query.semester[0] : route.query.semester
+      const requestedSemesterId = Number(rawSemester)
+      sid.value = semesters.value.find((semester) => semester.id === requestedSemesterId)?.id
+        ?? semesters.value.find((semester) => semester.is_current)?.id
         ?? semesterContext.currentSemesterId
         ?? semesters.value[0].id
       await Promise.all([loadBase(sid.value), reloadAll(sid.value)])
@@ -107,7 +133,7 @@ async function loadPage() {
       sid.value = null
     }
   } catch (error) {
-    loadError.value = apiErrorMessage(error, '暂时无法读取教学任务，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取课程设置，请重试。')
   } finally {
     loading.value = false
   }
@@ -206,7 +232,9 @@ async function save() {
   if (f.target === 'single' && !f.class_id) return message.warning('请选择班级')
   if (f.target === 'group' && !f.scheduling_unit_id) return message.warning('请选择走班分组')
   if (!f.subject_id) return message.warning('请选择科目')
-  if (f.teacher_ids.length === 0) return message.warning('请至少指定一位教师')
+  if (managementMode.value === 'teachers' && f.teacher_ids.length === 0) {
+    return message.warning('教师任课模式下，请至少指定一位教师')
+  }
   const lead = f.lead_teacher_id && f.teacher_ids.includes(f.lead_teacher_id)
     ? f.lead_teacher_id : f.teacher_ids[0]
   const payload: AssignmentPayload = {
@@ -225,14 +253,24 @@ async function save() {
     if (editingId.value) await updateAssignment(editingId.value, payload)
     else await createAssignment(sid.value!, payload)
     show.value = false
-    message.success('教学任务已保存')
+    message.success(managementMode.value === 'periods' ? '科目节数已保存' : '教师任课已保存')
     await reloadAll(sid.value!)
+    emit('changed')
   } catch (e) {
     message.error(apiErrorMessage(e, '保存失败'))
   } finally {
     saving.value = false
   }
 }
+
+async function onModeChange(next: 'periods' | 'teachers') {
+  if (props.embedded) return
+  const query = { ...route.query }
+  if (next === 'teachers') query.mode = 'teachers'
+  else delete query.mode
+  await router.replace({ query })
+}
+
 const deletingAssignmentId = ref<number | null>(null)
 async function removeAssignment(a: Assignment) {
   if (!canDelete.value || deletingAssignmentId.value !== null) return
@@ -241,6 +279,7 @@ async function removeAssignment(a: Assignment) {
     await deleteAssignment(a.id, highRiskConfirmation(`assignment:${a.id}`))
     message.success('已删除')
     await reloadAll(sid.value!)
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '删除教学任务失败'))
   } finally {
@@ -268,6 +307,7 @@ async function saveGroup() {
     groupShow.value = false
     message.success('走班分组已创建')
     await reloadAll(sid.value!)
+    emit('changed')
   } catch (e) {
     message.error(apiErrorMessage(e, '创建失败'))
   } finally {
@@ -281,6 +321,7 @@ async function removeGroup(g: SchedulingUnit) {
     await deleteGroup(g.id, highRiskConfirmation(`scheduling-unit:${g.id}`))
     message.success('分组已删除')
     await reloadAll(sid.value!)
+    emit('changed')
   } catch (e) {
     message.error(apiErrorMessage(e, '删除失败（分组可能仍有教学任务）'))
   } finally {
@@ -298,17 +339,41 @@ function blockLabel(a: Assignment): string {
   if (a.block_rules.length === 0) return '—'
   return a.block_rules.map((b) => `${b.block_size}连堂×${b.count_per_week}`).join('、')
 }
+
+function returnToFlow() {
+  router.push({
+    name: 'scheduling-flow',
+    query: {
+      step: managementMode.value === 'periods' ? 'subjects' : 'teachers',
+      ...(sid.value ? { semester: String(sid.value) } : {}),
+    },
+  })
+}
 </script>
 
 <template>
-  <div class="scheduling-page" data-testid="assignments-page">
-    <header class="scheduling-page-header">
+  <div class="scheduling-page" :class="{ 'scheduling-page-embedded': props.embedded }" data-testid="assignments-page">
+    <header v-if="!props.embedded" class="scheduling-page-header">
       <div>
-        <p class="scheduling-eyebrow">{{ '排课准备' }}</p>
-        <h1>{{ '教学任务管理' }}</h1>
-        <p>{{ '维护班级、科目、教师与每周课时，并同步核对教师和班级负载。' }}</p>
+        <p class="scheduling-eyebrow">{{ '排课工作台' }}</p>
+        <h1>{{ managementMode === 'periods' ? '科目节数' : '教师任课' }}</h1>
+        <p>{{ managementMode === 'periods' ? '先为每个班级设置科目和每周课时，教师可以稍后补齐。' : '为已设置课时的科目指定授课教师，完成后才能开始排课。' }}</p>
       </div>
       <div class="scheduling-header-actions">
+        <n-button quaternary data-testid="assignments-back-flow" @click="returnToFlow">
+          <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
+          {{ '返回开始排课' }}
+        </n-button>
+        <n-radio-group
+          :value="managementMode"
+          size="small"
+          aria-label="选择课程设置视图"
+          data-testid="assignments-mode"
+          @update:value="onModeChange"
+        >
+          <n-radio-button value="periods">{{ '科目节数' }}</n-radio-button>
+          <n-radio-button value="teachers">{{ '教师任课' }}</n-radio-button>
+        </n-radio-group>
         <n-select
           v-if="semesters.length"
           v-accessible-select="'选择工作学期'"
@@ -323,8 +388,8 @@ function blockLabel(a: Assignment): string {
 
     <section v-if="loading" class="scheduling-state" data-testid="assignments-loading" role="status" aria-live="polite">
       <n-spin size="small" />
-      <strong>{{ '正在读取教学任务' }}</strong>
-      <span>{{ '教学任务和课时负载加载完成后会显示在这里。' }}</span>
+      <strong>{{ '正在读取课程设置' }}</strong>
+      <span>{{ '课程、课时负载和教师任课状态加载完成后会显示在这里。' }}</span>
     </section>
 
     <section v-else-if="loadError" class="scheduling-state scheduling-state-error" data-testid="assignments-error" role="alert">
@@ -340,14 +405,14 @@ function blockLabel(a: Assignment): string {
     <section v-else-if="!sid" class="scheduling-state" data-testid="assignments-empty">
       <ClipboardList :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建可用学期' }}</strong>
-      <span>{{ '先创建学期并维护班级、科目和教师，再建立教学任务。' }}</span>
-      <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+      <span>{{ '先创建学期并维护班级、科目和教师，再录入课程和每周节数。' }}</span>
+      <n-button v-if="!props.embedded" type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
     </section>
 
     <template v-else>
       <n-alert v-if="!canEdit" type="info" data-testid="assignments-readonly">
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
-        {{ '当前角色仅可查看教学任务和课时负载，写入操作仅对教务主任开放。' }}
+        {{ '当前角色仅可查看课程设置和课时负载，写入操作仅对教务主任开放。' }}
       </n-alert>
 
       <div class="assignments-layout" data-testid="assignments-workspace">
@@ -356,13 +421,13 @@ function blockLabel(a: Assignment): string {
             <header class="scheduling-panel-heading">
               <div>
                 <p class="scheduling-eyebrow">{{ '任务总览' }}</p>
-                <h2>{{ '教学任务' }}</h2>
-                <p>{{ assignments.length ? `当前共 ${assignments.length} 项教学任务` : '当前学期还没有教学任务' }}</p>
+                <h2>{{ managementMode === 'periods' ? '科目节数' : '教师任课' }}</h2>
+                <p>{{ assignments.length ? `当前共 ${assignments.length} 项课程` : '当前学期还没有课程' }}</p>
               </div>
               <div v-if="canEdit" class="scheduling-actions">
                 <n-button type="primary" data-testid="assignment-add" @click="openCreate">
                   <template #icon><Plus :size="15" aria-hidden="true" /></template>
-                  {{ '新增教学任务' }}
+                  {{ managementMode === 'periods' ? '新增科目节数' : '新增教师任课' }}
                 </n-button>
                 <n-button data-testid="group-add" @click="openGroup">
                   <template #icon><Layers3 :size="15" aria-hidden="true" /></template>
@@ -372,21 +437,21 @@ function blockLabel(a: Assignment): string {
             </header>
 
             <div v-if="assignments.length === 0" class="scheduling-inline-empty" data-testid="assignment-list-empty">
-              <n-empty :description="'暂无教学任务'" />
+              <n-empty :description="managementMode === 'periods' ? '暂无科目节数' : '暂无教师任课'" />
             </div>
             <div
               v-else
               class="scheduling-table-scroll"
               data-testid="assignment-table-scroll"
               tabindex="0"
-              aria-label="教学任务列表，可横向滚动"
+              aria-label="课程列表，可横向滚动"
             >
               <table class="scheduling-data-table assignment-data-table" data-testid="assignment-table">
                 <thead>
                   <tr>
                     <th>{{ '排课单元' }}</th>
                     <th>{{ '科目' }}</th>
-                    <th>{{ '教师' }}</th>
+                    <th>{{ managementMode === 'periods' ? '教师（可稍后补齐）' : '授课教师' }}</th>
                     <th>{{ '周课时' }}</th>
                     <th>{{ '连堂' }}</th>
                     <th>{{ '教室/场地' }}</th>
@@ -414,7 +479,7 @@ function blockLabel(a: Assignment): string {
                     <td>{{ a.required_room_type ? roomTypeLabel(a.required_room_type) : '—' }}</td>
                     <td v-if="canEdit">
                       <div class="scheduling-row-actions">
-                        <n-button size="tiny" :aria-label="'编辑本行教学任务'" @click="openEdit(a)">
+                        <n-button size="tiny" :aria-label="'编辑本行课程'" @click="openEdit(a)">
                           <template #icon><Pencil :size="13" aria-hidden="true" /></template>
                           {{ '编辑' }}
                         </n-button>
@@ -469,7 +534,7 @@ function blockLabel(a: Assignment): string {
                       {{ '删除分组' }}
                     </n-button>
                   </template>
-                  {{ `将永久删除走班群组“${group.name}”及其中全部教学任务。确定继续吗？` }}
+                  {{ `将永久删除走班群组“${group.name}”及其中全部课程。确定继续吗？` }}
                 </n-popconfirm>
               </div>
             </div>
@@ -507,13 +572,13 @@ function blockLabel(a: Assignment): string {
             </header>
             <div v-if="overCapacity.length === 0" class="assignment-check-ok">
               <CheckCircle2 :size="17" aria-hidden="true" />
-              <span>{{ '各班教学任务均未超出可排节次' }}</span>
+              <span>{{ '各班课程均未超出可排节次' }}</span>
             </div>
             <div v-else class="assignment-warning-list" data-testid="class-warning">
               <n-alert v-for="classItem in overCapacity" :key="classItem.class_id" type="warning" :show-icon="false">
                 <span class="assignment-warning-line">
                   <AlertTriangle :size="14" aria-hidden="true" />
-                  {{ classItem.grade }}{{ '年级' }}{{ classItem.name }}：{{ '教学任务' }} {{ classItem.assigned }} {{ '节' }} &gt; {{ '可排' }} {{ classItem.capacity }} {{ '节' }}
+                  {{ classItem.grade }}{{ '年级' }}{{ classItem.name }}：{{ '课程' }} {{ classItem.assigned }} {{ '节' }} &gt; {{ '可排' }} {{ classItem.capacity }} {{ '节' }}
                 </span>
               </n-alert>
             </div>
@@ -522,7 +587,7 @@ function blockLabel(a: Assignment): string {
       </div>
     </template>
 
-    <n-modal v-if="canEdit" v-model:show="show" preset="card" :title="editingId ? '编辑教学任务' : '新增教学任务'" class="scheduling-modal assignment-modal">
+    <n-modal v-if="canEdit" v-model:show="show" preset="card" :title="editingId ? '编辑课程' : '新增课程'" class="scheduling-modal assignment-modal">
       <div class="scheduling-form">
         <div class="scheduling-field">
           <label>{{ '排课对象' }}</label>
@@ -556,7 +621,7 @@ function blockLabel(a: Assignment): string {
         </div>
 
         <div class="scheduling-field">
-          <label>{{ '授课教师（可多人协同，第一位默认为主讲）' }}</label>
+          <label>{{ managementMode === 'periods' ? '授课教师（可稍后在“教师任课”中补齐）' : '授课教师（可多人协同，第一位默认为主讲）' }}</label>
           <n-select v-model:value="form.teacher_ids" v-accessible-select="'选择授课教师'" data-testid="a-teachers" multiple :options="teacherOptions" filterable :placeholder="'选择教师'" />
           <n-select
             v-if="form.teacher_ids.length > 1"

@@ -67,6 +67,23 @@ export interface ClassUnit {
   homeroom_teacher: SubjectBrief | null
   period_table_id: number | null
 }
+export interface ClassBatchCandidate {
+  row_id: number
+  name: string
+  default_name: string
+  department: string | null
+  student_count: number | null
+  homeroom_teacher_id: number | null
+  conflict: string | null
+}
+export interface ClassBatchPreview {
+  semester_id: number
+  grade: number
+  track: ClassTrack
+  grade_label: string
+  fingerprint: string
+  candidates: ClassBatchCandidate[]
+}
 
 export const ROOM_TYPE_LABELS: Record<RoomType, string> = {
   normal: '普通教室',
@@ -136,3 +153,25 @@ export const updateClassUnit = (id: number, body: Record<string, unknown>) =>
   request<ClassUnit>('PATCH', `/class-units/${id}`, body)
 export const deleteClassUnit = (id: number, confirmation: HighRiskConfirmation) =>
   request<void>('DELETE', `/class-units/${id}`, confirmation)
+export const previewClassBatch = (semesterId: number, body: {
+  grade: number
+  track: ClassTrack
+  start_number: number
+  end_number: number
+}) => apiPost<ClassBatchPreview>(`/class-units/batch/preview?semester_id=${semesterId}`, body)
+export const commitClassBatch = (semesterId: number, body: {
+  grade: number
+  track: ClassTrack
+  preview_fingerprint: string
+  candidates: Array<{
+    row_id: number
+    name: string
+    department: string | null
+    student_count: number | null
+    homeroom_teacher_id: number | null
+  }>
+}) => apiPost<{
+  semester_id: number
+  idempotent: boolean
+  classes: ClassUnit[]
+}>(`/class-units/batch?semester_id=${semesterId}`, body)

@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.models.audit import AuditLog
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
+from app.services import scheduling_inputs
 from app.services.solver_data import load_config, load_problem
 from app.solver import conflict_explainer
 from app.solver import report as soft_report
@@ -99,6 +100,7 @@ def execute(
                      heartbeat=time.time())
         return
 
+    assignment_input_fingerprint = scheduling_inputs.fingerprint(db, source.semester_id)
     problem = load_problem(db, source.semester_id, source)
     config = load_config(db, source.semester_id)
     relaxation = Relaxation(soft_codes=frozenset(relax)) if allow_partial else None
@@ -162,7 +164,8 @@ def execute(
     new = write_result(db, source, result.entries, user_id, username, result.objective,
                        partial=allow_partial, unplaced=result.unplaced_periods,
                        unscheduled=result.unscheduled,
-                       rule_revision_id=problem.rule_revision_id)
+                       rule_revision_id=problem.rule_revision_id,
+                       assignment_input_fingerprint=assignment_input_fingerprint)
     rep = soft_report.evaluate(problem, result.entries, config)
     db.commit()
 
@@ -290,6 +293,7 @@ def write_result(
     unplaced: int = 0,
     unscheduled: tuple[UnscheduledCourse, ...] = (),
     rule_revision_id: int | None = None,
+    assignment_input_fingerprint: str | None = None,
 ) -> Timetable:
     """把求解结果写成新草稿。来源草稿不动。调用方负责 commit。
 
@@ -301,6 +305,10 @@ def write_result(
     new = Timetable(
         semester_id=source.semester_id, name=name, status=TimetableStatus.draft.value,
         rule_revision_id=rule_revision_id,
+        assignment_input_fingerprint=(
+            assignment_input_fingerprint
+            or scheduling_inputs.fingerprint(db, source.semester_id)
+        ),
         unscheduled=[_serialize_unscheduled(u) for u in unscheduled] or None,
     )
     db.add(new)

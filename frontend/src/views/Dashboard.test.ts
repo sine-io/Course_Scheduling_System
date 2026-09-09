@@ -26,6 +26,7 @@ function makeRouter() {
       routes: [
         { path: '/', name: 'dashboard', component: Dashboard },
         { path: '/scheduling/workbench', name: 'workbench', component: { template: '<div />' } },
+        { path: '/scheduling/flow', name: 'scheduling-flow', component: { template: '<div />' } },
         { path: '/scheduling/assignments', name: 'assignments', component: { template: '<div />' } },
         { path: '/settings/semesters', name: 'semesters', component: { template: '<div />' } },
         { path: '/settings/calendar', name: 'calendar', component: { template: '<div />' } },
@@ -81,9 +82,10 @@ describe('Dashboard', () => {
     expect(wrapper.text()).toContain('仪表盘')
     expect(wrapper.text()).toContain('尚未创建任何学期数据')
     expect(wrapper.get('a[href="/settings/semesters"]').text()).toContain('创建第一个学期')
+    expect(wrapper.get('[data-testid="dash-shortcut-scheduling-flow"]')).toBeTruthy()
     expect(wrapper.get('[data-testid="dash-shortcut-workbench"]')).toBeTruthy()
-    expect(wrapper.get('[data-testid="dash-shortcut-assignments"]')).toBeTruthy()
-    expect(wrapper.get('[data-testid="dash-shortcut-daily-board"]')).toBeTruthy()
+    expect(wrapper.get('[data-testid="dash-shortcut-versions"]')).toBeTruthy()
+    expect(wrapper.find('[data-testid="dash-shortcut-assignments"]').exists()).toBe(false)
   })
 
   it('教务主任首页不请求已移除的设置状态接口', async () => {
@@ -187,7 +189,9 @@ describe('Dashboard', () => {
     expect(wrapper.get('[data-testid="dash-entry-101"]').text()).toContain('数学')
     expect(wrapper.text()).toContain('尚有 1 节待安排')
     expect(wrapper.get('a[href="/scheduling/workbench"]')).toBeTruthy()
-    expect(wrapper.get('a[href="/scheduling/assignments"]')).toBeTruthy()
+    expect(wrapper.get('a[href="/scheduling/flow"]')).toBeTruthy()
+    expect(wrapper.get('a[href="/scheduling/versions"]')).toBeTruthy()
+    expect(wrapper.find('a[href="/scheduling/assignments"]').exists()).toBe(false)
     expect(wrapper.get('a[href="/daily-board"]')).toBeTruthy()
   })
 

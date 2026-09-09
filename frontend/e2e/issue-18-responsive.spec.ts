@@ -120,7 +120,6 @@ async function expectModalWithinViewport(
 const manualSectionTestIds = {
   '科目': 'manual-section-subjects',
   '教师': 'manual-section-teachers',
-  '班级': 'manual-section-classes',
   '教室/场地': 'manual-section-rooms',
 } as const
 
@@ -449,21 +448,6 @@ for (const viewport of VIEWPORTS) {
       ])
     }
 
-    await manualSection(page, '班级').click()
-    await expect(page.getByTestId('classes-table')).toContainText('七年级1班')
-    if (viewport.width <= 768) await expectInternalOverflow(page, 'classes-table-scroll')
-    await page.getByTestId('class-add').click()
-    const classModal = page.locator('.n-modal').filter({ hasText: '新增班级' })
-    await expect(classModal.getByLabel('年级')).toBeVisible()
-    await expect(classModal.getByLabel('班级名称')).toBeVisible()
-    await expect(classModal.getByLabel('学段')).toBeVisible()
-    await expect(classModal.getByLabel('班主任')).toBeVisible()
-    await expect(classModal.getByLabel('作息时间表')).toBeVisible()
-    await expect(classModal.getByLabel('人数')).toBeVisible()
-    if (viewport.width === 375) await expectModalWithinViewport(classModal, viewport)
-    await classModal.getByRole('button', { name: '取消' }).click()
-    await expectNoRootOverflow(page)
-
     await manualSection(page, '科目').click()
     await expect(page.getByTestId('subjects-table')).toContainText('数学')
     if (viewport.width <= 768) await expectInternalOverflow(page, 'subjects-table-scroll')
@@ -527,8 +511,6 @@ test('教务主任可维护基础数据但不显示管理员专属操作', async
   await expect(page.getByTestId('time-rules-save')).toBeVisible()
   await page.keyboard.press('Escape')
 
-  await manualSection(page, '班级').click()
-  await expect(page.getByTestId('class-add')).toBeVisible()
   await manualSection(page, '科目').click()
   await manualSection(page, '教室/场地').click()
   await expect(page.getByTestId('room-add')).toBeVisible()

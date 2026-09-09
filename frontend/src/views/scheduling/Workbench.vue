@@ -7,8 +7,8 @@ import {
   NAlert, NButton, NRadioButton, NRadioGroup, NSelect, NSpin, NTag,
   useMessage,
 } from 'naive-ui'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import TimetableGrid from '@/components/timetable/TimetableGrid.vue'
 import type { DragData, DropFeedback, GridEntry, PeriodCell } from '@/components/timetable/types'
 import { apiErrorMessage, type ApiError } from '@/api/client'
@@ -34,6 +34,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 const message = useMessage()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
+const route = useRoute()
 const router = useRouter()
 
 const loading = ref(true)
@@ -56,7 +57,17 @@ const defaultTable = ref<PeriodTable | null>(null)
 const periods = ref<PeriodCell[]>([])
 const numWeekdays = ref(5)
 
-const view = ref<ViewKind>('class')
+function parseView(value: unknown): ViewKind {
+  return value === 'teacher' || value === 'room' ? value : 'class'
+}
+
+function parseTimetableId(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const parsed = Number(raw)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+const view = ref<ViewKind>(parseView(route.query.view))
 const classId = ref<number | null>(null)
 const teacherId = ref<number | null>(null)
 const roomId = ref<number | null>(null)
@@ -123,7 +134,10 @@ async function loadSemesterData(id: number) {
     drafts.value = await listTimetables(id)
     ttId.value = created.id
   } else {
-    ttId.value = drafts.value[0]?.id ?? null
+    const requestedId = parseTimetableId(route.query.timetable)
+    ttId.value = drafts.value.find((draft) => draft.id === requestedId)?.id
+      ?? drafts.value[0]?.id
+      ?? null
   }
 
   classId.value = listedClasses[0]?.id ?? null
@@ -137,8 +151,9 @@ async function loadSemester(id: number) {
   loadError.value = null
   try {
     await loadSemesterData(id)
+    await router.replace({ query: { ...route.query, semester: String(id) } })
   } catch (error) {
-    loadError.value = apiErrorMessage(error, '暂时无法读取排课工作台，请重试。')
+    loadError.value = apiErrorMessage(error, '暂时无法读取课程表调整，请重试。')
   } finally {
     loading.value = false
   }
@@ -150,7 +165,10 @@ async function loadPage() {
   try {
     await semesterContext.load()
     semesters.value = await listSemesters()
-    const currentId = semesters.value.find((semester) => semester.is_current)?.id
+    const rawSemester = Array.isArray(route.query.semester) ? route.query.semester[0] : route.query.semester
+    const requestedSemesterId = Number(rawSemester)
+    const currentId = semesters.value.find((semester) => semester.id === requestedSemesterId)?.id
+      ?? semesters.value.find((semester) => semester.is_current)?.id
       ?? semesterContext.currentSemesterId
       ?? semesters.value[0]?.id
     if (currentId) await loadSemesterData(currentId)
@@ -173,10 +191,26 @@ onMounted(() => {
 })
 onUnmounted(() => window.removeEventListener('keydown', onKey))
 
+watch(() => route.query.view, (next) => {
+  const parsed = parseView(next)
+  if (parsed === view.value) return
+  view.value = parsed
+  clearPlacement()
+  void loadPeriods()
+})
+
+watch(() => route.query.timetable, (next) => {
+  const parsed = parseTimetableId(next)
+  if (!parsed || parsed === ttId.value || !drafts.value.some((draft) => draft.id === parsed)) return
+  void onDraftChange(parsed)
+})
+
 async function onViewChange(next: ViewKind) {
-  view.value = next
+  const parsed = parseView(next)
+  view.value = parsed
   clearPlacement()
   await loadPeriods()
+  await router.replace({ query: { ...route.query, view: parsed } })
 }
 
 async function onClassChange(id: number) {
@@ -192,6 +226,7 @@ async function onDraftChange(id: number) {
   resetWorkspaceHistory()
   try {
     await refreshTimetable()
+    await router.replace({ query: { ...route.query, timetable: String(id) } })
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取所选课表草稿，请重试。')
   } finally {
@@ -645,9 +680,9 @@ function onKey(event: KeyboardEvent) {
   <div class="scheduling-page workbench-page" data-testid="workbench-page">
     <header class="scheduling-page-header">
       <div>
-        <p class="scheduling-eyebrow">{{ '排课作业' }}</p>
-        <h1>{{ '排课工作台' }}</h1>
-        <p>{{ '在班级课表中处理未排课程，并从教师或教室/场地视角核对结果。' }}</p>
+        <p class="scheduling-eyebrow">{{ '生成结果' }}</p>
+        <h1>{{ '课程表调整' }}</h1>
+        <p>{{ '在班级课表中调整生成结果，并从教师或教室/场地视角核对。' }}</p>
       </div>
       <div class="scheduling-header-actions workbench-header-actions">
         <n-select
@@ -672,8 +707,8 @@ function onKey(event: KeyboardEvent) {
 
     <section v-if="loading" class="scheduling-state" data-testid="workbench-loading" role="status" aria-live="polite">
       <n-spin size="small" />
-      <strong>{{ '正在读取排课工作台' }}</strong>
-      <span>{{ '课表草稿和教学任务加载完成后会显示在这里。' }}</span>
+      <strong>{{ '正在读取课程表调整' }}</strong>
+      <span>{{ '课表草稿和课程设置加载完成后会显示在这里。' }}</span>
     </section>
 
     <section v-else-if="loadError" class="scheduling-state scheduling-state-error" data-testid="workbench-error" role="alert">
@@ -689,7 +724,7 @@ function onKey(event: KeyboardEvent) {
     <section v-else-if="!sid" class="scheduling-state" data-testid="workbench-empty">
       <Clock3 :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建可用学期' }}</strong>
-      <span>{{ '先创建学期和作息时间表，再进入排课工作台。' }}</span>
+      <span>{{ '先创建学期和作息时间表，再进入课程表调整。' }}</span>
       <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
     </section>
 
@@ -796,8 +831,8 @@ function onKey(event: KeyboardEvent) {
       <section v-else-if="classes.length === 0" class="scheduling-state workbench-inline-state" data-testid="workbench-no-classes">
         <ShieldCheck :size="22" aria-hidden="true" />
         <strong>{{ '当前学期还没有班级' }}</strong>
-        <span>{{ '维护班级和教学任务后，工作台会按班级显示待排课程。' }}</span>
-        <n-button type="primary" @click="router.push({ name: 'basedata' })">{{ '前往基础数据' }}</n-button>
+        <span>{{ '先在“开始排课”的设置班级步骤中维护班级，工作台会按班级显示待排课程。' }}</span>
+        <n-button type="primary" @click="router.push({ name: 'scheduling-flow', query: { step: 'classes', ...(sid ? { semester: String(sid) } : {}) } })">{{ '前往设置班级' }}</n-button>
       </section>
 
       <section v-else-if="periods.length === 0" class="scheduling-state workbench-inline-state" data-testid="workbench-no-periods">
@@ -873,7 +908,7 @@ function onKey(event: KeyboardEvent) {
             data-testid="wb-tray-unconfigured"
           >
             <AlertTriangle :size="20" aria-hidden="true" />
-            <strong>{{ '本班尚未配置教学任务' }}</strong>
+            <strong>{{ '本班尚未配置课程' }}</strong>
           </div>
           <div v-else-if="trayItems.length === 0" class="workbench-tray-empty" data-testid="wb-tray-empty">
             <CheckCircle2 :size="20" aria-hidden="true" />

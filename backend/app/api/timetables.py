@@ -43,7 +43,7 @@ from app.schemas.timetable import (
     TimetableRename,
 )
 from app.services import conflict_checker as cc
-from app.services import high_risk, semester_context
+from app.services import high_risk, scheduling_inputs, semester_context
 from app.services import timetable_publish as pub
 from app.services.scheduling_rules import active_revision_id
 from app.services.school_rules import (
@@ -219,6 +219,7 @@ def create_timetable(
         rule_revision_id=active_revision_id(db, semester_id),
     )
     db.add(tt)
+    scheduling_inputs.stamp(db, tt)
     db.commit()
     db.refresh(tt)
     return TimetableOut(

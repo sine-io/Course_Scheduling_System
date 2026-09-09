@@ -180,6 +180,8 @@ def _validate_refs(db: Session, semester_id: int, body: AssignmentIn) -> None:
         if room is None or room.semester_id != semester_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "教室/场地无效或不属于本学期")
     teacher_ids = [t.teacher_id for t in body.teachers]
+    if not teacher_ids:
+        return
     found = db.scalars(
         select(Teacher.id).where(
             Teacher.id.in_(teacher_ids), Teacher.semester_id == semester_id

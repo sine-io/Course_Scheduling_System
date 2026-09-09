@@ -11,6 +11,7 @@ import pytest
 from app.api import solver as solver_api
 from app.models.timetable import ScheduleEntry, Timetable
 from app.models.user import Role
+from app.services import scheduling_inputs
 from app.services.solver_data import load_problem
 from app.solver.model_builder import SolveControl, SolveOptions, SolveProgress, solve
 from app.solver.problem import SolverConfig
@@ -102,7 +103,9 @@ def test_auto_schedule_writes_result_draft(sched):
     entries = db.query(ScheduleEntry).filter_by(timetable_id=result_id).all()
     assert sum(e.span for e in entries) == 8
     assert db.query(ScheduleEntry).filter_by(timetable_id=tid).count() == 0
-    assert db.get(Timetable, result_id).status == "draft"
+    result = db.get(Timetable, result_id)
+    assert result.status == "draft"
+    assert result.assignment_input_fingerprint == scheduling_inputs.fingerprint(db, sid)
 
 
 def test_result_name_is_unique(sched):

@@ -16,11 +16,9 @@ const ROLE_CASES: RoleCase[] = [
     password: 'e2edirector1234',
     links: [
       { label: '仪表盘', href: '/' },
-      { label: '教学任务', href: '/scheduling/assignments' },
-      { label: '自动排课', href: '/scheduling/auto' },
-      { label: '排课工作台', href: '/scheduling/workbench' },
+      { label: '开始排课', href: '/scheduling/flow' },
+      { label: '课程表调整', href: '/scheduling/workbench' },
       { label: '版本与发布', href: '/scheduling/versions' },
-      { label: '排课规则', href: '/scheduling/settings' },
       { label: '课表查询', href: '/timetable-query' },
       { label: '今日看板', href: '/daily-board' },
       { label: '代课课时统计', href: '/substitution-stats' },
@@ -39,7 +37,7 @@ const ROLE_CASES: RoleCase[] = [
       { label: '通知', href: '/notifications' },
       { label: '我的代课课时', href: '/substitution-stats' },
     ],
-    forbidden: ['工作空间', '首页总览', '排课工作台', '系统管理'],
+    forbidden: ['学期准备', '首页总览', '开始排课', '科目与任课', '课程表调整', '系统管理'],
   },
   {
     title: '系统管理员',
@@ -47,6 +45,7 @@ const ROLE_CASES: RoleCase[] = [
     password: 'e2eadmin1234',
     links: [
       { label: '仪表盘', href: '/' },
+      { label: '开始排课', href: '/scheduling/flow' },
       { label: '系统管理', href: '/settings/system' },
       { label: '备份恢复', href: '/settings/backup' },
       { label: '账号权限', href: '/settings/accounts' },
@@ -68,8 +67,7 @@ test.describe('角色导航与页面兼容', () => {
       await page.goto('/')
 
       const nav = page.getByTestId('shell-nav')
-      await expect(nav).not.toContainText('工作空间')
-      await expect(nav).toContainText('学期准备')
+      await expect(nav).toContainText('工作空间')
       await expect(nav).toContainText('日常运行')
       await expect(nav).not.toContainText('常用')
       await expect(nav).not.toContainText('完整功能')

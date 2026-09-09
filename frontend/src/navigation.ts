@@ -9,6 +9,7 @@ import {
   DatabaseBackup,
   History,
   LayoutDashboard,
+  ListChecks,
   Settings2,
   ShieldCheck,
   Shuffle,
@@ -30,6 +31,7 @@ export type NavigationKey =
   | 'semesters'
   | 'calendar'
   | 'basedata'
+  | 'scheduling-flow'
   | 'assignments'
   | 'scheduling-settings'
   | 'auto-schedule'
@@ -56,6 +58,7 @@ export interface NavigationEntry {
   allowedRoles: readonly NavigationRole[]
   route: RouteLocationRaw
   activeNames?: readonly string[]
+  discoverable?: boolean
 }
 
 function entry(
@@ -66,7 +69,7 @@ function entry(
   group: string,
   allowedRoles: readonly NavigationRole[],
   route: RouteLocationRaw,
-  options: Pick<NavigationEntry, 'activeNames'> = {},
+  options: Pick<NavigationEntry, 'activeNames' | 'discoverable'> = {},
 ): NavigationEntry {
   return {
     key,
@@ -86,16 +89,17 @@ function entry(
  * discover from the shell.
  */
 export const NAVIGATION_CATALOG: readonly NavigationEntry[] = [
-  entry('dashboard', '仪表盘', '查看当前学期摘要、角色快捷入口和可访问的今日运行。', LayoutDashboard, '学期准备', DAILY_USER_ROLES, { name: 'dashboard' }),
+  entry('dashboard', '仪表盘', '查看当前学期摘要、角色快捷入口和可访问的今日运行。', LayoutDashboard, '工作空间', DAILY_USER_ROLES, { name: 'dashboard' }),
   entry('semesters', '学期与作息时间表', '管理学期、作息时间表和历史学期。', CalendarDays, '学期准备', CORE_VIEW_ROLES, { name: 'semesters' }, { activeNames: ['semesters', 'period-table-editor'] }),
   entry('calendar', '校历与排课准备', '维护校历特殊日期和学期准备状态。', CalendarCheck2, '学期准备', DAILY_OPERATOR_ROLES, { name: 'calendar' }),
-  entry('basedata', '基础数据', '维护教师、班级、科目和教室/场地。', Users, '学期准备', CORE_VIEW_ROLES, { name: 'basedata' }),
+  entry('basedata', '基础数据', '维护教师、科目和教室/场地；班级在开始排课中设置。', Users, '学期准备', CORE_VIEW_ROLES, { name: 'basedata' }),
 
-  entry('assignments', '教学任务', '维护每周课时、教师和班级的教学安排。', ClipboardList, '排课主流程', CORE_VIEW_ROLES, { name: 'assignments' }),
-  entry('auto-schedule', '自动排课', '查看前置检查结果并运行自动排课。', WandSparkles, '排课主流程', CORE_VIEW_ROLES, { name: 'auto-schedule' }),
-  entry('workbench', '排课工作台', '查看或编辑课表草稿。', BookOpen, '排课主流程', CORE_VIEW_ROLES, { name: 'workbench' }),
+  entry('scheduling-flow', '开始排课', '在一个工作台内完成班级、课时、科目节数、教师任课和排课。', ListChecks, '排课主流程', CORE_VIEW_ROLES, { name: 'scheduling-flow' }),
+  entry('assignments', '科目与任课', '先录入每周课时，再补齐教师任课。', ClipboardList, '排课主流程', CORE_VIEW_ROLES, { name: 'assignments' }, { discoverable: false }),
+  entry('auto-schedule', '自动排课', '查看前置检查结果并运行自动排课。', WandSparkles, '排课主流程', CORE_VIEW_ROLES, { name: 'auto-schedule' }, { discoverable: false }),
+  entry('workbench', '课程表调整', '检查或调整课表草稿。', BookOpen, '排课主流程', CORE_VIEW_ROLES, { name: 'workbench' }),
   entry('versions', '版本与发布', '检查课表版本、完整性和发布记录。', History, '排课主流程', CORE_VIEW_ROLES, { name: 'versions' }),
-  entry('scheduling-settings', '排课规则', '维护排课所需的课时和约束参数。', Settings2, '排课主流程', CORE_VIEW_ROLES, { name: 'scheduling-settings' }),
+  entry('scheduling-settings', '排课规则', '维护排课所需的课时和约束参数。', Settings2, '排课主流程', CORE_VIEW_ROLES, { name: 'scheduling-settings' }, { discoverable: false }),
   entry('timetable-query', '课表查询', '查询已发布的班级、教师和教室课表。', Table2, '排课主流程', DAILY_USER_ROLES, { name: 'timetable-query' }),
 
   entry('leaves', '请假登记', '登记本人或全校教师请假并查看受影响节次。', ClipboardClock, '日常运行', DAILY_USER_ROLES, { name: 'leaves' }),
@@ -148,13 +152,13 @@ export function accessibleCatalog(
 }
 
 export function navigationGroupOrder(): readonly string[] {
-  return ['学期准备', '排课主流程', '日常运行', '报表', '系统管理']
+  return ['工作空间', '学期准备', '排课主流程', '日常运行', '报表', '系统管理']
 }
 
 export function navigationGroupEntries(
   roles: readonly string[] | null | undefined,
 ): { label: string; items: NavigationEntry[] }[] {
-  const entries = accessibleCatalog(roles)
+  const entries = accessibleCatalog(roles).filter((item) => item.discoverable !== false)
   return navigationGroupOrder()
     .map((label) => ({ label, items: entries.filter((item) => item.group === label) }))
     .filter((group) => group.items.length > 0)

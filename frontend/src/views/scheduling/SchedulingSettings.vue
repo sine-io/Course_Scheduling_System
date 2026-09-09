@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   Clock3,
   FileCheck2,
@@ -26,6 +27,7 @@ import {
   useMessage,
 } from 'naive-ui'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
 import {
   activateSchedulingRules,
@@ -54,6 +56,8 @@ import './scheduling-workspace.css'
 const message = useMessage()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
+const route = useRoute()
+const router = useRouter()
 
 const loading = ref(true)
 const saving = ref(false)
@@ -235,7 +239,10 @@ async function loadPage(): Promise<void> {
     const [items, catalog] = await Promise.all([listSemesters(), listRuleTemplates()])
     semesters.value = items
     templates.value = catalog
-    sid.value = items.find((item) => item.is_current)?.id
+    const rawSemester = Array.isArray(route.query.semester) ? route.query.semester[0] : route.query.semester
+    const requestedSemesterId = Number(rawSemester)
+    sid.value = items.find((item) => item.id === requestedSemesterId)?.id
+      ?? items.find((item) => item.is_current)?.id
       ?? semesterContext.currentSemesterId ?? items[0]?.id ?? null
     if (sid.value) await loadWorkspace(sid.value)
   } catch (error) {
@@ -249,6 +256,14 @@ async function changeSemester(id: number): Promise<void> {
   sid.value = id
   selectedKey.value = null
   await loadWorkspace(id)
+  await router.replace({ query: { ...route.query, semester: String(id) } })
+}
+
+function returnToFlow(): void {
+  router.push({
+    name: 'scheduling-flow',
+    query: { step: 'start', ...(sid.value ? { semester: String(sid.value) } : {}) },
+  })
 }
 
 async function saveRule(): Promise<void> {
@@ -357,6 +372,10 @@ onMounted(loadPage)
         <p>用模板维护可追溯的排课规则；规则发布后会固定到新建课表。</p>
       </div>
       <div class="rule-editor-header-actions">
+        <NButton quaternary data-testid="rule-back-flow" @click="returnToFlow">
+          <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
+          返回开始排课
+        </NButton>
         <NSelect
           v-if="semesters.length"
           v-model:value="sid"

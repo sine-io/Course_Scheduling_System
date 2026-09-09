@@ -3,6 +3,7 @@ import { NMessageProvider } from 'naive-ui'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { h } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import SchedulingSettings from './SchedulingSettings.vue'
 
@@ -115,12 +116,21 @@ async function mountEditor() {
     must_change_password: false,
   }
   auth.loaded = true
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/scheduling/settings', name: 'scheduling-settings', component: { template: '<main />' } },
+      { path: '/scheduling/flow', name: 'scheduling-flow', component: { template: '<main />' } },
+    ],
+  })
+  await router.push({ name: 'scheduling-settings' })
+  await router.isReady()
   const Host = {
     render: () => h(NMessageProvider, null, { default: () => h(SchedulingSettings) }),
   }
   const wrapper = mount(Host, {
     attachTo: document.body,
-    global: { plugins: [pinia] },
+    global: { plugins: [pinia, router] },
   })
   await flushPromises()
   return wrapper

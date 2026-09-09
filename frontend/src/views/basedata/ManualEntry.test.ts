@@ -33,6 +33,7 @@ async function mountEntry(
   canDelete = false,
   canManageAccounts = false,
   showReadonlyNotice = true,
+  showClasses = true,
 ) {
   const Host = {
     render: () => h(NMessageProvider, null, {
@@ -43,6 +44,7 @@ async function mountEntry(
         canManageAccounts,
         initialSection,
         showReadonlyNotice,
+        showClasses,
       }),
     }),
   }
@@ -200,6 +202,14 @@ describe('ManualEntry', () => {
     expect(wrapper.get('[data-testid="manual-common-confirm"]').attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="manual-common-语文"]').trigger('click')
     expect(mocks.createSubject).not.toHaveBeenCalled()
+  })
+
+  it('隐藏班级入口时不加载班级数据', async () => {
+    const wrapper = await mountEntry(true, 'subjects', false, false, true, false)
+
+    expect(wrapper.find('[data-testid="manual-section-classes"]').exists()).toBe(false)
+    expect(mocks.listClassUnits).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('先建立科目，再补教师')
   })
 
   it('维护页可以向各分类透传管理员删除与账号绑定权限', async () => {

@@ -14,11 +14,8 @@ const CORE_VIEW_ROLE_LIST = [...CORE_VIEW_ROLES]
 const DAILY_OPERATOR_ROLE_LIST = [...DAILY_OPERATOR_ROLES]
 const templateImportPrototypeComponent = () => import('@/views/prototypes/TemplateImportPrototype.vue')
 const templateImportPrototypeMeta = { public: true, prototype: true }
-/* Paike flow prototype routes are disabled. Uncomment these declarations and
- * the route block below when the prototype needs to be reviewed again.
 const paikeFlowPrototypeComponent = () => import('@/views/prototypes/PaikeFlowPrototype.vue')
 const paikeFlowPrototypeMeta = { public: true, prototype: true }
-*/
 
 const routes = [
   {
@@ -46,7 +43,6 @@ const routes = [
     path: '/prototype/template-import/c',
     redirect: { name: 'template-import-prototype', query: { variant: 'C' } },
   },
-  /* Paike flow prototype routes are disabled. See the declarations above.
   {
     // Throwaway UI prototype: intentionally public so it can be reviewed without a seeded session.
     path: '/prototype/paike-flow',
@@ -56,23 +52,16 @@ const routes = [
   },
   {
     path: '/prototype/paike-flow/a',
-    name: 'paike-flow-prototype-a',
-    component: paikeFlowPrototypeComponent,
-    meta: paikeFlowPrototypeMeta,
+    redirect: { name: 'paike-flow-prototype', query: { variant: 'A' } },
   },
   {
     path: '/prototype/paike-flow/b',
-    name: 'paike-flow-prototype-b',
-    component: paikeFlowPrototypeComponent,
-    meta: paikeFlowPrototypeMeta,
+    redirect: { name: 'paike-flow-prototype', query: { variant: 'B' } },
   },
   {
     path: '/prototype/paike-flow/c',
-    name: 'paike-flow-prototype-c',
-    component: paikeFlowPrototypeComponent,
-    meta: paikeFlowPrototypeMeta,
+    redirect: { name: 'paike-flow-prototype', query: { variant: 'C' } },
   },
-  */
   {
     path: '/change-password',
     name: 'change-password',
@@ -111,6 +100,12 @@ const routes = [
         path: 'basedata',
         name: 'basedata',
         component: () => import('@/views/basedata/BaseData.vue'),
+        meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
+      },
+      {
+        path: 'scheduling/flow',
+        name: 'scheduling-flow',
+        component: () => import('@/views/scheduling/SchedulingFlow.vue'),
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
@@ -257,6 +252,19 @@ router.beforeEach(async (to) => {
   }
   if (!auth.mustChangePassword && to.name === 'change-password') {
     return { name: 'dashboard' }
+  }
+
+  if (to.name === 'basedata' && to.query.tab === 'classes') {
+    const rawSemester = Array.isArray(to.query.semester)
+      ? to.query.semester[0]
+      : to.query.semester
+    const semester = typeof rawSemester === 'string' && /^\d+$/.test(rawSemester) && Number(rawSemester) > 0
+      ? rawSemester
+      : undefined
+    return {
+      name: 'scheduling-flow',
+      query: { step: 'classes', ...(semester ? { semester } : {}) },
+    }
   }
 
   if (to.name === 'system' && (to.query.section === 'backup' || to.query.section === 'accounts')) {

@@ -12,19 +12,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import clock
-from app.models.assignment import (
-    AssignmentTeacher,
-    BlockRule,
-    CourseAssignment,
-    SchedulingUnit,
-    SchedulingUnitMember,
-)
+from app.models.assignment import CourseAssignment
 from app.models.audit import AuditLog
 from app.models.leave import AffectedPeriod, AffectedStatus, LeaveRequest, LeaveStatus
 from app.models.semester import Semester
 from app.models.timetable import ScheduleEntry, Timetable, TimetableStatus
 from app.models.user import User
-from app.services import semester_context
+from app.services import scheduling_inputs, semester_context
 
 PUBLICATION_CHECK_TTL = timedelta(minutes=15)
 
@@ -88,7 +82,12 @@ def completeness(db: Session, timetable: Timetable) -> dict:
     }
 
 
-def publication_fingerprint(db: Session, timetable: Timetable) -> str:
+def publication_fingerprint(
+    db: Session,
+    timetable: Timetable,
+    *,
+    assignment_input_fingerprint: str | None = None,
+) -> str:
     """Return a stable digest for everything that can change a publication decision."""
     context, _ = semester_context.read_context(db)
     semester = db.get(Semester, timetable.semester_id)
@@ -102,55 +101,6 @@ def publication_fingerprint(db: Session, timetable: Timetable) -> str:
             semester.start_date,
             semester.end_date,
         ]
-    assignments = db.execute(
-        select(
-            CourseAssignment.id,
-            CourseAssignment.scheduling_unit_id,
-            CourseAssignment.subject_id,
-            CourseAssignment.periods_per_week,
-            CourseAssignment.required_room_type,
-            CourseAssignment.room_id,
-            CourseAssignment.lock_room,
-        )
-        .where(CourseAssignment.semester_id == timetable.semester_id)
-        .order_by(CourseAssignment.id)
-    ).all()
-    assignment_teachers = db.execute(
-        select(
-            AssignmentTeacher.course_assignment_id,
-            AssignmentTeacher.teacher_id,
-            AssignmentTeacher.is_lead,
-        )
-        .join(CourseAssignment)
-        .where(CourseAssignment.semester_id == timetable.semester_id)
-        .order_by(AssignmentTeacher.course_assignment_id, AssignmentTeacher.teacher_id)
-    ).all()
-    block_rules = db.execute(
-        select(
-            BlockRule.course_assignment_id,
-            BlockRule.block_size,
-            BlockRule.count_per_week,
-        )
-        .join(CourseAssignment)
-        .where(CourseAssignment.semester_id == timetable.semester_id)
-        .order_by(
-            BlockRule.course_assignment_id,
-            BlockRule.block_size,
-            BlockRule.count_per_week,
-        )
-    ).all()
-    unit_members = db.execute(
-        select(
-            SchedulingUnitMember.scheduling_unit_id,
-            SchedulingUnitMember.class_unit_id,
-        )
-        .join(SchedulingUnit)
-        .where(SchedulingUnit.semester_id == timetable.semester_id)
-        .order_by(
-            SchedulingUnitMember.scheduling_unit_id,
-            SchedulingUnitMember.class_unit_id,
-        )
-    ).all()
     entries = db.execute(
         select(
             ScheduleEntry.id,
@@ -174,10 +124,8 @@ def publication_fingerprint(db: Session, timetable: Timetable) -> str:
             timetable.status,
             timetable.unscheduled,
         ],
-        "assignments": [list(row) for row in assignments],
-        "assignment_teachers": [list(row) for row in assignment_teachers],
-        "block_rules": [list(row) for row in block_rules],
-        "unit_members": [list(row) for row in unit_members],
+        "assignment_input_fingerprint": assignment_input_fingerprint
+        or scheduling_inputs.fingerprint(db, timetable.semester_id),
         "entries": [list(row) for row in entries],
     }
     encoded = json.dumps(payload, ensure_ascii=True, sort_keys=True, default=str).encode()
@@ -187,7 +135,14 @@ def publication_fingerprint(db: Session, timetable: Timetable) -> str:
 def record_publication_check(
     db: Session, timetable: Timetable, *, passed: bool
 ) -> tuple[str, datetime]:
-    fingerprint = publication_fingerprint(db, timetable)
+    assignment_input_fingerprint = scheduling_inputs.fingerprint(
+        db, timetable.semester_id
+    )
+    fingerprint = publication_fingerprint(
+        db,
+        timetable,
+        assignment_input_fingerprint=assignment_input_fingerprint,
+    )
     checked_at = datetime.now(UTC)
     timetable.publication_check_fingerprint = fingerprint
     timetable.publication_check_passed = passed
@@ -222,6 +177,12 @@ def publication_confirmation_error(
     if publication_fingerprint(db, timetable) != fingerprint:
         return "publication_check_stale", "草稿或当前学期已变化，请重新检查后确认"
     return None
+
+
+def publication_check_is_current(db: Session, timetable: Timetable) -> bool:
+    """Return whether the stored check still matches the mutable draft."""
+    fingerprint = timetable.publication_check_fingerprint or ""
+    return publication_confirmation_error(db, timetable, fingerprint) is None
 
 
 def publication_state(db: Session, timetable: Timetable) -> str:
@@ -269,6 +230,7 @@ def duplicate(db: Session, source: Timetable, name: str) -> Timetable:
         rule_revision_id=source.rule_revision_id,
         name=name,
         status=TimetableStatus.draft.value,
+        assignment_input_fingerprint=source.assignment_input_fingerprint,
     )
     db.add(new)
     db.flush()

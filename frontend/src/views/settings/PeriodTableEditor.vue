@@ -12,12 +12,27 @@ import type { Period, PeriodType } from '@/api/semesters'
 import { useSemesterContextStore } from '@/stores/semesterContext'
 import './settings-workspace.css'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  embeddedTableId?: number
+}>(), {
+  embedded: false,
+  embeddedTableId: undefined,
+})
+const emit = defineEmits<{
+  back: []
+  changed: []
+}>()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const message = useMessage()
 const semesterContext = useSemesterContextStore()
-const tableId = Number(route.params.id)
+const tableId = computed(() => (
+  props.embedded && props.embeddedTableId
+    ? props.embeddedTableId
+    : Number(route.params.id)
+))
 
 interface Row {
   period_no: number
@@ -93,9 +108,9 @@ async function load() {
   loading.value = true
   loadError.value = null
   try {
-    if (!Number.isInteger(tableId) || tableId <= 0) throw new Error('invalid-period-table-id')
+    if (!Number.isInteger(tableId.value) || tableId.value <= 0) throw new Error('invalid-period-table-id')
     await semesterContext.load()
-    const table = await getPeriodTable(tableId)
+    const table = await getPeriodTable(tableId.value)
     tableSemesterId.value = table.semester_id ?? null
     tableName.value = table.name
     numWeekdays.value = table.num_weekdays
@@ -194,32 +209,42 @@ async function save() {
         })
       }
     }
-    await replacePeriods(tableId, periods)
+    await replacePeriods(tableId.value, periods)
     for (const { row, start, end } of normalizedRows) {
       row.start_time = start.value
       row.end_time = end.value
     }
     message.success('作息时间表已保存')
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '保存失败，请重试。'))
   } finally {
     saving.value = false
   }
 }
+
+function goBack() {
+  if (props.embedded) {
+    emit('back')
+    return
+  }
+  router.back()
+}
 </script>
 
 <template>
-  <div class="settings-page period-editor-page">
+  <div class="settings-page period-editor-page" :class="{ 'settings-page-embedded': props.embedded }">
     <header class="settings-page-header">
       <div>
         <p class="settings-eyebrow">{{ '作息配置' }}</p>
-        <h1>{{ '作息时间表' }}</h1>
+        <h1 v-if="!props.embedded">{{ '作息时间表' }}</h1>
+        <h2 v-else class="period-editor-title">{{ '作息时间表' }}</h2>
         <p>{{ tableName ? `正在编辑“${tableName}”。只有常规课单元格会参与排课。` : '维护每天的节次、时间和用途。' }}</p>
       </div>
       <div class="settings-command-group">
-        <n-button data-testid="period-table-back" @click="router.back()">
+        <n-button data-testid="period-table-back" @click="goBack">
           <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
-          {{ '返回' }}
+          {{ props.embedded ? '返回排课工作台' : '返回' }}
         </n-button>
         <n-button v-if="!loading && !loadError" type="primary" data-testid="period-table-save" :loading="saving" :disabled="saving || !canEdit" @click="save">
           <template #icon><Save :size="16" aria-hidden="true" /></template>
@@ -328,6 +353,7 @@ async function save() {
 <style scoped>
 .period-editor-page,
 .period-editor-panel { min-width: 0; }
+.period-editor-title { margin: 0; font-size: 24px; line-height: 1.25; }
 .period-grid-scroll { max-width: 100%; }
 .period-grid { table-layout: fixed; }
 .period-grid th,
