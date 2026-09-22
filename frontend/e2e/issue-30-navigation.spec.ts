@@ -16,7 +16,7 @@ const ROLE_CASES: RoleCase[] = [
     password: 'e2edirector1234',
     links: [
       { label: '仪表盘', href: '/' },
-      { label: '开始排课', href: '/scheduling/flow' },
+      { label: '排课工作台', href: '/scheduling/flow' },
       { label: '课程表调整', href: '/scheduling/workbench' },
       { label: '版本与发布', href: '/scheduling/versions' },
       { label: '课表查询', href: '/timetable-query' },
@@ -37,7 +37,7 @@ const ROLE_CASES: RoleCase[] = [
       { label: '通知', href: '/notifications' },
       { label: '我的代课课时', href: '/substitution-stats' },
     ],
-    forbidden: ['学期准备', '首页总览', '开始排课', '科目与任课', '课程表调整', '系统管理'],
+    forbidden: ['学期准备', '首页总览', '排课工作台', '科目与任课', '课程表调整', '系统管理'],
   },
   {
     title: '系统管理员',
@@ -45,7 +45,7 @@ const ROLE_CASES: RoleCase[] = [
     password: 'e2eadmin1234',
     links: [
       { label: '仪表盘', href: '/' },
-      { label: '开始排课', href: '/scheduling/flow' },
+      { label: '排课工作台', href: '/scheduling/flow' },
       { label: '系统管理', href: '/settings/system' },
       { label: '备份恢复', href: '/settings/backup' },
       { label: '账号权限', href: '/settings/accounts' },

@@ -51,7 +51,7 @@ class PeriodTable(Base):
         String(64), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(64))
-    num_weekdays: Mapped[int] = mapped_column(Integer, default=5)  # 一周上课天数(5 或 6)
+    num_weekdays: Mapped[int] = mapped_column(Integer, default=5)  # 一周上课天数(5~7)
     is_default: Mapped[bool] = mapped_column(Boolean, default=False)
 
     semester: Mapped["Semester"] = relationship(back_populates="period_tables")
@@ -70,7 +70,7 @@ class Period(Base):
     period_table_id: Mapped[int] = mapped_column(
         ForeignKey("period_tables.id", ondelete="CASCADE"), index=True
     )
-    weekday: Mapped[int] = mapped_column(Integer)   # 1=周一 … 5/6
+    weekday: Mapped[int] = mapped_column(Integer)   # 1=周一 … 7=周日
     period_no: Mapped[int] = mapped_column(Integer)  # 当日节次顺序(含休息时段),1..N
     name: Mapped[str] = mapped_column(String(32))    # 显示名称,如「第一节」「午休」
     # 领域时间(学校墙钟时间),无时区(见 architecture.md D6)

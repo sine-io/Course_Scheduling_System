@@ -33,7 +33,7 @@ const dashboardIntro = computed(() => (
     : '查看当前学期，并从快捷入口进入个人教务工作。'
 ))
 const dashboardHeaderRoute = computed(() => (
-  canManageCore.value ? { name: 'scheduling-flow' } : { name: 'timetable-query' }
+  canManageCore.value ? { name: 'scheduling-workbench' } : { name: 'timetable-query' }
 ))
 const dashboardHeaderLabel = computed(() => (
   canManageCore.value ? '进入排课工作台' : '进入课表查询'
@@ -47,7 +47,7 @@ const dashboardShortcuts = computed(() => {
     ]
   }
   return [
-    { key: 'scheduling-flow', label: '开始排课', description: '统一管理班级、课时、科目节数、教师任课并生成课表草稿。', route: { name: 'scheduling-flow' }, icon: ListChecks },
+    { key: 'scheduling-workbench', label: '排课工作台', description: '统一管理班级、课时、科目节数、教师任课并生成课表草稿。', route: { name: 'scheduling-workbench' }, icon: ListChecks },
     { key: 'workbench', label: '课程表调整', description: '检查或调整排课草稿。', route: { name: 'workbench' }, icon: BookOpen },
     { key: 'versions', label: '版本与发布', description: '检查课表版本、完整性和发布记录。', route: { name: 'versions' }, icon: History },
   ]
@@ -224,8 +224,8 @@ onMounted(loadDashboard)
       <section v-else class="dashboard-panel dashboard-empty-panel">
         <n-empty :description="canManageCore ? '尚未创建任何学期数据' : '尚未建立当前工作学期，请联系教务主任'">
           <template v-if="canManageCore" #extra>
-            <RouterLink class="dashboard-primary-link" :to="{ name: 'semesters' }">
-              {{ '创建第一个学期' }}
+            <RouterLink class="dashboard-primary-link" :to="{ name: 'scheduling-workbench' }">
+              {{ '进入排课工作台创建学期' }}
             </RouterLink>
           </template>
         </n-empty>

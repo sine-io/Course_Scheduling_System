@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { AlertTriangle, ArrowLeft, Clock3, Plus, RefreshCw, Save, Trash2 } from '@lucide/vue'
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Plus, RefreshCw, Save, Trash2, WandSparkles } from '@lucide/vue'
 import {
-  NAlert, NButton, NEmpty, NInput, NPopconfirm, NPopselect, NSpin, useMessage,
+  NAlert, NButton, NEmpty, NInput, NInputNumber, NPopconfirm, NPopselect, NSpin, NTag, useMessage,
 } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -54,6 +54,10 @@ const tableName = ref('')
 const tableSemesterId = ref<number | null>(null)
 const numWeekdays = ref(5)
 const rows = ref<Row[]>([])
+const templateDays = ref(5)
+const templateMorningRows = ref(4)
+const templateAfternoonRows = ref(3)
+const applyingTemplate = ref(false)
 
 const canManageSemesters = computed(() => (
   !auth.user || auth.hasRole('admin') || auth.hasRole('director')
@@ -66,6 +70,12 @@ const canEdit = computed(() => (
 const WEEKDAY_NAMES = ['一', '二', '三', '四', '五', '六', '日']
 const weekdays = computed(() => Array.from({ length: numWeekdays.value }, (_, index) => index + 1))
 const gridMinWidth = computed(() => `${300 + weekdays.value.length * 108 + 92}px`)
+const regularCapacity = computed(() => rows.value.reduce(
+  (total, row) => total + weekdays.value.filter((weekday) => row.cells[weekday] === 'regular').length,
+  0,
+))
+const configuredCells = computed(() => rows.value.length * weekdays.value.length)
+const reservedCells = computed(() => configuredCells.value - regularCapacity.value)
 
 const periodTypeLabels: Record<PeriodType, string> = {
   regular: '常规课',
@@ -114,6 +124,7 @@ async function load() {
     tableSemesterId.value = table.semester_id ?? null
     tableName.value = table.name
     numWeekdays.value = table.num_weekdays
+    templateDays.value = table.num_weekdays
     rows.value = buildRows(table.periods, table.num_weekdays)
   } catch (error) {
     loadError.value = apiErrorMessage(error, '暂时无法读取作息时间表，请重试。')
@@ -148,6 +159,41 @@ function removeRow(periodNumber: number) {
 function applyRowType(row: Row, type: PeriodType) {
   if (!canEdit.value) return
   for (const weekday of weekdays.value) row.cells[weekday] = type
+}
+
+function templateRows() {
+  const morning = Math.max(0, Math.min(10, Math.trunc(templateMorningRows.value || 0)))
+  const afternoon = Math.max(0, Math.min(10, Math.trunc(templateAfternoonRows.value || 0)))
+  const cells = (type: PeriodType): Record<number, PeriodType> => Object.fromEntries(
+    Array.from({ length: templateDays.value }, (_, day) => [day + 1, type]),
+  ) as Record<number, PeriodType>
+  const nextRows: Row[] = []
+  let periodNumber = 1
+  for (let index = 0; index < morning; index += 1) {
+    nextRows.push({ period_no: periodNumber, name: `第 ${periodNumber} 节`, start_time: null, end_time: null, cells: cells('regular') })
+    periodNumber += 1
+  }
+  if (morning > 0 && afternoon > 0) {
+    nextRows.push({ period_no: periodNumber, name: '午休', start_time: null, end_time: null, cells: cells('lunch') })
+    periodNumber += 1
+  }
+  for (let index = 0; index < afternoon; index += 1) {
+    nextRows.push({ period_no: periodNumber, name: `第 ${periodNumber} 节`, start_time: null, end_time: null, cells: cells('regular') })
+    periodNumber += 1
+  }
+  return nextRows
+}
+
+function applyTemplate() {
+  if (!canEdit.value || applyingTemplate.value) return
+  applyingTemplate.value = true
+  const nextDays = Math.max(5, Math.min(7, Math.trunc(templateDays.value || 5)))
+  numWeekdays.value = nextDays
+  templateDays.value = nextDays
+  const nextRows = templateRows()
+  rows.value = nextRows
+  applyingTemplate.value = false
+  message.info('已生成模板草稿，请按学校实际情况调整后保存')
 }
 
 function normalizeTime(value: string | null): NormalizedTime | null {
@@ -282,6 +328,51 @@ function goBack() {
         所选作息时间表属于历史学期，历史学期只允许查询，不能保存修改。
       </n-alert>
 
+      <section class="period-setup-overview" data-testid="period-setup-overview">
+        <div class="period-setup-copy">
+          <p class="settings-eyebrow">{{ '设置课时' }}</p>
+          <h3>{{ '先确定上课日和每天节数，再逐节标记用途' }}</h3>
+          <p>{{ '常规课计入班级可排容量；早自习、午休、班会时间和固定用途不会占用普通排课容量。模板只生成草稿，保存前仍可调整。' }}</p>
+        </div>
+        <div class="period-template-controls" aria-label="作息模板参数">
+          <div class="period-template-field">
+            <label for="period-template-days">{{ '每周上课日' }}</label>
+            <n-input-number id="period-template-days" v-model:value="templateDays" :min="5" :max="7" :disabled="!canEdit" data-testid="period-template-days" />
+          </div>
+          <div class="period-template-field">
+            <label for="period-template-morning">{{ '上午节数' }}</label>
+            <n-input-number id="period-template-morning" v-model:value="templateMorningRows" :min="0" :max="10" :disabled="!canEdit" data-testid="period-template-morning" />
+          </div>
+          <div class="period-template-field">
+            <label for="period-template-afternoon">{{ '下午节数' }}</label>
+            <n-input-number id="period-template-afternoon" v-model:value="templateAfternoonRows" :min="0" :max="10" :disabled="!canEdit" data-testid="period-template-afternoon" />
+          </div>
+          <n-button dashed :loading="applyingTemplate" :disabled="!canEdit || applyingTemplate" data-testid="period-template-apply" @click="applyTemplate">
+            <template #icon><WandSparkles :size="15" aria-hidden="true" /></template>
+            {{ '生成模板草稿' }}
+          </n-button>
+        </div>
+      </section>
+
+      <div class="period-capacity-summary" data-testid="period-capacity-summary">
+        <div class="period-capacity-stat">
+          <span>{{ '每周可排容量' }}</span>
+          <strong>{{ regularCapacity }} {{ '节' }}</strong>
+        </div>
+        <div class="period-capacity-stat">
+          <span>{{ '已配置格数' }}</span>
+          <strong>{{ configuredCells }} {{ '格' }}</strong>
+        </div>
+        <div class="period-capacity-stat">
+          <span>{{ '免排/固定用途' }}</span>
+          <strong>{{ reservedCells }} {{ '格' }}</strong>
+        </div>
+        <n-tag size="small" :type="regularCapacity > 0 ? 'success' : 'error'">
+          <CheckCircle2 v-if="regularCapacity > 0" :size="13" aria-hidden="true" />
+          {{ regularCapacity > 0 ? '具备常规排课容量' : '至少需要一个常规课节次' }}
+        </n-tag>
+      </div>
+
       <div class="settings-table-scroll period-grid-scroll" data-testid="period-grid-scroll" tabindex="0" aria-label="作息时间表，可横向滚动">
         <table class="settings-data-table period-grid" :style="{ minWidth: gridMinWidth }">
           <thead>
@@ -354,6 +445,37 @@ function goBack() {
 .period-editor-page,
 .period-editor-panel { min-width: 0; }
 .period-editor-title { margin: 0; font-size: 24px; line-height: 1.25; }
+.period-setup-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 1.35fr);
+  align-items: end;
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface-muted);
+}
+.period-setup-copy { min-width: 0; }
+.period-setup-copy h3 { margin: 0; font-size: 15px; }
+.period-setup-copy p:last-child { margin: 6px 0 0; color: var(--app-text-muted); font-size: 12px; line-height: 1.55; }
+.period-template-controls { display: flex; min-width: 0; align-items: end; flex-wrap: wrap; gap: 10px; }
+.period-template-field { display: grid; min-width: 92px; gap: 5px; }
+.period-template-field label { color: var(--app-text-muted); font-size: 11px; font-weight: 650; }
+.period-template-controls > .n-button { align-self: end; }
+.period-capacity-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 11px 14px;
+  border-top: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+}
+.period-capacity-stat { display: grid; gap: 3px; }
+.period-capacity-stat span { color: var(--app-text-muted); font-size: 11px; }
+.period-capacity-stat strong { color: var(--app-text); font-size: 15px; }
+.period-capacity-summary .n-tag { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
 .period-grid-scroll { max-width: 100%; }
 .period-grid { table-layout: fixed; }
 .period-grid th,
@@ -384,6 +506,11 @@ function goBack() {
 .period-empty { display: grid; min-height: 130px; place-items: center; }
 
 @media (max-width: 560px) {
+  .period-setup-overview { grid-template-columns: minmax(0, 1fr); }
+  .period-template-controls { align-items: stretch; }
+  .period-template-controls > .n-button { width: 100%; }
+  .period-capacity-summary { align-items: flex-start; gap: 12px 18px; }
+  .period-capacity-summary .n-tag { width: 100%; margin-left: 0; }
   .period-grid .period-details-column { width: 250px; }
   .period-grid { min-width: 990px !important; }
 }

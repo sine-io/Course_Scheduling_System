@@ -375,7 +375,7 @@ function openResult() {
 
 function returnToFlow() {
   router.push({
-    name: 'scheduling-flow',
+    name: 'scheduling-workbench',
     query: { step: 'start', ...(sid.value ? { semester: String(sid.value) } : {}) },
   })
 }
@@ -396,7 +396,7 @@ function returnToFlow() {
       <div class="scheduling-header-actions">
         <n-button quaternary data-testid="as-back-flow" @click="returnToFlow">
           <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
-          {{ '返回开始排课' }}
+          {{ '返回排课工作台' }}
         </n-button>
         <n-select
           v-if="semesters.length"
@@ -428,8 +428,8 @@ function returnToFlow() {
     <section v-else-if="!sid" class="scheduling-state" data-testid="as-empty">
       <Clock3 :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建可用学期' }}</strong>
-      <span>{{ '先创建学期和作息时间表，再启动自动排课。' }}</span>
-      <n-button v-if="!props.embedded" type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+      <span>{{ '先在排课工作台中创建学期并设置作息时间表，再启动自动排课。' }}</span>
+      <n-button v-if="!props.embedded" type="primary" @click="router.push({ name: 'scheduling-workbench' })">{{ '前往排课工作台' }}</n-button>
     </section>
 
     <template v-else>

@@ -13,6 +13,7 @@ const props = defineProps<{
   semesterId: number
   canEdit: boolean
 }>()
+const emit = defineEmits<{ changed: [] }>()
 
 const wordFile = ref<File | null>(null)
 const xlsxFile = ref<File | null>(null)
@@ -70,6 +71,7 @@ async function commitFiles() {
     resultMessage.value = result.idempotent
       ? '这批参考文件已经导入过，系统保持幂等，未重复创建数据。'
       : `已创建 ${result.created.assignments ?? 0} 个教学任务，草稿课表已生成。`
+    emit('changed')
   } catch (cause) {
     error.value = apiErrorMessage(cause, '参考文件提交失败')
   } finally {

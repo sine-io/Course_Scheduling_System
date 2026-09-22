@@ -1,4 +1,4 @@
-"""备份/恢复后台任务(worker;pg_dump/pg_restore 只在 worker 镜像,M5-2)。"""
+"""备份/恢复后台任务(worker;pg_dump/pg_restore 只由 worker 进程调用,M5-2)。"""
 
 import logging
 

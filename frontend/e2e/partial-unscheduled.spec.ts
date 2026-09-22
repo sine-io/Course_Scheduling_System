@@ -55,7 +55,7 @@ test('部分排课:完全排不下的课列入未排列表并说明原因,发布
   await post(page, `/api/timetables?semester_id=${sid}`, { name: '草稿A' })
 
   // ── 自动排课页:勾选部分排课(来源草稿由页面自己选)──
-  await page.goto(`/scheduling/auto?semester_id=${sid}`)
+  await page.goto(`/scheduling/flow?step=start&semester=${sid}`)
   await page.locator('.n-base-selection').first().click()
   await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
   await page.getByTestId('as-partial').click()

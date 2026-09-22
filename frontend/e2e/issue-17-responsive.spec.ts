@@ -190,6 +190,18 @@ async function mockApplication(
     }
     if (path === '/api/semesters') return fulfillJson(route, [SEMESTER])
     if (path === '/api/semesters/71') return fulfillJson(route, SEMESTER)
+    if (path === '/api/solver/preflight') return fulfillJson(route, {
+      ok: true,
+      issues: [],
+      semester_id: SEMESTER.id,
+      semester_label: SEMESTER.label,
+      error_count: 0,
+      warning_count: 0,
+      assignment_count: options.emptyAssignments ? 0 : 1,
+      total_periods: options.emptyAssignments ? 0 : 3,
+      teacher_count: 1,
+      class_count: 1,
+    })
     if (path === '/api/class-units/301/period-table') return fulfillJson(route, PERIOD_TABLE)
     if (path === '/api/class-units') return fulfillJson(route, [CLASS])
     if (path === '/api/subjects') return fulfillJson(route, [{ id: 501, semester_id: 71, name: '语文' }])
@@ -311,7 +323,7 @@ for (const viewport of VIEWPORTS) {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await mockApplication(page)
 
-    await page.goto('/scheduling/assignments')
+    await page.goto('/scheduling/flow?step=subjects&semester=71')
     await expect(page.getByTestId('assignments-page')).toBeVisible()
     await expect(page.getByLabel('选择工作学期')).toBeVisible()
     await expect(page.getByTestId('assignment-table')).toContainText('语文')
@@ -332,7 +344,7 @@ for (const viewport of VIEWPORTS) {
 
     if (viewport.width === 375) {
       await page.getByTestId('assignment-add').click()
-      const modal = page.locator('.n-modal').filter({ hasText: '新增教学任务' })
+      const modal = page.locator('.n-modal').filter({ hasText: '新增课程' })
       await expect(modal.getByRole('radiogroup', { name: '排课对象' })).toBeVisible()
       await expect(modal.getByLabel('选择排课班级')).toBeVisible()
       await expect(modal.getByLabel('选择科目')).toBeVisible()
@@ -441,7 +453,7 @@ test('班级未配置教学任务时与全部排完状态明确区分', async ({
   await page.setViewportSize({ width: 1280, height: 800 })
   await mockApplication(page, ['director'], { emptyAssignments: true })
 
-  await page.goto('/scheduling/assignments')
+  await page.goto('/scheduling/flow?step=subjects&semester=71')
   await expect(page.getByTestId('assignment-list-empty')).toContainText('暂无教学任务')
 
   await page.goto('/scheduling/workbench')
@@ -475,7 +487,7 @@ test('教务主任进入无草稿工作台时创建默认草稿并显示写入�
   await expect(page.getByTestId('workbench-no-draft')).toHaveCount(0)
   expect(state.writeRequests).toContain('POST /api/timetables')
 
-  await page.goto('/scheduling/assignments')
+  await page.goto('/scheduling/flow?step=subjects&semester=71')
   await expect(page.getByTestId('assignments-page')).toBeVisible()
   await expect(page.getByTestId('assignments-readonly')).toHaveCount(0)
   await expect(page.getByTestId('assignment-add')).toBeVisible()
@@ -485,9 +497,9 @@ test('教学任务读取失败时显示可重试状态', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 })
   await mockApplication(page, ['director'], { failAssignments: true })
 
-  await page.goto('/scheduling/assignments')
-  await expect(page.getByTestId('assignments-error')).toContainText('教学任务服务暂时不可用')
-  await expect(page.getByTestId('assignments-retry')).toBeVisible()
+  await page.goto('/scheduling/flow?step=subjects&semester=71')
+  await expect(page.getByTestId('flow-error')).toContainText('教学任务服务暂时不可用')
+  await expect(page.getByTestId('flow-retry')).toBeVisible()
 
   await page.goto('/scheduling/workbench')
   await expect(page.getByTestId('workbench-error')).toContainText('教学任务服务暂时不可用')

@@ -15,11 +15,22 @@ import { useSemesterContextStore } from '@/stores/semesterContext'
 import type { SemesterListItem } from '@/api/semesters'
 import {
   confirmSemesterReadiness, createCalendarException, deleteCalendarException,
+  revokeSemesterReadiness,
   getSemesterReadiness, listCalendarExceptions, updateCalendarException,
 } from '@/api/calendar'
 import type { CalendarException, CalendarExceptionKind, SemesterReadiness } from '@/api/calendar'
 import './settings-workspace.css'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  embeddedSemesterId?: number
+}>(), {
+  embedded: false,
+  embeddedSemesterId: undefined,
+})
+const emit = defineEmits<{
+  changed: []
+}>()
 const message = useMessage()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
@@ -36,6 +47,7 @@ const dataError = ref<string | null>(null)
 const saving = ref(false)
 const deletingExceptionId = ref<number | null>(null)
 const confirmingReady = ref(false)
+const revokingReady = ref(false)
 let loadSequence = 0
 
 const form = ref({
@@ -103,7 +115,7 @@ async function loadPage() {
   try {
     await semesterContext.load()
     semesters.value = await listSemesters()
-    const queryId = Number(route.query.semester)
+    const queryId = props.embeddedSemesterId ?? Number(route.query.semester)
     selectedSemesterId.value = semesters.value.some((semester) => semester.id === queryId)
       ? queryId
       : (semesters.value.find((semester) => semester.is_current)?.id
@@ -123,6 +135,7 @@ async function loadPage() {
 onMounted(loadPage)
 
 async function selectSemester(value: number | null) {
+  if (props.embedded) return
   selectedSemesterId.value = value
   resetForm()
   if (value) {
@@ -169,6 +182,7 @@ async function saveException() {
     resetForm()
     await loadSemesterData()
     message.success(wasEditing ? '特殊日期已更新' : '特殊日期已保存')
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '特殊日期保存失败，请重试。'))
   } finally {
@@ -183,6 +197,7 @@ async function removeException(id: number) {
     await deleteCalendarException(id)
     await loadSemesterData()
     message.success('特殊日期已删除')
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '特殊日期删除失败，请重试。'))
   } finally {
@@ -196,6 +211,7 @@ async function confirmReady() {
   try {
     readiness.value = await confirmSemesterReadiness(selectedSemesterId.value)
     message.success('排课准备已确认完成')
+    emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '尚未满足排课准备条件'))
     await loadSemesterData()
@@ -203,17 +219,32 @@ async function confirmReady() {
     confirmingReady.value = false
   }
 }
+
+async function revokeReady() {
+  if (!canEdit.value || !selectedSemesterId.value || revokingReady.value) return
+  revokingReady.value = true
+  try {
+    readiness.value = await revokeSemesterReadiness(selectedSemesterId.value)
+    message.success('已撤销排课准备确认')
+    emit('changed')
+  } catch (error) {
+    message.error(apiErrorMessage(error, '撤销排课准备确认失败，请重试。'))
+    await loadSemesterData()
+  } finally {
+    revokingReady.value = false
+  }
+}
 </script>
 
 <template>
   <div class="settings-page">
-    <header class="settings-page-header">
+    <header v-if="!props.embedded" class="settings-page-header">
       <div>
         <p class="settings-eyebrow">{{ '学期运行准备' }}</p>
         <h1>{{ '校历与排课准备' }}</h1>
         <p>{{ '维护停课与补课日期，检查当前学期是否具备开始排课的必要条件。' }}</p>
       </div>
-      <n-button text type="primary" @click="router.push({ name: 'semesters' })">
+      <n-button text type="primary" @click="router.push({ name: 'scheduling-workbench', query: { panel: 'semester', ...(selectedSemesterId ? { semester: String(selectedSemesterId) } : {}) } })">
         <template #icon><CalendarCheck2 :size="16" aria-hidden="true" /></template>
         {{ '管理学期与作息表' }}
       </n-button>
@@ -236,7 +267,7 @@ async function confirmReady() {
     </section>
 
     <template v-else>
-      <section class="settings-panel" data-testid="calendar-semester-panel">
+      <section v-if="!props.embedded" class="settings-panel" data-testid="calendar-semester-panel">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '工作范围' }}</p>
@@ -364,6 +395,10 @@ async function confirmReady() {
               <n-button v-if="!readiness?.ready" type="primary" data-testid="calendar-ready" :loading="confirmingReady" :disabled="confirmingReady || !canEdit" @click="confirmReady">
                 <template #icon><CheckCircle2 :size="15" aria-hidden="true" /></template>
                 {{ '确认排课准备完成' }}
+              </n-button>
+              <n-button v-else type="warning" ghost data-testid="calendar-revoke-ready" :loading="revokingReady" :disabled="revokingReady || !canEdit" @click="revokeReady">
+                <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+                {{ '撤销排课准备确认' }}
               </n-button>
             </div>
             <div v-if="readiness?.issues?.length" class="settings-rows" data-testid="calendar-readiness-issues">

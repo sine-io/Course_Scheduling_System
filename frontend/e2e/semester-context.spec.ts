@@ -27,7 +27,7 @@ test.describe('Issue 25: current semester context', () => {
       period_tables: Array<{ id: number }>
     }
 
-    await page.goto('/scheduling/assignments')
+    await page.goto('/scheduling/flow?step=subjects')
     const selector = page.getByTestId('current-semester-select')
     await expect(selector).toHaveValue(String(second.id))
     const confirmation = new Promise<string>((resolve) => {
@@ -51,7 +51,7 @@ test.describe('Issue 25: current semester context', () => {
     expect(oldLinkWrite.status()).toBe(409)
     expect((await oldLinkWrite.json()).detail.code).toBe('semester_not_current')
 
-    await page.goto(`/settings/period-tables/${firstDetail.period_tables[0].id}`)
+    await page.goto(`/scheduling/flow?step=periods&table=${firstDetail.period_tables[0].id}&semester=${first.id}`)
     await expect(page.getByTestId('period-table-readonly')).toContainText('历史学期')
     await expect(page.getByTestId('period-table-save')).toBeDisabled()
 

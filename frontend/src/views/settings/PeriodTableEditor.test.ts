@@ -140,6 +140,28 @@ describe('PeriodTableEditor', () => {
     expect(document.body.textContent).toContain('第一节的开始时间格式不正确')
   })
 
+  it('快捷模板生成可编辑的常规课和午休草稿', async () => {
+    const wrapper = await mountEditor()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="period-template-days"] input').setValue('5')
+    await wrapper.get('[data-testid="period-template-morning"] input').setValue('2')
+    await wrapper.get('[data-testid="period-template-afternoon"] input').setValue('1')
+    await wrapper.get('[data-testid="period-template-apply"]').trigger('click')
+    await nextTick()
+
+    expect(wrapper.get('[data-testid="period-capacity-summary"]').text()).toContain('15 节')
+    expect(wrapper.get('[data-testid="period-capacity-summary"]').text()).toContain('5 格')
+
+    await wrapper.get('[data-testid="period-table-save"]').trigger('click')
+    await flushPromises()
+
+    const periods = mocks.replacePeriods.mock.calls[0][1] as Period[]
+    expect(periods).toHaveLength(20)
+    expect(periods.filter((period) => period.type === 'regular')).toHaveLength(15)
+    expect(periods.filter((period) => period.type === 'lunch')).toHaveLength(5)
+  })
+
   it('旧链接指向历史学期时显示只读并禁用保存入口', async () => {
     mocks.getSemesterContext.mockResolvedValue({
       current_semester: { id: 2, label: '当前学期' }, revision: 3, can_switch: false,

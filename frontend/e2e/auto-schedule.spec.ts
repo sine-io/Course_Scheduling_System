@@ -4,18 +4,12 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
-  semesterLabel,
 } from './helpers'
 
 const SHOTS = 'e2e/screenshots'
 
 const post = async (page: Page, url: string, data: object) =>
   (await page.request.post(url, { data })).json()
-
-async function selectSemester(page: Page, year: number) {
-  await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: semesterLabel(year) }).click()
-}
 
 /** 12 班初中:规模够大,solver 需要几秒收敛,才看得到进度与「提前结束」。 */
 async function seedSchool(page: Page, sid: number) {
@@ -64,8 +58,7 @@ test('自动排课:显示进度,提前结束取当前最佳解并生成新草稿
   await seedSchool(page, sem.id)
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
 
-  await page.goto('/scheduling/auto')
-  await selectSemester(page, YEAR)
+  await page.goto(`/scheduling/flow?step=start&semester=${sem.id}`)
 
   // pre-flight 通过才会让人按下去
   await expect(page.getByText('数据检查通过，可以开始排课')).toBeVisible()
@@ -121,8 +114,7 @@ test('自动排课:数据未通过前置检查时拦截,并列出待修正项目
   })
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
 
-  await page.goto('/scheduling/auto')
-  await selectSemester(page, YEAR)
+  await page.goto(`/scheduling/flow?step=start&semester=${sem.id}`)
 
   await expect(page.getByTestId('pf-issue').first()).toContainText('超过可排节次')
   await page.getByTestId('as-start').click()
@@ -156,8 +148,7 @@ async function setupInfeasible(page: Page, year: number) {
   await seedInfeasible(page, sem.id)
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
 
-  await page.goto('/scheduling/auto')
-  await selectSemester(page, year)
+  await page.goto(`/scheduling/flow?step=start&semester=${sem.id}`)
   await expect(page.getByText('数据检查通过，可以开始排课')).toBeVisible()
   await page.getByTestId('as-minutes').locator('input').fill('1')
   return sem

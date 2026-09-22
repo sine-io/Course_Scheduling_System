@@ -224,6 +224,7 @@
       <p>以下步骤适合希望手工管理配置文件的用户。</p>
       <h3 id="方式-a拉取官方预建镜像推荐">方式 A:拉取官方预建镜像(推荐)</h3>
       <p>只需要两个文件:<code>docker-compose.yml</code> 与 <code>.env</code>。创建一个空文件夹(例如 <code>scheduling</code>),放入本项目的 <code>docker-compose.yml</code>,并在同层创建 <code>.env</code>(见步骤 2)。</p>
+      <p>采用当前 Compose 的版本只有 <code>course_scheduling_system-backend</code> 与 <code>course_scheduling_system-web</code> 两个应用镜像；<code>api</code>、<code>worker</code>、<code>worker-ops</code> 三个服务会复用前者（旧版发布包名见升级指南）。</p>
       <pre><code class="language-bash">mkdir scheduling &amp;&amp; cd scheduling
       # 下载 docker-compose.yml 与 .env.example(从项目 Releases 页或源代码获取)
       curl -fLO https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/docker-compose.yml
@@ -252,7 +253,7 @@
       <h2 id="步骤-3启动">步骤 3:启动</h2>
       <h3 id="方式-a拉取镜像">方式 A(拉取镜像)</h3>
       <pre><code class="language-bash">sudo docker compose pull      # 下载官方镜像（首次耗时较长）
-      sudo docker compose up -d     # 后台启动六个容器
+      sudo docker compose up -d     # 后台启动六个容器（三个后端服务共用 backend 镜像）
       </code></pre>
       <h3 id="方式-b从源代码构建_1">方式 B(从源代码构建)</h3>
       <pre><code class="language-bash">sudo docker compose up -d     # 首次会自动构建镜像，通常需要几分钟
@@ -269,7 +270,7 @@
       <li>本机:<a href="http://localhost">http://localhost</a></li>
       <li>校内其他电脑:<code>http://&lt;主机的局域网IP&gt;</code>(例如 <code>http://192.168.1.50</code>,IP 用 <code>ipconfig</code> / <code>ip a</code> 查)</li>
       </ul>
-      <p>以 <code>.env</code> 设置的 <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> 登录,系统会要求你<strong>首次改密码</strong>。随后打开“学期与作息时间表”创建当前学期，再到“基础数据”和“校历与排课准备”逐项录入和确认，完成后即可开始创建教学任务。</p>
+      <p>以 <code>.env</code> 设置的 <code>ADMIN_USERNAME</code> / <code>ADMIN_PASSWORD</code> 登录,系统会要求你<strong>首次改密码</strong>。随后进入“排课工作台”，在“学期管理”“校历与准备”“资源与导入”三个辅助工作面完成学期、作息、校历和资源准备，再按工作台步骤创建教学任务。原“学期与作息时间表”“基础数据”“校历与排课准备”地址仍可兼容跳转。</p>
       <hr />
       <h2 id="硬件最低需求">硬件最低需求</h2>
       <div class="tw"><table>

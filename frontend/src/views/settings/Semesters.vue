@@ -12,7 +12,7 @@ import { apiErrorMessage } from '@/api/client'
 import { highRiskConfirmation } from '@/api/highRisk'
 import {
   copySemester, createPeriodTable, createSemester, deletePeriodTable,
-  deleteSemester, getSemester, listSemesters,
+  deleteSemester, getSemester, listSemesters, updateSemester,
 } from '@/api/semesters'
 import type { CopyOptions, SemesterListItem, Semester } from '@/api/semesters'
 import { useAppConfigStore } from '@/stores/appConfig'
@@ -29,6 +29,7 @@ const props = withDefaults(defineProps<{
 })
 const emit = defineEmits<{
   changed: []
+  semestersChanged: [preferredSemesterId?: number]
   editPeriodTable: [id: number]
 }>()
 const message = useMessage()
@@ -49,6 +50,9 @@ const deletingSemesterId = ref<number | null>(null)
 const deletingTableId = ref<number | null>(null)
 const addingTable = ref(false)
 const copying = ref(false)
+const editingDatesSemesterId = ref<number | null>(null)
+const updatingDatesSemesterId = ref<number | null>(null)
+const dateEditor = ref({ start_date: null as string | null, end_date: null as string | null })
 
 const currentYear = new Date().getFullYear()
 const form = ref({
@@ -138,7 +142,7 @@ async function onCreateSemester() {
   if (!canManageSemesters.value || creating.value) return
   creating.value = true
   try {
-    await createSemester({
+    const created = await createSemester({
       academic_year: form.value.academic_year,
       term: form.value.term,
       start_date: form.value.start_date as string,
@@ -146,7 +150,8 @@ async function onCreateSemester() {
     })
     message.success('学期已创建')
     await refreshData()
-    emit('changed')
+    if (props.embedded) emit('semestersChanged', created.id)
+    else emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
@@ -161,7 +166,8 @@ async function onDeleteSemester(id: number) {
     await deleteSemester(id, highRiskConfirmation(`semester:${id}`))
     message.success('学期已删除')
     await refreshData()
-    emit('changed')
+    if (props.embedded) emit('semestersChanged', selectedSemesterId.value ?? undefined)
+    else emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
@@ -229,13 +235,61 @@ function editTable(id: number) {
     emit('editPeriodTable', id)
     return
   }
-  router.push({ name: 'period-table-editor', params: { id } })
+  router.push({
+    name: 'scheduling-workbench',
+    query: { semester: String(owner.id), step: 'periods', table: String(id) },
+  })
 }
 
 async function selectSemester(id: number | null) {
   if (!id || props.embedded) return
   selectedSemesterId.value = id
   await router.replace({ query: { ...route.query, semester: String(id) } })
+}
+
+function beginEditDates(semester: Semester) {
+  if (!canWriteSemester(semester.id)) return
+  editingDatesSemesterId.value = semester.id
+  dateEditor.value = {
+    start_date: semester.start_date,
+    end_date: semester.end_date,
+  }
+}
+
+function cancelEditDates() {
+  editingDatesSemesterId.value = null
+  dateEditor.value = { start_date: null, end_date: null }
+}
+
+async function saveDates(semester: Semester) {
+  if (
+    updatingDatesSemesterId.value !== null
+    || !canWriteSemester(semester.id)
+    || !dateEditor.value.start_date
+    || !dateEditor.value.end_date
+  ) {
+    message.warning('请选择学期的起止日期')
+    return
+  }
+  if (dateEditor.value.start_date > dateEditor.value.end_date) {
+    message.warning('开始日期不能晚于结束日期')
+    return
+  }
+  updatingDatesSemesterId.value = semester.id
+  try {
+    await updateSemester(semester.id, {
+      start_date: dateEditor.value.start_date,
+      end_date: dateEditor.value.end_date,
+    })
+    message.success('学期日期已更新')
+    cancelEditDates()
+    await refreshData()
+    emit('changed')
+  } catch (error) {
+    message.error(apiErrorMessage(error, '学期日期保存失败，请重试。'))
+  } finally {
+    updatingDatesSemesterId.value = null
+  }
 }
 
 const showCopy = ref(false)
@@ -291,7 +345,7 @@ async function onCopy() {
   const endDate = copyForm.value.end_date
   copying.value = true
   try {
-    await copySemester(copySource.value.id, {
+    const created = await copySemester(copySource.value.id, {
       ...copyForm.value,
       start_date: startDate,
       end_date: endDate,
@@ -299,7 +353,8 @@ async function onCopy() {
     showCopy.value = false
     message.success('已复制到新学期')
     await refreshData()
-    emit('changed')
+    if (props.embedded) emit('semestersChanged', created.id)
+    else emit('changed')
   } catch (error) {
     message.error(apiErrorMessage(error, '暂时无法读取学期与作息数据，请重试。').replace('学期与作息数据', '学期'))
   } finally {
@@ -336,7 +391,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
           aria-label="选择工作学期"
           @update:value="selectSemester"
         />
-        <n-button text type="primary" @click="router.push({ name: 'calendar' })">
+        <n-button text type="primary" @click="router.push({ name: 'scheduling-workbench', query: { panel: 'calendar', ...(selectedSemesterId ? { semester: String(selectedSemesterId) } : {}) } })">
           <template #icon><CalendarDays :size="16" aria-hidden="true" /></template>
           {{ '查看校历' }}
         </n-button>
@@ -360,7 +415,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
     </section>
 
     <template v-else>
-      <section v-if="canManageSemesters && !props.embedded" class="settings-panel" data-testid="semester-create-panel">
+      <section v-if="canManageSemesters" class="settings-panel" data-testid="semester-create-panel">
         <div class="settings-panel-heading">
           <div>
             <p class="settings-eyebrow">{{ '新建工作面' }}</p>
@@ -426,10 +481,40 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
                 <n-tag v-if="isCurrentSemester(semester)" type="success" size="small">{{ '当前工作学期' }}</n-tag>
                 <n-tag v-else-if="selectedSemesterId === semester.id" type="info" size="small">{{ '当前查看' }}</n-tag>
               </div>
-              <p>{{ semester.start_date || '未设置开始日期' }} - {{ semester.end_date || '未设置结束日期' }}</p>
+              <div v-if="editingDatesSemesterId === semester.id" class="settings-date-editor" :data-testid="`semester-date-editor-${semester.id}`">
+                <n-date-picker v-model:formatted-value="dateEditor.start_date" value-format="yyyy-MM-dd" type="date" />
+                <span aria-hidden="true">至</span>
+                <n-date-picker v-model:formatted-value="dateEditor.end_date" value-format="yyyy-MM-dd" type="date" />
+                <div class="settings-command-group">
+                  <n-button
+                    size="small"
+                    type="primary"
+                    :data-testid="`semester-save-dates-${semester.id}`"
+                    :loading="updatingDatesSemesterId === semester.id"
+                    :disabled="updatingDatesSemesterId !== null"
+                    @click="saveDates(semester)"
+                  >
+                    {{ '保存日期' }}
+                  </n-button>
+                  <n-button size="small" :disabled="updatingDatesSemesterId !== null" @click="cancelEditDates">{{ '取消' }}</n-button>
+                </div>
+              </div>
+              <div v-else class="settings-semester-dates">
+                <p>{{ semester.start_date || '未设置开始日期' }} - {{ semester.end_date || '未设置结束日期' }}</p>
+                <n-button
+                  v-if="canWriteSemester(semester.id)"
+                  text
+                  size="small"
+                  data-testid="semester-edit-dates"
+                  @click="beginEditDates(semester)"
+                >
+                  <template #icon><Pencil :size="14" aria-hidden="true" /></template>
+                  {{ '编辑日期' }}
+                </n-button>
+              </div>
             </div>
-            <div v-if="!props.embedded" class="settings-command-group">
-              <n-button size="small" @click="router.push({ name: 'calendar', query: { semester: String(semester.id) } })">
+            <div class="settings-command-group">
+              <n-button :data-testid="`semester-calendar-${semester.id}`" size="small" @click="router.push({ name: 'scheduling-workbench', query: { panel: 'calendar', semester: String(semester.id) } })">
                 <template #icon><CalendarDays :size="14" aria-hidden="true" /></template>
                 {{ '校历与排课准备' }}
               </n-button>
@@ -514,7 +599,7 @@ const readinessLabel = (value: string) => (value === 'ready' ? '已确认' : '�
           </div>
           <div class="settings-field">
             <label for="period-table-weekdays">{{ '每周上课天数' }}</label>
-            <n-input-number id="period-table-weekdays" v-model:value="addTableForm.num_weekdays" :min="5" :max="6" />
+            <n-input-number id="period-table-weekdays" v-model:value="addTableForm.num_weekdays" :min="5" :max="7" />
           </div>
           <n-checkbox v-model:checked="addTableForm.is_default">{{ '设为该学期默认作息表' }}</n-checkbox>
           <div class="settings-modal-actions">

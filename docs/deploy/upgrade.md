@@ -12,6 +12,10 @@
 
 沿用旧 Compose 文件而缺少新容器时，系统会立即返回包含处理方法的错误（例如“运维后台服务 worker-ops 未运行，请更新 docker-compose.yml”）。补齐新文件后执行 `sudo docker compose up -d` 即可恢复，数据不受影响。
 
+> **后端镜像名称也随当前架构更新**：新版 Compose 将 `api`、`worker`、`worker-ops` 统一指向 `ghcr.io/sine-io/course_scheduling_system-backend`。从旧版升级时不要只修改 `IMAGE_TAG`；请先替换 `docker-compose.yml`，再执行 `sudo docker compose pull`。旧文件仍引用 `-api`/`-worker` 历史包名，可能拉不到对应的新版本。
+
+如果要回滚到仍使用 `-api`/`-worker` 包名的旧版本，必须把 Compose 文件也回滚到该版本；新旧 Compose 与镜像名称要成对使用。当前未发布版本首次发布后，新的版本标签才会出现在 `-backend` 包中。
+
 ---
 
 ## 方式 A:拉取镜像部署(最常见)
@@ -66,7 +70,7 @@ sudo docker compose up -d --build   # 重新构建并重启
 因为数据与镜像分离,回滚镜像很单纯:
 
 ```bash
-# .env 改回旧版本号,例如 IMAGE_TAG=v1.1.0
+# .env 改回旧版本号,例如 IMAGE_TAG=v1.1.0；同时换回 v1.1.0 的 Compose 文件
 sudo docker compose pull
 sudo docker compose up -d
 ```
@@ -80,6 +84,7 @@ sudo docker compose up -d
 - [ ] 升级前已「立即备份」
 - [ ] 已读该版本 CHANGELOG,确认有无 ⚠️ 破坏性变更
 - [ ] **`docker-compose.yml` 已更新到新版**(容器组成可能有变动)
+- [ ] `api`、`worker`、`worker-ops` 均显示使用同一个 `backend` 镜像
 - [ ] `sudo docker compose pull` 成功拉取新镜像
 - [ ] `sudo docker compose up -d` 后六个容器均为 healthy
 - [ ] `/api/health` 回 ok,登录数据完整

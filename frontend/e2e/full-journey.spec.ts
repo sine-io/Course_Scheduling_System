@@ -68,8 +68,7 @@ test('全流程:建学期 → 自动排课 → 发布 → 请假 → 代课 → 
   await post(page, `/api/timetables?semester_id=${sem.id}`, { name: '草稿A' })
 
   // ── 2) 自动排课(真实走 solver worker,UI 显示进度)──
-  await page.goto('/scheduling/auto')
-  await selectSemester(page, YEAR)
+  await page.goto(`/scheduling/flow?step=start&semester=${sem.id}`)
   await expect(page.getByText('数据检查通过，可以开始排课')).toBeVisible()
   await page.getByTestId('as-start').click()
   await expect(page.getByTestId('as-stop')).toBeEnabled({ timeout: 90_000 })

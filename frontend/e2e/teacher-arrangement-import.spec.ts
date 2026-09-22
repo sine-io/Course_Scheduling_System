@@ -132,10 +132,9 @@ for (const viewport of VIEWPORTS) {
     })
 
     try {
-      await page.goto('/basedata')
-      await expect(page.getByTestId('basedata-template-import')).toBeVisible()
+      await page.goto(`/basedata?tab=template&semester=${semester.id}`)
+      await expect(page.getByTestId('basedata-section-template')).toBeVisible()
       await expect(page.getByText('参考文件', { exact: true })).toHaveCount(0)
-      await page.getByTestId('basedata-template-import').click()
       await expect(page).toHaveURL(/tab=template/)
       await expect(page.getByRole('heading', { name: '教师安排模板' })).toBeVisible()
 

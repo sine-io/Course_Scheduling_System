@@ -3,7 +3,8 @@
 #   sudo docker compose up -d
 #   浏览器开 http://<主机IP>
 #
-# 六个容器:web(Caddy+前端)、api、worker(排课)、worker-ops(导出/备份/定时)、postgres、redis
+# 六个容器:web(Caddy+前端)、api、worker(排课)、worker-ops(导出/备份/定时)、postgres、redis。
+# api、worker 与 worker-ops 共用同一个 backend 镜像，但保持三个独立进程以隔离队列、资源和重启。
 #
 # 两种部署方式,同一份文件:
 #   从源代码构建:sudo docker compose up -d
@@ -39,11 +40,13 @@ services:
       start_period: 20s
 
   api:
-    image: ghcr.io/sine-io/course_scheduling_system-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
-      target: base
+      # worker target 是正式发布的统一 backend 运行时，包含 API 与后台任务所需的完整依赖。
+      target: worker
     restart: unless-stopped
+    command: ["api"]
     env_file: .env
     environment:
       # 让 api 也知道站点地址:设了域名(HTTPS)时自动开启 cookie Secure 标记
@@ -64,7 +67,7 @@ services:
 
   # 排课 worker:守 default 队列。一次自动排课可占住它好几分钟,这是预期行为。
   worker:
-    image: ghcr.io/sine-io/course_scheduling_system-worker:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: worker
@@ -82,7 +85,7 @@ services:
   # 运维 worker:守 ops 队列(导出/备份/恢复/发送邮件),并兼任定时任务调度器。
   # 存在的理由:排课那几分钟,正是排课管理员最常按「导出课表」的时候——不该排在排课后面等。
   worker-ops:
-    image: ghcr.io/sine-io/course_scheduling_system-worker:${IMAGE_TAG:-latest}
+    image: ghcr.io/sine-io/course_scheduling_system-backend:${IMAGE_TAG:-latest}
     build:
       context: ./backend
       target: worker

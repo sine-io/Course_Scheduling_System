@@ -32,8 +32,8 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
 ]
-# 导出(M5-1 起):PDF 生成。系统依赖(Pango 等)与中文字体只装在 worker 镜像;
-# api 镜像保持精简,导出统一走后台任务(worker)。见 Dockerfile 的 worker 阶段。
+# 导出(M5-1 起):PDF 生成。系统依赖(Pango 等)与中文字体随统一 backend 镜像安装;
+# 导出仍统一走后台任务(worker)，base target 仅保留为可复用的内部基础层。见 Dockerfile 的 worker 阶段。
 export = [
     "weasyprint>=63",
 ]

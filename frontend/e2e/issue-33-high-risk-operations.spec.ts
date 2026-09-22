@@ -61,8 +61,7 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     expect(subjectResponse.ok()).toBeTruthy()
     const subject = await subjectResponse.json() as { id: number }
 
-    await page.goto('/basedata')
-    await page.getByTestId('manual-section-subjects').click()
+    await page.goto(`/scheduling/flow?step=subjects&view=archive&semester=${semester.id}`)
     await expect(page.getByRole('cell', { name: '高风险边界测试科目' })).toBeVisible()
     await expect(page.getByTestId(`subject-delete-${subject.id}`)).toHaveCount(0)
 
@@ -241,8 +240,7 @@ test.describe('Issue #33 管理员高风险操作保护与审计', () => {
     expect(firstResponse.ok()).toBeTruthy()
     const first = await firstResponse.json() as { id: number }
 
-    await page.goto('/basedata')
-    await page.getByTestId('manual-section-subjects').click()
+    await page.goto(`/scheduling/flow?step=subjects&view=archive&semester=${semester.id}`)
     const deleteButton = page.getByTestId(`subject-delete-${first.id}`)
     await deleteButton.click()
     const deletePopover = page.locator('.n-popover')

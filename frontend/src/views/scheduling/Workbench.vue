@@ -724,8 +724,8 @@ function onKey(event: KeyboardEvent) {
     <section v-else-if="!sid" class="scheduling-state" data-testid="workbench-empty">
       <Clock3 :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建可用学期' }}</strong>
-      <span>{{ '先创建学期和作息时间表，再进入课程表调整。' }}</span>
-      <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+      <span>{{ '先在排课工作台中创建学期和作息时间表，再进入课程表调整。' }}</span>
+      <n-button type="primary" @click="router.push({ name: 'scheduling-workbench' })">{{ '前往排课工作台' }}</n-button>
     </section>
 
     <template v-else>
@@ -831,15 +831,15 @@ function onKey(event: KeyboardEvent) {
       <section v-else-if="classes.length === 0" class="scheduling-state workbench-inline-state" data-testid="workbench-no-classes">
         <ShieldCheck :size="22" aria-hidden="true" />
         <strong>{{ '当前学期还没有班级' }}</strong>
-        <span>{{ '先在“开始排课”的设置班级步骤中维护班级，工作台会按班级显示待排课程。' }}</span>
-        <n-button type="primary" @click="router.push({ name: 'scheduling-flow', query: { step: 'classes', ...(sid ? { semester: String(sid) } : {}) } })">{{ '前往设置班级' }}</n-button>
+        <span>{{ '先在“排课工作台”的设置班级步骤中维护班级，工作台会按班级显示待排课程。' }}</span>
+        <n-button type="primary" @click="router.push({ name: 'scheduling-workbench', query: { step: 'classes', ...(sid ? { semester: String(sid) } : {}) } })">{{ '前往设置班级' }}</n-button>
       </section>
 
       <section v-else-if="periods.length === 0" class="scheduling-state workbench-inline-state" data-testid="workbench-no-periods">
         <Clock3 :size="22" aria-hidden="true" />
         <strong>{{ '当前学期还没有作息时间表' }}</strong>
         <span>{{ '配置可排课节次后，课表网格会显示在这里。' }}</span>
-        <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+        <n-button type="primary" @click="router.push({ name: 'scheduling-workbench', query: { step: 'periods', ...(sid ? { semester: String(sid) } : {}) } })">{{ '前往设置课时' }}</n-button>
       </section>
 
       <div v-else class="workbench-layout" data-testid="workbench-workspace">

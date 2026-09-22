@@ -8,16 +8,20 @@ import { useAuthStore } from '@/stores/auth'
 import SchedulingFlow from './SchedulingFlow.vue'
 
 const semesterMocks = vi.hoisted(() => ({
+  createSemester: vi.fn(),
   getPeriodSetup: vi.fn(),
   getSemester: vi.fn(),
   getSemesterContext: vi.fn(),
   listSemesters: vi.fn(),
 }))
 const assignmentMocks = vi.hoisted(() => ({
+  classLoad: vi.fn(),
   listAssignments: vi.fn(),
 }))
 const basedataMocks = vi.hoisted(() => ({
+  createSubject: vi.fn(),
   listClassUnits: vi.fn(),
+  listSubjects: vi.fn(),
   listTeachers: vi.fn(),
 }))
 const solverMocks = vi.hoisted(() => ({
@@ -71,7 +75,7 @@ function makeRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/scheduling/flow', name: 'scheduling-flow', component: SchedulingFlow },
+      { path: '/scheduling/flow', name: 'scheduling-workbench', component: SchedulingFlow },
       { path: '/basedata', name: 'basedata', component: { template: '<main />' } },
       { path: '/settings/semesters', name: 'semesters', component: { template: '<main />' } },
       { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main />' } },
@@ -106,13 +110,20 @@ async function mountFlow() {
         Assignments: { template: '<div data-testid="embedded-assignments" />' },
         AutoSchedule: { template: '<div data-testid="embedded-auto-schedule" />' },
         ClassesTab: { template: '<div data-testid="embedded-classes" />' },
+        SubjectsTab: { template: '<div data-testid="embedded-subjects" />' },
+        TeachersTab: { template: '<div data-testid="embedded-teachers" />' },
+        SchedulingSupportWorkspace: {
+          props: ['panel', 'semesterId', 'resourceSection'],
+          emits: ['back', 'changed', 'semestersChanged', 'editPeriodTable'],
+          template: '<section data-testid="flow-support-panel"><span data-testid="flow-support-panel-name">{{ panel }}</span><button data-testid="flow-support-back" @click="$emit(\'back\')">返回</button></section>',
+        },
         PeriodTableEditor: {
           emits: ['back'],
           template: '<button data-testid="embedded-period-editor" @click="$emit(\'back\')" />',
         },
-        Semesters: {
-          emits: ['edit-period-table'],
-          template: '<button data-testid="embedded-semesters" @click="$emit(\'edit-period-table\', 12)" />',
+        PeriodSetupWorkspace: {
+          emits: ['changed', 'edit-period-table'],
+          template: '<div><button data-testid="embedded-period-setup" @click="$emit(\'edit-period-table\', 12)" /><button data-testid="embedded-period-setup-changed" @click="$emit(\'changed\')" /></div>',
         },
       },
     },
@@ -124,6 +135,15 @@ async function mountFlow() {
 describe('SchedulingFlow', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    basedataMocks.createSubject.mockResolvedValue({
+      id: 3,
+      semester_id: semester.id,
+      name: '数学',
+      domain: '数学',
+      required_room_type: null,
+      default_block_size: 1,
+      is_major: true,
+    })
     semesterMocks.getSemesterContext.mockResolvedValue({
       current_semester: semester,
       revision: 1,
@@ -150,6 +170,7 @@ describe('SchedulingFlow', () => {
       }],
     })
     basedataMocks.listClassUnits.mockResolvedValue([classUnit])
+    basedataMocks.listSubjects.mockResolvedValue([{ id: 2, semester_id: semester.id, name: '语文' }])
     basedataMocks.listTeachers.mockResolvedValue([])
     assignmentMocks.listAssignments.mockResolvedValue([{
       id: 18,
@@ -168,6 +189,14 @@ describe('SchedulingFlow', () => {
       lock_room: false,
       teachers: [],
       block_rules: [],
+    }])
+    assignmentMocks.classLoad.mockResolvedValue([{
+      class_id: classUnit.id,
+      name: classUnit.name,
+      grade: classUnit.grade,
+      assigned: 5,
+      capacity: 5,
+      over_capacity: false,
     }])
     solverMocks.preflight.mockResolvedValue(report)
     semesterMocks.getPeriodSetup.mockResolvedValue({
@@ -204,25 +233,250 @@ describe('SchedulingFlow', () => {
 
     await wrapper.get('[data-testid="flow-go-teachers"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
     expect(router.currentRoute.value.query).toMatchObject({ step: 'teachers', semester: '7' })
     expect(wrapper.get('[data-testid="flow-embedded-step"]').text()).toContain('教师任课')
     expect(wrapper.find('[data-testid="scheduling-flow-steps"]').exists()).toBe(false)
 
+    await wrapper.get('[data-testid="flow-teachers-archive"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ step: 'teachers', semester: '7', view: 'archive' })
+    expect(wrapper.find('[data-testid="embedded-teachers"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="embedded-assignments"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="flow-teachers-work"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.view).toBeUndefined()
+    expect(wrapper.find('[data-testid="embedded-assignments"]').exists()).toBe(true)
+
     await wrapper.get('[data-testid="flow-step-back"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
     expect(router.currentRoute.value.query.step).toBeUndefined()
     expect(wrapper.find('[data-testid="scheduling-flow-steps"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('keeps class, period, and subject setup on the scheduling-flow route', async () => {
+  it.each([
+    ['no_period_table', 'periods'],
+    ['period_table_missing', 'periods'],
+    ['regular_period_missing', 'periods'],
+    ['period_time_invalid', 'periods'],
+    ['class_period_table_missing', 'periods'],
+    ['class_period_capacity_exceeded', 'periods'],
+    ['assignment_without_teacher', 'teachers'],
+    ['assignment_teacher_missing', 'teachers'],
+    ['teacher_overload', 'teachers'],
+    ['assignment_without_class', 'subjects'],
+    ['class_assignment_periods_mismatch', 'subjects'],
+    ['group_shape_mismatch', 'subjects'],
+    ['class_overload', 'subjects'],
+    ['block_infeasible', 'subjects'],
+    ['block_exceeds_periods', 'subjects'],
+  ])('routes the %s preflight blocker to the %s step', async (code, step) => {
+    solverMocks.preflight.mockResolvedValue({
+      ...report,
+      issues: [{
+        ...report.issues[0],
+        code,
+        subject_type: code === 'teacher_overload' ? 'teacher' : 'assignment',
+      }],
+    })
+
+    const { router, wrapper } = await mountFlow()
+
+    await wrapper.get('[data-testid="flow-go-issue"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toMatchObject({ step, semester: '7' })
+
+    wrapper.unmount()
+  })
+
+  it.each(['semester_dates_missing', 'semester_dates_invalid'])(
+    'routes the %s readiness blocker to semester maintenance',
+    async (code) => {
+      solverMocks.preflight.mockResolvedValue({
+        ...report,
+        issues: [{
+          ...report.issues[0],
+          code,
+          subject_type: 'semester',
+        }],
+      })
+
+      const { router, wrapper } = await mountFlow()
+
+      expect(wrapper.get('[data-testid="flow-go-issue"]').text()).toContain('维护学期日期')
+      await wrapper.get('[data-testid="flow-go-issue"]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+      expect(router.currentRoute.value.query).toEqual({ panel: 'semester', semester: '7' })
+
+      wrapper.unmount()
+    },
+  )
+
+  it('routes room preflight blockers to room maintenance', async () => {
+    solverMocks.preflight.mockResolvedValue({
+      ...report,
+      issues: [{
+        ...report.issues[0],
+        code: 'room_no_candidate',
+        message: '没有可用的实验室',
+        subject_type: 'room',
+      }],
+    })
+
+    const { router, wrapper } = await mountFlow()
+
+    expect(wrapper.get('[data-testid="flow-go-issue"]').text()).toContain('管理教室/场地')
+    await wrapper.get('[data-testid="flow-go-issue"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toMatchObject({ panel: 'resources', resource: 'rooms', semester: '7' })
+
+    wrapper.unmount()
+  })
+
+  it('opens semester, calendar, and resource support surfaces from the workbench overview', async () => {
+    const { router, wrapper } = await mountFlow()
+
+    expect(wrapper.get('[data-testid="flow-support-surfaces"]').text()).toContain('学期管理')
+    expect(wrapper.find('[data-testid="flow-open-semester-support"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="flow-open-calendar-support"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="flow-open-resources-support"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="flow-open-calendar-support"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ panel: 'calendar', semester: '7' })
+    expect(wrapper.get('[data-testid="flow-support-panel-name"]').text()).toBe('calendar')
+
+    await wrapper.get('[data-testid="flow-support-back"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ semester: '7' })
+    expect(wrapper.find('[data-testid="flow-support-panel"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('reloads all semester-scoped readiness data after a URL semester switch', async () => {
+    const otherSemester = {
+      ...semester,
+      id: 8,
+      label: '2042-2043学年第二学期',
+      term: 2,
+      is_current: false,
+    }
+    semesterMocks.listSemesters.mockResolvedValue([semester, otherSemester])
+    semesterMocks.getSemester.mockImplementation(async (id: number) => ({
+      ...(id === otherSemester.id ? otherSemester : semester),
+      period_tables: [],
+    }))
+    basedataMocks.listClassUnits.mockImplementation(async (id: number) => ([{
+      ...classUnit,
+      semester_id: id,
+      id: id === otherSemester.id ? 81 : classUnit.id,
+    }]))
+    basedataMocks.listSubjects.mockImplementation(async (id: number) => ([{
+      id: id === otherSemester.id ? 82 : 2,
+      semester_id: id,
+      name: id === otherSemester.id ? '英语' : '语文',
+    }]))
+    basedataMocks.listTeachers.mockImplementation(async () => [])
+    assignmentMocks.listAssignments.mockImplementation(async (id: number) => {
+      const other = id === otherSemester.id
+      const classId = other ? 81 : classUnit.id
+      const className = other ? '702班' : classUnit.name
+      return [{
+        id: other ? 88 : 18,
+        semester_id: id,
+        scheduling_unit: {
+          id: other ? 89 : 8,
+          semester_id: id,
+          unit_type: 'single',
+          name: className,
+          classes: [{ id: classId, name: className, grade: 7 }],
+        },
+        subject: { id: other ? 82 : 2, name: other ? '英语' : '语文' },
+        periods_per_week: 5,
+        required_room_type: null,
+        room_id: null,
+        lock_room: false,
+        teachers: [],
+        block_rules: [],
+      }]
+    })
+    solverMocks.preflight.mockImplementation(async (id: number) => ({
+      ...report,
+      semester_id: id,
+      semester_label: id === otherSemester.id ? otherSemester.label : semester.label,
+    }))
+    semesterMocks.getPeriodSetup.mockImplementation(async (id: number) => ({
+      fingerprint: String(id),
+      source: 'existing',
+      classes: [],
+      groups: [],
+      unresolved_class_ids: [],
+      ready: true,
+      blockers: [],
+      warnings: [],
+    }))
+
+    const { router, wrapper } = await mountFlow()
+    await router.push({ name: 'scheduling-workbench', query: { semester: String(otherSemester.id) } })
+    await flushPromises()
+
+    expect(semesterMocks.getSemester).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(basedataMocks.listClassUnits).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(basedataMocks.listSubjects).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(basedataMocks.listTeachers).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(assignmentMocks.listAssignments).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(solverMocks.preflight).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(semesterMocks.getPeriodSetup).toHaveBeenLastCalledWith(otherSemester.id)
+    expect(wrapper.get('[data-testid="flow-summary"]').text()).toContain(otherSemester.label)
+
+    wrapper.unmount()
+  })
+
+  it('keeps the subject archive in the subject-periods step and allows teacher archive before assignments exist', async () => {
+    assignmentMocks.listAssignments.mockResolvedValue([])
+
+    const { router, wrapper } = await mountFlow()
+
+    expect(wrapper.get('[data-testid="flow-step-teachers"]').classes()).toContain('is-blocked')
+    expect(wrapper.get('[data-testid="flow-go-teachers"]').attributes('disabled')).toBeUndefined()
+
+    await wrapper.get('[data-testid="flow-go-subjects"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="flow-subjects-archive"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ step: 'subjects', semester: '7', view: 'archive' })
+    expect(wrapper.find('[data-testid="flow-subject-archive"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="manual-common-subjects"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="embedded-subjects"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="manual-common-数学"]').trigger('click')
+    await wrapper.get('[data-testid="manual-common-confirm"]').trigger('click')
+    await flushPromises()
+    expect(basedataMocks.createSubject).toHaveBeenCalledWith(7, expect.objectContaining({ name: '数学' }))
+
+    await wrapper.get('[data-testid="flow-step-back"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="flow-go-teachers"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toMatchObject({ step: 'teachers', semester: '7', view: 'archive' })
+    expect(wrapper.find('[data-testid="embedded-teachers"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('keeps class, period, and subject setup on the scheduling-workbench route', async () => {
     const { router, wrapper } = await mountFlow()
     const steps = [
       ['classes', 'embedded-classes'],
-      ['periods', 'embedded-semesters'],
+      ['periods', 'embedded-period-setup'],
       ['subjects', 'embedded-assignments'],
     ] as const
 
@@ -230,7 +484,7 @@ describe('SchedulingFlow', () => {
       await wrapper.get(`[data-testid="flow-go-${step}"]`).trigger('click')
       await flushPromises()
 
-      expect(router.currentRoute.value.name).toBe('scheduling-flow')
+      expect(router.currentRoute.value.name).toBe('scheduling-workbench')
       expect(router.currentRoute.value.query).toMatchObject({ step, semester: '7' })
       expect(wrapper.find(`[data-testid="${embeddedTestId}"]`).exists()).toBe(true)
 
@@ -247,10 +501,10 @@ describe('SchedulingFlow', () => {
 
     await wrapper.get('[data-testid="flow-go-periods"]').trigger('click')
     await flushPromises()
-    await wrapper.get('[data-testid="embedded-semesters"]').trigger('click')
+    await wrapper.get('[data-testid="embedded-period-setup"]').trigger('click')
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
     expect(router.currentRoute.value.query).toMatchObject({ step: 'periods', table: '12', semester: '7' })
     expect(wrapper.find('[data-testid="embedded-period-editor"]').exists()).toBe(true)
 
@@ -259,6 +513,20 @@ describe('SchedulingFlow', () => {
     expect(router.currentRoute.value.query.step).toBeUndefined()
     expect(router.currentRoute.value.query.table).toBeUndefined()
     expect(wrapper.find('[data-testid="scheduling-flow-steps"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('reloads readiness after the period setup workspace changes data', async () => {
+    const { wrapper } = await mountFlow()
+    await wrapper.get('[data-testid="flow-go-periods"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="embedded-period-setup-changed"]').trigger('click')
+    await flushPromises()
+
+    expect(semesterMocks.getSemester).toHaveBeenLastCalledWith(semester.id)
+    expect(assignmentMocks.classLoad).toHaveBeenLastCalledWith(semester.id)
+    expect(wrapper.find('[data-testid="embedded-period-setup"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
@@ -287,7 +555,86 @@ describe('SchedulingFlow', () => {
     const { wrapper } = await mountFlow()
 
     expect(wrapper.get('[data-testid="flow-step-periods"]').classes()).toContain('is-active')
-    expect(wrapper.get('[data-testid="flow-step-subjects"]').classes()).toContain('is-done')
+    expect(wrapper.get('[data-testid="flow-step-subjects"]').classes()).toContain('is-blocked')
+
+    wrapper.unmount()
+  })
+
+  it('blocks the next scheduling step when class course load exceeds regular capacity', async () => {
+    assignmentMocks.classLoad.mockResolvedValue([{
+      class_id: classUnit.id,
+      name: classUnit.name,
+      grade: classUnit.grade,
+      assigned: 6,
+      capacity: 5,
+      over_capacity: true,
+    }])
+
+    const { wrapper } = await mountFlow()
+
+    expect(wrapper.get('[data-testid="flow-step-periods"]').classes()).toContain('is-active')
+    expect(wrapper.get('[data-testid="flow-step-subjects"]').classes()).toContain('is-blocked')
+    expect(wrapper.get('[data-testid="flow-step-teachers"]').classes()).toContain('is-blocked')
+    expect(wrapper.get('[data-testid="flow-step-periods"]').text()).toContain('常规容量仅 5 节')
+    expect(wrapper.get('[data-testid="flow-start"]').attributes('disabled')).toBeDefined()
+
+    wrapper.unmount()
+  })
+
+  it('creates the first semester inside the workbench without navigating to settings', async () => {
+    const created = { ...semester }
+    semesterMocks.getSemesterContext
+      .mockResolvedValueOnce({ current_semester: null, revision: 0, can_switch: false })
+      .mockResolvedValue({ current_semester: created, revision: 1, can_switch: false })
+    semesterMocks.listSemesters
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([created])
+    semesterMocks.createSemester.mockResolvedValue(created)
+
+    const { router, wrapper } = await mountFlow()
+
+    expect(wrapper.get('[data-testid="flow-empty"]').text()).toContain('创建学期')
+    const datePickers = wrapper.findAll('.n-date-picker')
+    expect(datePickers.length).toBe(2)
+    await datePickers[0].find('input').setValue('2042-09-01')
+    await datePickers[1].find('input').setValue('2043-01-31')
+    await flushPromises()
+    await wrapper.get('[data-testid="flow-semester-create"]').trigger('click')
+    await flushPromises()
+
+    expect(semesterMocks.createSemester).toHaveBeenCalledWith({
+      academic_year: expect.any(Number),
+      term: 1,
+      start_date: '2042-09-01',
+      end_date: '2043-01-31',
+    })
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toMatchObject({ semester: '7' })
+    expect(wrapper.find('[data-testid="flow-empty"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="flow-summary"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('keeps the in-place form available when semester creation fails', async () => {
+    semesterMocks.getSemesterContext.mockResolvedValueOnce({
+      current_semester: null,
+      revision: 0,
+      can_switch: false,
+    })
+    semesterMocks.listSemesters.mockResolvedValue([])
+    semesterMocks.createSemester.mockRejectedValue({ detail: '该学年学期已存在' })
+
+    const { wrapper } = await mountFlow()
+    const datePickers = wrapper.findAll('.n-date-picker')
+    await datePickers[0].find('input').setValue('2042-09-01')
+    await datePickers[1].find('input').setValue('2043-01-31')
+    await flushPromises()
+    await wrapper.get('[data-testid="flow-semester-create"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="flow-empty"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="flow-semester-create-form"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

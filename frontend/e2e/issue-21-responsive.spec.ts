@@ -175,6 +175,33 @@ async function mockApplication(
     }
     if (path === '/api/semesters') return fulfillJson(route, [SEMESTER])
     if (path === `/api/semesters/${SEMESTER.id}`) return fulfillJson(route, { ...SEMESTER, period_tables: [PERIOD_TABLE] })
+    if (path === '/api/class-units') return fulfillJson(route, [{
+      id: 301,
+      semester_id: SEMESTER.id,
+      grade: 7,
+      name: '1班',
+      track: 'junior_high',
+      period_table_id: PERIOD_TABLE.id,
+    }])
+    if (path === '/api/subjects') return fulfillJson(route, [{ id: 501, semester_id: SEMESTER.id, name: '语文' }])
+    if (path === '/api/teachers') return fulfillJson(route, [{ id: 401, semester_id: SEMESTER.id, name: '陈老师' }])
+    if (path === '/api/assignments') return fulfillJson(route, [{
+      id: 501,
+      semester_id: SEMESTER.id,
+      scheduling_unit: { id: 701, unit_type: 'single', name: '七年级1班', classes: [{ id: 301, name: '1班', grade: 7 }] },
+      subject: { id: 501, name: '语文' },
+      periods_per_week: 3,
+      teachers: [{ teacher_id: 401, is_lead: true, name: '陈老师' }],
+      block_rules: [],
+    }])
+    if (path === '/api/assignments/class-load') return fulfillJson(route, [{
+      class_id: 301,
+      name: '1班',
+      grade: 7,
+      assigned: 3,
+      capacity: 14,
+      over_capacity: false,
+    }])
     if (path === '/api/timetables' && request.method() === 'GET') return fulfillJson(route, TIMETABLES)
     if (path === '/api/solver/relaxable') return fulfillJson(route, [])
     if (path === '/api/solver/preflight') return fulfillJson(route, {
@@ -234,7 +261,7 @@ for (const viewport of VIEWPORTS) {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await mockApplication(page)
 
-    await page.goto('/scheduling/auto')
+    await page.goto('/scheduling/flow?step=start&semester=71')
     await expect(page.getByTestId('auto-schedule-page')).toBeVisible()
     await expect(page.getByLabel('选择工作学期')).toBeVisible()
     await expect(page.getByTestId('as-constraints')).toBeVisible()
@@ -286,7 +313,7 @@ test('教务主任看到自动排课和课表版本管理入口', async ({ page 
   await page.setViewportSize({ width: 1280, height: 800 })
   await mockApplication(page, ['director'])
 
-  await page.goto('/scheduling/auto')
+  await page.goto('/scheduling/flow?step=start&semester=71')
   await expect(page.getByTestId('as-restricted')).toHaveCount(0)
   await expect(page.getByTestId('as-start')).toBeEnabled()
 
@@ -318,7 +345,7 @@ test('自动排课离页时忽略迟到轮询，返回后恢复真实终态', as
   await page.setViewportSize({ width: 1280, height: 800 })
   const state = await mockApplication(page, USER.roles, { solveLifecycle: true })
 
-  await page.goto('/scheduling/auto')
+  await page.goto('/scheduling/flow?step=start&semester=71')
   await page.getByTestId('as-start').click()
   await expect(page.getByTestId('as-status')).toHaveText('排课中')
   await expect.poll(() => state.jobReads).toBeGreaterThanOrEqual(2)
@@ -327,7 +354,7 @@ test('自动排课离页时忽略迟到轮询，返回后恢复真实终态', as
   await page.waitForTimeout(650)
   await expect(page.getByText('已生成“自动排课结果”')).toHaveCount(0)
 
-  await page.goto('/scheduling/auto')
+  await page.goto('/scheduling/flow?step=start&semester=71')
   await expect(page.getByTestId('as-status')).toHaveText('已完成')
   await expect(page.getByTestId('as-done')).toContainText('自动排课结果')
 })

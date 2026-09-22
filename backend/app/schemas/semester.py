@@ -10,7 +10,7 @@ from app.models.semester import SemesterReadiness, SemesterStatus
 
 # ── 节次 ──────────────────────────────
 class PeriodIn(BaseModel):
-    weekday: int = Field(ge=1, le=6)
+    weekday: int = Field(ge=1, le=7)
     period_no: int = Field(ge=1)
     name: str = Field(min_length=1, max_length=32)
     start_time: time | None = None
@@ -24,7 +24,7 @@ class PeriodSetupPatternIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     period_no: int = Field(ge=1)
-    weekdays: list[int] = Field(min_length=1, max_length=6)
+    weekdays: list[int] = Field(min_length=1, max_length=7)
     name: str = Field(min_length=1, max_length=32)
     start_time: time | None = None
     end_time: time | None = None
@@ -33,9 +33,9 @@ class PeriodSetupPatternIn(BaseModel):
     @model_validator(mode="after")
     def _validate_weekdays_and_times(self) -> "PeriodSetupPatternIn":
         if len(set(self.weekdays)) != len(self.weekdays) or any(
-            weekday < 1 or weekday > 6 for weekday in self.weekdays
+            weekday < 1 or weekday > 7 for weekday in self.weekdays
         ):
-            raise ValueError("工作日必须是 1~6 且不可重复")
+            raise ValueError("工作日必须是 1~7 且不可重复")
         if (self.start_time is None) != (self.end_time is None):
             raise ValueError("开始时间和结束时间需要成对填写")
         if self.start_time is not None and self.end_time is not None:
@@ -52,7 +52,7 @@ class PeriodSetupGroupIn(BaseModel):
     key: str = Field(min_length=1, max_length=64)
     table_id: int | None = Field(default=None, gt=0)
     name: str = Field(min_length=1, max_length=64)
-    num_weekdays: int = Field(default=5, ge=5, le=6)
+    num_weekdays: int = Field(default=5, ge=5, le=7)
     is_default: bool = False
     class_ids: list[int] = []
     periods: list[PeriodSetupPatternIn] = []
@@ -110,7 +110,7 @@ class PeriodTableCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=64)
-    num_weekdays: int = Field(default=5, ge=5, le=6)
+    num_weekdays: int = Field(default=5, ge=5, le=7)
     is_default: bool = False
 
 

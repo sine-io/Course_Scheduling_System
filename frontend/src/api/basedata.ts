@@ -25,6 +25,7 @@ export interface Teacher {
   id: number
   semester_id: number
   name: string
+  id_last4?: string | null
   base_periods: number
   admin_title: string | null
   admin_reduction: number

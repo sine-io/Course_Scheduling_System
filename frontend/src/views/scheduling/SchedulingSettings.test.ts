@@ -120,7 +120,7 @@ async function mountEditor() {
     history: createMemoryHistory(),
     routes: [
       { path: '/scheduling/settings', name: 'scheduling-settings', component: { template: '<main />' } },
-      { path: '/scheduling/flow', name: 'scheduling-flow', component: { template: '<main />' } },
+      { path: '/scheduling/flow', name: 'scheduling-workbench', component: { template: '<main />' } },
     ],
   })
   await router.push({ name: 'scheduling-settings' })

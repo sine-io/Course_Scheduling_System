@@ -16,11 +16,10 @@ const DIRECTOR_ROUTES = [
   ['/settings/semesters', '学期与作息时间表'],
   ['/settings/calendar', '校历与排课准备'],
   ['/basedata', '基础数据'],
-  ['/scheduling/assignments', '教学任务管理'],
+  ['/scheduling/flow', '排课工作台'],
   ['/timetable-query', '课表查询'],
   ['/notifications', '通知'],
   ['/scheduling/workbench', '排课工作台'],
-  ['/scheduling/auto', '自动排课'],
   ['/leaves', '请假登记'],
   ['/substitutions', '调课与代课处理'],
   ['/notifications?view=board', '通知'],
@@ -107,7 +106,7 @@ for (const [viewportIndex, viewport] of VIEWPORTS.entries()) {
 
     const routes = [
       ...DIRECTOR_ROUTES,
-      [`/settings/period-tables/${periodTableId}`, '作息时间表'] as const,
+      [`/scheduling/flow?step=periods&table=${periodTableId}&semester=${semester.id}`, '设置课时'] as const,
     ]
 
     try {

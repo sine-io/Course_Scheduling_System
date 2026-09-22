@@ -52,7 +52,7 @@ test.describe('页面加载性能(60 班)', () => {
     await page.close()
   })
 
-  test('教学任务页、排课工作台与课表查询页加载 p95 < 2s', async ({ page }) => {
+  test('排课工作台、课程表调整与课表查询页加载 p95 < 2s', async ({ page }) => {
     test.setTimeout(300_000)
     await login(page)
     await deleteSemesterByYearTerm(page, YEAR, 1)
@@ -66,15 +66,15 @@ test.describe('页面加载性能(60 班)', () => {
     // 先暖机一次(加载 SPA bundle),之后测量「应用内导航」——这才是用户实际感受的
     // 页面切换延迟。整包 bundle 的冷启动下载成本另记为信息性数据(见 tasks.md bundle 待办)。
     const t0cold = Date.now()
-    await page.goto(`/scheduling/assignments?semester_id=${sem.id}`,
+    await page.goto(`/scheduling/flow?step=subjects&semester=${sem.id}`,
       { waitUntil: 'domcontentloaded' })
-    await page.getByRole('heading', { name: /教学任务/ }).first().waitFor({ state: 'visible' })
+    await page.getByRole('heading', { name: /科目节数/ }).first().waitFor({ state: 'visible' })
     await page.waitForLoadState('networkidle')
     console.log(`[perf] 冷启动首载(含 bundle)=${Date.now() - t0cold}ms(信息性)`)
 
     const cases: [string, RegExp][] = [
-      ['教学任务', /教学任务/],
       ['排课工作台', /排课工作台/],
+      ['课程表调整', /排课工作台/],
       ['课表查询', /课表查询/],
     ]
 

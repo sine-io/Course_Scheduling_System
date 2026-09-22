@@ -362,7 +362,7 @@ def _esc(s: str) -> str:
 
 
 def grid_to_html(grid: Grid, meta: Meta) -> str:
-    """单一对象的 A4 纵向课表 HTML。中文由 worker 镜像内嵌的 Noto CJK 呈现。"""
+    """单一对象的 A4 纵向课表 HTML。中文由 backend 镜像内嵌的 Noto CJK 呈现。"""
     head_cells = "".join(f"<th>{_esc(w)}</th>" for w in grid.weekday_names)
     period_label = _esc(school_rules.export_label("period"))
     subtitle = (

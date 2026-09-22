@@ -90,7 +90,7 @@ class BindableAccount(BaseModel):
 
 
 class TeacherTimeRuleIn(BaseModel):
-    weekday: int = Field(ge=1, le=6)
+    weekday: int = Field(ge=1, le=7)
     period_no: int = Field(ge=1)
     rule_type: TeacherRuleType
 

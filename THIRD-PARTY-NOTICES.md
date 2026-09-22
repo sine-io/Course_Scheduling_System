@@ -23,7 +23,9 @@
 | OR-Tools | Apache-2.0 |
 | WeasyPrint(worker 导出用) | BSD-3-Clause |
 
-## worker 镜像的系统组件(Debian,以系统程序库或子进程使用)
+## backend 镜像的系统组件(Debian,以系统程序库或子进程使用)
+
+以下组件随统一的 backend 镜像发布；API、worker 与 worker-ops 共用这套运行时，只有实际执行导出或备份的进程会调用相应程序。
 
 | 组件 | 授权 | 使用方式 |
 |---|---|---|

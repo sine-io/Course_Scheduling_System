@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteLocationGeneric } from 'vue-router'
 import {
   canUseDaily,
   canViewCore,
@@ -16,6 +17,27 @@ const templateImportPrototypeComponent = () => import('@/views/prototypes/Templa
 const templateImportPrototypeMeta = { public: true, prototype: true }
 const paikeFlowPrototypeComponent = () => import('@/views/prototypes/PaikeFlowPrototype.vue')
 const paikeFlowPrototypeMeta = { public: true, prototype: true }
+const schedulingWorkbenchPrototypeComponent = () => import('@/views/prototypes/SchedulingWorkbenchPrototype.vue')
+const schedulingWorkbenchPrototypeMeta = { public: true, prototype: true }
+
+function firstQueryValue(value: unknown): string | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
+}
+
+function positiveQueryId(value: unknown): string | undefined {
+  const candidate = firstQueryValue(value)
+  return candidate && /^\d+$/.test(candidate) && Number(candidate) > 0 ? candidate : undefined
+}
+
+function workbenchQuery(to: RouteLocationGeneric, target: Record<string, string | undefined>) {
+  const semester = positiveQueryId(to.query.semester)
+    ?? positiveQueryId(to.query.semester_id)
+  return {
+    name: 'scheduling-workbench',
+    query: { ...target, ...(semester ? { semester } : {}) },
+  }
+}
 
 const routes = [
   {
@@ -63,6 +85,25 @@ const routes = [
     redirect: { name: 'paike-flow-prototype', query: { variant: 'C' } },
   },
   {
+    // Throwaway UI prototype: five-step scheduling workbench with in-memory sample data.
+    path: '/prototype/scheduling-workbench',
+    name: 'scheduling-workbench-prototype',
+    component: schedulingWorkbenchPrototypeComponent,
+    meta: schedulingWorkbenchPrototypeMeta,
+  },
+  {
+    path: '/prototype/scheduling-workbench/a',
+    redirect: { name: 'scheduling-workbench-prototype', query: { variant: 'A' } },
+  },
+  {
+    path: '/prototype/scheduling-workbench/b',
+    redirect: { name: 'scheduling-workbench-prototype', query: { variant: 'B' } },
+  },
+  {
+    path: '/prototype/scheduling-workbench/c',
+    redirect: { name: 'scheduling-workbench-prototype', query: { variant: 'C' } },
+  },
+  {
     path: '/change-password',
     name: 'change-password',
     component: () => import('@/views/ChangePassword.vue'),
@@ -87,31 +128,53 @@ const routes = [
       {
         path: 'settings/semesters',
         name: 'semesters',
-        component: () => import('@/views/settings/Semesters.vue'),
+        redirect: (to: RouteLocationGeneric) => workbenchQuery(to, { panel: 'semester' }),
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'settings/calendar',
         name: 'calendar',
-        component: () => import('@/views/settings/Calendar.vue'),
+        redirect: (to: RouteLocationGeneric) => workbenchQuery(to, { panel: 'calendar' }),
         meta: { allowedRoles: DAILY_OPERATOR_ROLE_LIST },
       },
       {
         path: 'basedata',
         name: 'basedata',
-        component: () => import('@/views/basedata/BaseData.vue'),
+        redirect: (to: RouteLocationGeneric) => {
+          const tab = firstQueryValue(to.query.tab)
+          const target = {
+            classes: { step: 'classes' },
+            subjects: { step: 'subjects', view: 'archive' },
+            teachers: { step: 'teachers', view: 'archive' },
+            rooms: { panel: 'resources', resource: 'rooms' },
+            template: { panel: 'resources', resource: 'template' },
+            reference: { panel: 'resources', resource: 'reference' },
+            'teacher-accounts': { panel: 'resources', resource: 'teacher-accounts' },
+          }[tab ?? ''] ?? { panel: 'resources', resource: 'rooms' }
+          return workbenchQuery(to, target)
+        },
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'scheduling/flow',
-        name: 'scheduling-flow',
+        name: 'scheduling-workbench',
         component: () => import('@/views/scheduling/SchedulingFlow.vue'),
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
         path: 'scheduling/assignments',
-        name: 'assignments',
-        component: () => import('@/views/scheduling/Assignments.vue'),
+        name: 'assignments-legacy',
+        redirect: (to: RouteLocationGeneric) => {
+          const semester = positiveQueryId(to.query.semester)
+            ?? positiveQueryId(to.query.semester_id)
+          return {
+            path: '/scheduling/flow',
+            query: {
+              step: firstQueryValue(to.query.mode) === 'teachers' ? 'teachers' : 'subjects',
+              ...(semester ? { semester } : {}),
+            },
+          }
+        },
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
@@ -140,8 +203,15 @@ const routes = [
       },
       {
         path: 'scheduling/auto',
-        name: 'auto-schedule',
-        component: () => import('@/views/scheduling/AutoSchedule.vue'),
+        name: 'auto-schedule-legacy',
+        redirect: (to: RouteLocationGeneric) => {
+          const semester = positiveQueryId(to.query.semester)
+            ?? positiveQueryId(to.query.semester_id)
+          return {
+            name: 'scheduling-workbench',
+            query: { step: 'start', ...(semester ? { semester } : {}) },
+          }
+        },
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
@@ -194,8 +264,19 @@ const routes = [
       },
       {
         path: 'settings/period-tables/:id',
-        name: 'period-table-editor',
-        component: () => import('@/views/settings/PeriodTableEditor.vue'),
+        name: 'period-table-editor-legacy',
+        redirect: (to: RouteLocationGeneric) => {
+          const semester = positiveQueryId(to.query.semester)
+            ?? positiveQueryId(to.query.semester_id)
+          return {
+            path: '/scheduling/flow',
+            query: {
+              step: 'periods',
+              table: positiveQueryId(to.params.id),
+              ...(semester ? { semester } : {}),
+            },
+          }
+        },
         meta: { allowedRoles: CORE_VIEW_ROLE_LIST },
       },
       {
@@ -254,17 +335,18 @@ router.beforeEach(async (to) => {
     return { name: 'dashboard' }
   }
 
-  if (to.name === 'basedata' && to.query.tab === 'classes') {
-    const rawSemester = Array.isArray(to.query.semester)
-      ? to.query.semester[0]
-      : to.query.semester
-    const semester = typeof rawSemester === 'string' && /^\d+$/.test(rawSemester) && Number(rawSemester) > 0
-      ? rawSemester
-      : undefined
-    return {
-      name: 'scheduling-flow',
-      query: { step: 'classes', ...(semester ? { semester } : {}) },
-    }
+  if (to.name === 'basedata') {
+    const tab = firstQueryValue(to.query.tab)
+    const target = {
+      classes: { step: 'classes' },
+      subjects: { step: 'subjects', view: 'archive' },
+      teachers: { step: 'teachers', view: 'archive' },
+      rooms: { panel: 'resources', resource: 'rooms' },
+      template: { panel: 'resources', resource: 'template' },
+      reference: { panel: 'resources', resource: 'reference' },
+      'teacher-accounts': { panel: 'resources', resource: 'teacher-accounts' },
+    }[tab ?? ''] ?? { panel: 'resources', resource: 'rooms' }
+    return workbenchQuery(to, target)
   }
 
   if (to.name === 'system' && (to.query.section === 'backup' || to.query.section === 'accounts')) {

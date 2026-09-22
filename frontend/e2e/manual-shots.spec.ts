@@ -206,10 +206,9 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
   await loginAsAdmin(page)
   const sid = await ensureManualData(page)
 
-  // ── 03 教学任务管理 ──
-  await page.goto('/scheduling/assignments')
-  await selectSemester(page)
-  await expect(page.getByRole('heading', { name: '教学任务管理' })).toBeVisible({ timeout: 20_000 })
+  // ── 03 排课工作台 · 科目节数 ──
+  await page.goto(`/scheduling/flow?step=subjects&semester=${sid}`)
+  await expect(page.getByRole('heading', { name: '科目节数' })).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(700)
   await page.screenshot({ path: `${SHOTS}/03-assignments.png` })
 
@@ -221,8 +220,7 @@ test('生成操作手册截图（03–10）', async ({ page }) => {
   await page.screenshot({ path: `${SHOTS}/04-workbench.png` })
 
   // ── 05 自动排课(真的跑一次,截进度与达成度报告)──
-  await page.goto('/scheduling/auto')
-  await selectSemester(page)
+  await page.goto(`/scheduling/flow?step=start&semester=${sid}`)
   const done = page.getByTestId('as-status')
   if (!(await done.isVisible().catch(() => false))) {
     await expect(page.getByText('数据检查通过，可以开始排课')).toBeVisible({ timeout: 30_000 })

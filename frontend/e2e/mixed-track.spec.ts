@@ -19,7 +19,7 @@ test('混合学制:班级设置不再管理作息时间表', async ({ page }) =>
   const sem = await createTestSemester(page, YEAR)
   await createTestPeriodTable(page, sem.id, '高中部作息时间表', SENIOR_HIGH_SLOTS)
 
-  // 班级统一从“开始排课”工作台进入，保留学期上下文。
+  // 班级统一从“排课工作台”进入，保留学期上下文。
   await page.goto(`/scheduling/flow?step=classes&semester=${sem.id}`)
   await expect(page.getByTestId('classes-empty')).toBeVisible()
 

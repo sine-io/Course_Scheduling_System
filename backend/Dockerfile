@@ -1,6 +1,6 @@
-# 后端镜像:两个 target。
-#   base   → api 服务(精简)
-#   worker → 后台任务(额外装 WeasyPrint 系统依赖/中文字体与 PostgreSQL client)
+# 后端镜像:base 是可复用的基础层,worker 是正式发布的统一 backend 运行时。
+#   base   → 仅含 Python 核心依赖的内部基础层
+#   worker → API 与后台任务共用(额外含 WeasyPrint 系统依赖/中文字体与 PostgreSQL client)
 # 明确锁 trixie:其 main 内含 postgresql-client(17),pg_dump 可备份 v16 服务器。
 FROM python:3.12-slim-trixie AS base
 
@@ -30,7 +30,7 @@ EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["api"]
 
-# ── worker:PDF 导出的重量级原生依赖只装在这里,api 镜像保持精简 ──
+# ── worker:统一 backend 运行时的重量级原生依赖 ──
 # WeasyPrint 需 Pango/Cairo/gdk-pixbuf;中文内嵌字体用 Noto CJK;
 # poppler-utils 供导出 PNG 与验证用(PDF→影像)。
 FROM base AS worker

@@ -193,6 +193,10 @@
       <h2 id="一条规则docker-composeyml-要跟着版本走">一条规则:<code>docker-compose.yml</code> 要跟着版本走</h2>
       <p>系统的容器组成会随版本演进(例如 v1.1 就多了一个 <code>worker-ops</code> 容器)。<strong>升级时请连 <code>docker-compose.yml</code> 一起更新到新版</strong>——方式 A 重新下载该档,方式 B 的 <code>git pull</code> 会自动带到。</p>
       <p>沿用旧 Compose 文件而缺少新容器时，系统会立即返回包含处理方法的错误（例如“运维后台服务 worker-ops 未运行，请更新 docker-compose.yml”）。补齐新文件后执行 <code>sudo docker compose up -d</code> 即可恢复，数据不受影响。</p>
+      <blockquote>
+      <p><strong>后端镜像名称也随当前架构更新</strong>：新版 Compose 将 <code>api</code>、<code>worker</code>、<code>worker-ops</code> 统一指向 <code>ghcr.io/sine-io/course_scheduling_system-backend</code>。从旧版升级时不要只修改 <code>IMAGE_TAG</code>；请先替换 <code>docker-compose.yml</code>，再执行 <code>sudo docker compose pull</code>。旧文件仍引用 <code>-api</code>/<code>-worker</code> 历史包名，可能拉不到对应的新版本。</p>
+      </blockquote>
+      <p>如果要回滚到仍使用 <code>-api</code>/<code>-worker</code> 包名的旧版本，必须把 Compose 文件也回滚到该版本；新旧 Compose 与镜像名称要成对使用。当前未发布版本首次发布后，新的版本标签才会出现在 <code>-backend</code> 包中。</p>
       <hr />
       <h2 id="方式-a拉取镜像部署最常见">方式 A:拉取镜像部署(最常见)</h2>
       <p>在放 <code>docker-compose.yml</code> 的文件夹内:</p>
@@ -229,7 +233,7 @@
       <hr />
       <h2 id="回滚升级后想退回旧版">回滚(升级后想退回旧版)</h2>
       <p>因为数据与镜像分离,回滚镜像很单纯:</p>
-      <pre><code class="language-bash"># .env 改回旧版本号,例如 IMAGE_TAG=v1.1.0
+      <pre><code class="language-bash"># .env 改回旧版本号,例如 IMAGE_TAG=v1.1.0；同时换回 v1.1.0 的 Compose 文件
       sudo docker compose pull
       sudo docker compose up -d
       </code></pre>
@@ -242,6 +246,7 @@
       <li><span class="tick todo">☐</span> 升级前已「立即备份」</li>
       <li><span class="tick todo">☐</span> 已读该版本 CHANGELOG,确认有无 ⚠️ 破坏性变更</li>
       <li><span class="tick todo">☐</span> <strong><code>docker-compose.yml</code> 已更新到新版</strong>(容器组成可能有变动)</li>
+      <li><span class="tick todo">☐</span> <code>api</code>、<code>worker</code>、<code>worker-ops</code> 均显示使用同一个 <code>backend</code> 镜像</li>
       <li><span class="tick todo">☐</span> <code>sudo docker compose pull</code> 成功拉取新镜像</li>
       <li><span class="tick todo">☐</span> <code>sudo docker compose up -d</code> 后六个容器均为 healthy</li>
       <li><span class="tick todo">☐</span> <code>/api/health</code> 回 ok,登录数据完整</li>

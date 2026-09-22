@@ -125,7 +125,7 @@ def _cancel_quietly(job) -> None:
 def render_export(html: str, fmt: str, *, timeout: int = 90) -> bytes:
     """在 worker 渲染 PDF/PNG,阻塞等待结果并返回 bytes(api 导出端点调用)。
 
-    api 镜像无 WeasyPrint 依赖,故统一派到 worker;结果经 RQ result 取回。
+    API 进程不执行 WeasyPrint 渲染,故统一派到 worker 进程;结果经 RQ result 取回。
     """
     from app.workers.export_job import render_timetable_pdf, render_timetable_png
 

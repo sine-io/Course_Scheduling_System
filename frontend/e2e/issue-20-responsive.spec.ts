@@ -129,6 +129,28 @@ for (const viewport of VIEWPORTS) {
       issues: [],
       calendar_exception_count: 0,
     }))
+    await page.route('**/api/semesters/44', (route) => fulfillJson(route, {
+      ...SEMESTER,
+      period_tables: [PERIOD_TABLE],
+    }))
+    await page.route('**/api/class-units?**', (route) => fulfillJson(route, []))
+    await page.route('**/api/subjects?**', (route) => fulfillJson(route, []))
+    await page.route('**/api/teachers?**', (route) => fulfillJson(route, []))
+    await page.route('**/api/assignments/class-load?**', (route) => fulfillJson(route, []))
+    await page.route('**/api/assignments?**', (route) => fulfillJson(route, []))
+    await page.route('**/api/solver/preflight?**', (route) => fulfillJson(route, {
+      ok: false,
+      issues: [],
+      semester_id: SEMESTER.id,
+      semester_label: SEMESTER.label,
+      error_count: 0,
+      warning_count: 0,
+      assignment_count: 0,
+      total_periods: 0,
+      teacher_count: 0,
+      class_count: 0,
+    }))
+    await page.route('**/api/semesters/44/period-setup', (route) => fulfillJson(route, { detail: '尚未设置' }, 404))
     await page.route('**/api/period-tables/77', async (route) => {
       pendingPeriodRoute = route
     })
@@ -142,7 +164,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByTestId('calendar-data-error')).toContainText('校历服务暂时不可用')
     await expectNoRootOverflow(page)
 
-    await page.goto('/settings/period-tables/77')
+    await page.goto('/scheduling/flow?step=periods&table=77&semester=44')
     await expect(page.getByTestId('period-table-loading')).toBeVisible()
     await expectNoRootOverflow(page)
     await expect.poll(() => pendingPeriodRoute).not.toBeNull()

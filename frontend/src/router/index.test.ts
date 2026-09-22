@@ -40,7 +40,8 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('dashboard')
 
     await router.push('/scheduling/auto')
-    expect(router.currentRoute.value.name).toBe('auto-schedule')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'start' })
   }, 10_000)
 
   it('keeps pure teachers on personal daily pages and blocks management links', async () => {
@@ -106,7 +107,7 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('dashboard')
   })
 
-  it('redirects legacy notification, demo, and system section links to their replacements', async () => {
+  it('redirects legacy and duplicated links to their replacements without losing context', async () => {
     setActivePinia(createPinia())
     const auth = useAuthStore()
     auth.user = {
@@ -131,12 +132,71 @@ describe('router role boundaries', () => {
     expect(router.currentRoute.value.name).toBe('account-permissions')
 
     await router.push('/basedata?tab=classes&semester=8')
-    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
     expect(router.currentRoute.value.query).toEqual({ step: 'classes', semester: '8' })
 
     await router.push('/basedata?tab=classes&semester=invalid')
-    expect(router.currentRoute.value.name).toBe('scheduling-flow')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
     expect(router.currentRoute.value.query).toEqual({ step: 'classes' })
+
+    await router.push('/basedata?tab=subjects&semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'subjects', view: 'archive', semester: '8' })
+
+    await router.push('/basedata?tab=teachers&semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'teachers', view: 'archive', semester: '8' })
+
+    await router.push('/basedata?tab=rooms&semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ panel: 'resources', resource: 'rooms', semester: '8' })
+
+    await router.push('/basedata?tab=template&semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ panel: 'resources', resource: 'template', semester: '8' })
+
+    await router.push('/settings/semesters?semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ panel: 'semester', semester: '8' })
+
+    await router.push('/settings/calendar?semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ panel: 'calendar', semester: '8' })
+
+    await router.push('/scheduling/assignments?mode=teachers&semester_id=9')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'teachers', semester: '9' })
+
+    await router.push('/scheduling/assignments?mode=periods&semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'subjects', semester: '8' })
+
+    await router.push('/scheduling/auto?semester_id=9')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'start', semester: '9' })
+
+    await router.push('/settings/period-tables/12?semester=8')
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ step: 'periods', table: '12', semester: '8' })
+  })
+
+  it('keeps the scheduling workbench deep-link path and query context', async () => {
+    setActivePinia(createPinia())
+    const auth = useAuthStore()
+    auth.user = {
+      id: 4,
+      username: 'admin',
+      display_name: '系统管理员',
+      roles: ['admin'],
+      must_change_password: false,
+    }
+    auth.loaded = true
+
+    await router.push('/scheduling/flow?step=periods&table=12&semester=8')
+
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.path).toBe('/scheduling/flow')
+    expect(router.currentRoute.value.query).toEqual({ step: 'periods', table: '12', semester: '8' })
   })
 
   it('keeps the scheduling flow prototype public and normalizes variant aliases', async () => {

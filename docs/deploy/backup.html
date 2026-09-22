@@ -187,7 +187,7 @@
       <hr />
       <h2 id="一每日自动备份默认已开">一、每日自动备份(默认已开)</h2>
       <ul>
-      <li>worker 按 <code>Asia/Shanghai</code> 时区每天 <strong>02:00</strong> 自动执行一次 <code>pg_dump</code>。</li>
+      <li><code>worker-ops</code> 按 <code>Asia/Shanghai</code> 时区每天 <strong>02:00</strong> 自动执行一次 <code>pg_dump</code>。</li>
       <li>默认保留最新 <strong>30 份</strong>,超出者由旧到新自动轮替删除。</li>
       <li>可在 <code>.env</code> 调整:</li>
       </ul>
@@ -235,7 +235,7 @@
       <hr />
       <h2 id="四手动用命令备份-恢复高级">四、手动用命令备份 / 恢复(高级)</h2>
       <p>若你偏好在命令列操作(例如写进自己的调度脚本):</p>
-      <pre><code class="language-bash"># 备份(pg_dump 在 worker 容器内执行,worker 才装了 postgresql-client)
+      <pre><code class="language-bash"># 备份(pg_dump 在 worker 容器内执行；worker 与 worker-ops 共用 backend 镜像)
       sudo docker compose exec worker pg_dump -Fc -h postgres -U scheduler -d scheduler \
         -f /backups/manual_$(date +%Y%m%d_%H%M%S).dump
 

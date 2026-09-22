@@ -6,7 +6,6 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
-  semesterLabel,
 } from './helpers'
 
 const SHOTS = 'e2e/screenshots'
@@ -16,10 +15,6 @@ async function pickFiltered(page: Page, testId: string, text: string) {
   await page.getByTestId(testId).click()
   await page.keyboard.type(text)
   await page.locator('.n-base-select-option', { hasText: text }).first().click()
-}
-async function selectSemester(page: Page, year: number) {
-  await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: semesterLabel(year) }).click()
 }
 async function api(page: Page, url: string, data: object) {
   return (await page.request.post(url, { data })).json()
@@ -42,8 +37,7 @@ test('教学任务管理:走班群组创建、协同教师+连堂、班级超节
     await api(page, `/api/subjects?semester_id=${sid}`, { name: n })
   }
 
-  await page.goto('/scheduling/assignments')
-  await selectSemester(page, YEAR)
+  await page.goto(`/scheduling/flow?step=subjects&semester=${sid}`)
 
   // ── ① 走班群组创建(UI)──
   await page.getByTestId('group-add').click()

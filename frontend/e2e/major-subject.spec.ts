@@ -3,7 +3,6 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
-  semesterLabel,
 } from './helpers'
 
 const SHOTS = 'e2e/screenshots'
@@ -16,10 +15,7 @@ test('科目管理:勾选主科后列表显示标签,重新加载仍保留', asy
   await deleteSemesterByYearTerm(page, YEAR, 1)
   const sem = await createTestSemester(page, YEAR, { subjects: [] })
 
-  await page.goto('/basedata')
-  await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
-  await page.getByTestId('manual-section-subjects').click()
+  await page.goto(`/scheduling/flow?step=subjects&view=archive&semester=${sem.id}`)
 
   // 新增一般科目(不勾主科)
   await page.getByRole('button', { name: '新增科目' }).click()
@@ -40,9 +36,6 @@ test('科目管理:勾选主科后列表显示标签,重新加载仍保留', asy
 
   // 重新加载后仍保留(确认真的写进 DB,不是前端状态)
   await page.reload()
-  await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
-  await page.getByTestId('manual-section-subjects').click()
   await expect(page.getByTestId('sub-major-语文')).toBeVisible()
 
   const subjects = await (await page.request.get(`/api/subjects?semester_id=${sem.id}`)).json()

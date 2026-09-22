@@ -18,8 +18,11 @@ services:
       - api
 
   api:
+    # 开发 API 与 worker 使用同一个完整 backend 镜像，避免本地构建出两套标签。
+    image: scheduling-dev-backend:latest
     build:
       context: ./backend
+      target: worker
     # dev:迁移后以 --reload 启动,源代码变更立即生效
     entrypoint: ["bash", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"]
     env_file: .env
@@ -38,8 +41,10 @@ services:
         condition: service_healthy
 
   worker:
+    image: scheduling-dev-backend:latest
     build:
       context: ./backend
+      target: worker
     # dev 用单一进程监听两条队列:ops 在前(导出/备份/发送邮件是秒级任务,优先处理),default 在后。
     # 正式环境拆成 worker + worker-ops 两个容器,排课才不会堵住导出(见 docker-compose.yml)。
     # 这里若只写 ["worker"],dev 就没有任何进程在守 ops——导出、备份、发送邮件、定时任务全失效。

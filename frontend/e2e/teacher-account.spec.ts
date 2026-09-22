@@ -3,7 +3,6 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
-  semesterLabel,
 } from './helpers'
 
 const YEAR = 2035 // 专用测试学年
@@ -15,13 +14,10 @@ test('教师联系信息：新增教师并保存电子邮箱', async ({ page }) 
 
   // 前置(API):创建干净的测试学期
   await deleteSemesterByYearTerm(page, YEAR, 1)
-  await createTestSemester(page, YEAR)
+  const sem = await createTestSemester(page, YEAR)
 
-  // 进入基础数据 → 选择该学期 → 打开教师分类
-  await page.goto('/basedata')
-  await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
-  await page.getByTestId('manual-section-teachers').click()
+  // 教师档案统一在排课工作台维护
+  await page.goto(`/scheduling/flow?step=teachers&view=archive&semester=${sem.id}`)
 
   // 新增教师,填入姓名与联系信息
   await page.getByTestId('teacher-add').click()
@@ -37,9 +33,6 @@ test('教师联系信息：新增教师并保存电子邮箱', async ({ page }) 
   await page.screenshot({ path: `${SHOTS}/teacher-2-list.png` })
 
   // 验证 Email 已保存(经 API 确认)
-  const list = await (await page.request.get('/api/semesters')).json()
-  const sem = list.find((s: { academic_year: number; term: number }) =>
-    s.academic_year === YEAR && s.term === 1)
   const teachers = await (await page.request.get(`/api/teachers?semester_id=${sem.id}`)).json()
   const chen = teachers.find((t: { name: string }) => t.name === '陈老师')
   expect(chen.email).toBe('chen@example.edu.cn')

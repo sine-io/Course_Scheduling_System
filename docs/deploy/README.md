@@ -1,8 +1,8 @@
 # 部署与运维手册
 
-给**学校信息管理者/教务主任**的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。
+给**学校信息管理者/教务主任**的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。`api`、`worker` 与 `worker-ops` 共用一个 `backend` 镜像，但仍是三个独立容器。
 
-> `worker` 专跑自动排课(一次可跑好几分钟),`worker-ops` 跑导出、备份、恢复、发送邮件与定时任务。分开的用意是:**排课那几分钟里,你按「导出课表」仍然是立即响应的**。
+> `worker` 专跑自动排课(一次可跑好几分钟),`worker-ops` 跑导出、备份、恢复、发送邮件与定时任务。分开的用意是:**排课那几分钟里,你按「导出课表」仍然是立即响应的**。共用镜像只减少构建与发布对象，不合并进程或队列。
 
 ## 我该从哪里开始?
 
@@ -47,7 +47,7 @@
 
 同一份 `docker-compose.yml` 支持两种做法:
 
-1. **拉取官方预建镜像**（推荐，免构建、升级快）：准备 `docker-compose.yml` 和 `.env` 两个文件，然后执行 `sudo docker compose pull && sudo docker compose up -d`。
+1. **拉取官方预建镜像**（推荐，免构建、升级快）：准备 `docker-compose.yml` 和 `.env` 两个文件，然后执行 `sudo docker compose pull && sudo docker compose up -d`。应用层只需拉取 `backend` 与 `web` 两个镜像，PostgreSQL/Redis 仍使用各自的官方基础镜像。
 2. **从源代码自行构建**（需要修改程序或无法连接 GHCR 时）：克隆项目后执行 `sudo docker compose up -d`，首次会在本机构建镜像，通常需要几分钟。
 
 详见 [安装指南](install.md)。
@@ -57,6 +57,6 @@
 | 文件用词 | 意思 |
 |---|---|
 | 主机 / host | 跑 Docker 的那台电脑(校内服务器、台式机、NAS 均可) |
-| 容器 container | 一个服务的执行实体,如上图五个 |
+| 容器 container | 一个服务的执行实体,如上图六个 |
 | volume | Docker 管理的数据存储区,容器删掉也不会消失 |
 | `.env` | 你的配置文件(密码、校名、端口号),**含机密,不要上传到任何地方** |

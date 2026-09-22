@@ -1,7 +1,7 @@
 """数据库备份与恢复(M5-2)。
 
 以 PostgreSQL 原生工具 pg_dump / pg_restore(custom 格式,可 --clean 恢复)。这些工具
-只装在 worker 镜像,故实际 dump/restore 在 worker 执行;api 端负责列表、下载、上传与分派任务。
+实际 dump/restore 只在 worker 进程执行;api 端负责列表、下载、上传与分派任务。两者可共用 backend 镜像而不改变职责边界。
 
 - 文件名:`backup_YYYYMMDD_HHMMSS_<reason>.dump`,存放于共挂的 volume(config.backup_dir)。
 - 保留 config.backup_keep 份,超出者由旧而新轮替删除。
@@ -115,7 +115,7 @@ def is_valid_dump(path: str) -> bool:
         return False
 
 
-# ── dump / restore(需 pg_dump/pg_restore,worker 镜像)──────
+# ── dump / restore(需 pg_dump/pg_restore,由 worker 进程执行)──────
 def create_backup(reason: str = "manual") -> BackupInfo:
     """跑 pg_dump 生成一份备份并轮替。返回新备份信息。"""
     reason = reason if reason.isalpha() else "manual"
@@ -130,7 +130,7 @@ def create_backup(reason: str = "manual") -> BackupInfo:
             check=True, env=_env(p), capture_output=True, text=True,
         )
     except FileNotFoundError as e:
-        raise BackupError("找不到 pg_dump(需在 worker 镜像执行)") from e
+        raise BackupError("找不到 pg_dump(需在 worker 进程执行)") from e
     except subprocess.CalledProcessError as e:
         raise BackupError(f"备份失败:{e.stderr or e}") from e
     prune()
@@ -198,7 +198,7 @@ def restore_backup(name: str) -> list[str]:
             check=False, env=_env(p), capture_output=True, text=True,
         )
     except FileNotFoundError as e:
-        raise BackupError("找不到 pg_restore(需在 worker 镜像执行)") from e
+        raise BackupError("找不到 pg_restore(需在 worker 进程执行)") from e
     # 单事务恢复下任何 SQL 错误都会回滚整次恢复；不能再把跨版本 SET 错误当作已完成。
     if proc.returncode != 0:
         raise BackupError(f"恢复失败，全部变更已回滚:{proc.stderr or proc.returncode}")

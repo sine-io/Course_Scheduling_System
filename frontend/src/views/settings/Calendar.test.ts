@@ -16,6 +16,7 @@ const calendarMocks = vi.hoisted(() => ({
   deleteCalendarException: vi.fn(),
   getSemesterReadiness: vi.fn(),
   listCalendarExceptions: vi.fn(),
+  revokeSemesterReadiness: vi.fn(),
   updateCalendarException: vi.fn(),
 }))
 
@@ -143,5 +144,20 @@ describe('Calendar', () => {
 
     deletion.resolve()
     await flushPromises()
+  })
+
+  it('允许在辅助校历工作面撤销已确认的排课准备', async () => {
+    const readyReadiness = { ...readiness, readiness: 'ready' as const, ready: true }
+    semesterMocks.listSemesters.mockResolvedValue([semester])
+    calendarMocks.getSemesterReadiness.mockResolvedValue(readyReadiness)
+    calendarMocks.revokeSemesterReadiness.mockResolvedValue({ ...readiness })
+
+    const wrapper = await mountCalendar()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="calendar-revoke-ready"]').trigger('click')
+    await flushPromises()
+
+    expect(calendarMocks.revokeSemesterReadiness).toHaveBeenCalledWith(semester.id)
   })
 })

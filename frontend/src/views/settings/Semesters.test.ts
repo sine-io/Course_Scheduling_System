@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   createPeriodTable: vi.fn(),
   deletePeriodTable: vi.fn(),
   copySemester: vi.fn(),
+  updateSemester: vi.fn(),
 }))
 
 vi.mock('@/api/semesters', () => ({
@@ -46,6 +47,7 @@ function makeRouter() {
       { path: '/settings/semesters', name: 'semesters', component: Semesters },
       { path: '/settings/calendar', name: 'calendar', component: { template: '<main />' } },
       { path: '/settings/period-tables/:id', name: 'period-table-editor', component: { template: '<main />' } },
+      { path: '/scheduling/flow', name: 'scheduling-workbench', component: { template: '<main />' } },
       { path: '/basedata', name: 'basedata', component: { template: '<main />' } },
     ],
   })
@@ -183,7 +185,7 @@ describe('Semesters', () => {
     expect(preference.attributes('aria-checked')).toBe('true')
   })
 
-  it('嵌入排课工作台时只显示指定学期并把作息编辑交给父页面', async () => {
+  it('嵌入排课工作台时保留学期生命周期操作并把作息编辑交给父页面', async () => {
     const table = {
       id: 12,
       semester_id: semester.id,
@@ -204,9 +206,62 @@ describe('Semesters', () => {
     await flushPromises()
 
     expect(wrapper.find('.settings-page-header').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="semester-create-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="semester-create-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="copy-semester"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="semester-calendar-1"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="semester-1"]').text()).toContain('标准作息')
     await wrapper.get('[data-testid="period-table-edit-12"]').trigger('click')
     expect(editPeriodTable).toHaveBeenCalledWith(12)
+  })
+
+  it('可在工作台辅助学期面编辑已有学期日期', async () => {
+    mocks.listSemesters.mockResolvedValue([semester])
+    mocks.getSemester.mockResolvedValue(semester)
+    mocks.updateSemester.mockResolvedValue({
+      ...semester,
+      start_date: '2042-09-08',
+      end_date: '2043-01-25',
+    })
+
+    const wrapper = await mountSemesters({}, 'director', {
+      embedded: true,
+      embeddedSemesterId: semester.id,
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="semester-edit-dates"]').trigger('click')
+    const editor = wrapper.get('[data-testid="semester-date-editor-1"]')
+    const datePickers = editor.findAll('.n-date-picker')
+    await datePickers[0].find('input').setValue('2042-09-08')
+    await datePickers[1].find('input').setValue('2043-01-25')
+    await wrapper.get('[data-testid="semester-save-dates-1"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.updateSemester).toHaveBeenCalledWith(1, {
+      start_date: '2042-09-08',
+      end_date: '2043-01-25',
+    })
+  })
+
+  it('独立学期页的作息编辑进入排课工作台并保留学期和作息表', async () => {
+    const table = {
+      id: 12,
+      semester_id: semester.id,
+      name: '标准作息',
+      num_weekdays: 5,
+      is_default: true,
+      periods: [],
+    }
+    mocks.listSemesters.mockResolvedValue([semester])
+    mocks.getSemester.mockResolvedValue({ ...semester, period_tables: [table] })
+
+    const wrapper = await mountSemesters()
+    await flushPromises()
+    await wrapper.get('[data-testid="period-table-edit-12"]').trigger('click')
+    await flushPromises()
+
+    const router = wrapper.vm.$router
+    expect(router.currentRoute.value.name).toBe('scheduling-workbench')
+    expect(router.currentRoute.value.query).toEqual({ semester: '1', step: 'periods', table: '12' })
   })
 })

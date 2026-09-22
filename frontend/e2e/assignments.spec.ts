@@ -3,7 +3,6 @@ import {
   createTestSemester,
   deleteSemesterByYearTerm,
   login,
-  semesterLabel,
 } from './helpers'
 
 const YEAR = 2036 // 专用测试学年
@@ -25,10 +24,8 @@ test('教学任务管理:创建单班教学任务并显示教师超课时', asyn
     data: { name: '王师', base_periods: 2 },
   })
 
-  // 进入教学任务管理 → 选学期
-  await page.goto('/scheduling/assignments')
-  await page.locator('.n-base-selection').first().click()
-  await page.locator('.n-base-select-option', { hasText: semesterLabel(YEAR) }).click()
+  // 从排课工作台进入科目节数步骤
+  await page.goto(`/scheduling/flow?step=subjects&semester=${sid}`)
 
   // 新增教学任务:301 班 × 语文 × 王师 × 每周 5 节(> 基本课时 2 → 超课时)
   await page.getByTestId('assignment-add').click()

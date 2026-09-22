@@ -39,6 +39,7 @@ const props = defineProps<{
   semester: SemesterListItem
   canEdit: boolean
 }>()
+const emit = defineEmits<{ changed: [] }>()
 
 const mode = ref<TeacherArrangementMode>('standard')
 const file = ref<File | null>(null)
@@ -116,6 +117,9 @@ const canConfirmReadiness = computed(() => Boolean(
   && readiness.value
   && !readiness.value.ready
   && readiness.value.checks.every(check => check.ok),
+))
+const readinessNextHref = computed(() => (
+  `/scheduling/flow?step=start&semester=${props.semester.id}`
 ))
 const completedStep = computed(() => {
   if (result.value) return mode.value === 'scheduling_ready' ? 5 : 4
@@ -319,6 +323,7 @@ async function commitWorkbook() {
       confirmWarnings.value,
       decisions.value,
     )
+    emit('changed')
     if (mode.value === 'scheduling_ready') {
       await loadReadiness()
     }
@@ -795,9 +800,9 @@ function exportIssues() {
             v-if="readiness.ready"
             data-testid="readiness-next"
             class="template-readiness-next"
-            href="/scheduling/settings"
+            :href="readinessNextHref"
           >
-            编辑排课规则
+            继续排课工作台
             <ArrowRight :size="16" aria-hidden="true" />
           </a>
           <n-button

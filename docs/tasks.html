@@ -189,11 +189,12 @@
       使用方式:开发 AI(Opus 4.8 / Sonnet 5)每次领取<strong>一张任务卡</strong>,实现 → 依「验收标准」自我验证 → 报告 → 经用户验收后才进下一张。
       任务卡状态标记:<code>[ ]</code> 未开始 / <code>[~]</code> 进行中 / <code>[x]</code> 已验收。开发者完成后请直接更新本文件的复选框。</p>
       <p><strong>当前角色词汇（2026-08）</strong>：本文保留早期任务卡的历史记录；其中 <code>scheduler</code>/“排课管理员”均指当时的排课职责。当前未上线版本以 ADR-0009 为准，只保留内置系统管理员、教务主任和教师三种角色，排课与发布由教务主任承担，不提供旧角色兼容层。</p>
+      <p><strong>当前部署决定（ADR-0015）</strong>：历史任务卡曾使用 <code>base</code>/<code>worker</code> 两个发布镜像；当前 Compose 与 CI 只发布 <code>course_scheduling_system-backend</code>（<code>worker</code> target），并让 <code>api</code>、<code>worker</code>、<code>worker-ops</code> 以不同命令运行。历史条目中的旧包名和“API 镜像精简”描述保留用于追溯，不代表当前配置。</p>
       </blockquote>
       <hr />
       <h2 id="项目目录结构m0-创建整个项目遵循">项目目录结构(M0 创建,整个项目遵循)</h2>
       <pre><code>Course_Scheduling_System/
-      ├── docker-compose.yml          # 正式部署用(5 容器:caddy/api/worker/postgres/redis)
+      ├── docker-compose.yml          # 正式部署用(6 容器:caddy/api/worker/worker-ops/postgres/redis；后三者共用 backend 镜像)
       ├── docker-compose.dev.yml      # 开发用(热重载)
       ├── .env.example                # 仅需改:管理员密码、校名、SMTP(选填)
       ├── Caddyfile
@@ -251,7 +252,7 @@
       <tr>
       <td>M1 基础数据</td>
       <td>构建学校数据</td>
-      <td>学期、基础数据、作息和校历页面完成真实数据维护</td>
+      <td>排课工作台及三个学期准备辅助工作面完成真实数据维护</td>
       </tr>
       <tr>
       <td>M2 手动排课</td>
@@ -360,12 +361,13 @@
         3. 模板字段有中文说明列,导入时自动跳过</li>
       <li><strong>测试方式</strong>:pytest 用 fixtures 内的正确/错误 Excel 文件</li>
       </ul>
-      <h3 id="m1-4-分散的学期准备页面"><span class="tick done">☑</span> M1-4 分散的学期准备页面</h3>
+      <a id="m1-4-分散的学期准备页面"></a>
+      <h3 id="m1-4-排课工作台学期准备辅助工作面"><span class="tick done">☑</span> M1-4 排课工作台学期准备辅助工作面</h3>
       <ul>
-      <li><strong>描述</strong>:首次登录(无任何学期数据时)从“学期与作息时间表”开始；随后在基础数据、作息分组和校历页面维护真实数据。仪表盘只显示中性摘要，排课前置检查仍由排课流程负责。该行为由 ADR-0010 取代旧的跨页面向导设计。</li>
+      <li><strong>描述</strong>:首次登录(无任何学期数据时)从“排课工作台”的学期创建卡片开始；随后在学期管理、校历与准备、资源与导入辅助工作面及五步档案视图维护真实数据。仪表盘只显示中性摘要，排课前置检查仍由排课流程负责。该行为由 ADR-0010 与 ADR-0018 取代旧的跨页面向导设计。</li>
       <li><strong>模块</strong>:<code>frontend/src/views/settings/Semesters.vue</code>、<code>frontend/src/views/basedata/</code>、<code>frontend/src/views/settings/PeriodTableEditor.vue</code>、<code>frontend/src/views/settings/Calendar.vue</code></li>
       <li><strong>验收标准</strong>:
-        1. 全新系统无学期时，管理角色可进入学期页面创建中性学期；不会隐式生成科目、教师、班级或作息
+        1. 全新系统无学期时，管理角色可在排课工作台创建中性学期；不会隐式生成科目、教师、班级或作息
         2. 学期、基础数据、作息分组和校历可分别保存并再次打开，仪表盘摘要来自真实数据
         3. 用户测试：不看文档可在 30 分钟内创建中性学期、录入基础数据并确认学校实际作息</li>
       <li><strong>测试方式</strong>:Semesters/BaseData/PeriodTable Vitest + Playwright 学期准备旅程</li>
@@ -700,13 +702,13 @@
       </ul>
       <p><strong>补遗(实现后)</strong>
       - <strong>同一份 Compose，两种部署方式</strong>：为支持 <code>sudo docker compose pull</code>，<code>docker-compose.yml</code> 中 web、api 和 worker 服务同时配置 <code>image:</code>（GHCR）与 <code>build:</code>。克隆源代码的用户执行 <code>sudo docker compose up -d</code> 时仍在本机构建；只获取部署文件的用户可执行 <code>sudo docker compose pull &amp;&amp; sudo docker compose up -d</code> 拉取官方镜像。镜像版本由 <code>.env</code> 中的 <code>IMAGE_TAG</code> 决定，正式部署建议固定版本号。
-      - <strong>CI 补版本标签</strong>:原 <code>images</code> job 只推 <code>:latest</code> 与 <code>:sha</code>,<code>IMAGE_TAG=v1.0.0</code> 会拉不到镜像。三个镜像各补推 <code>:${github.ref_name}</code>(main push=<code>main</code>、版本标签=<code>v1.0.0</code>),版本固定才真的成立;版本标签仍为唯一触发双架构(amd64+arm64)的条件。
+      - <strong>CI 补版本标签</strong>:原 <code>images</code> job 只推 <code>:latest</code> 与 <code>:sha</code>,<code>IMAGE_TAG=v1.0.0</code> 会拉不到镜像。应用镜像各补推 <code>:${github.ref_name}</code>(main push=<code>main</code>、版本标签=<code>v1.0.0</code>),版本固定才真的成立;版本标签仍为唯一触发双架构(amd64+arm64)的条件。当前应用镜像为统一的 <code>backend</code> 与 <code>web</code>。
       - <strong>将 HTTPS 作为可选配置</strong>：Caddyfile 原先将站点地址固定为 <code>:80</code> 并写入镜像，使用预建镜像的学校无法修改。现改为 <code>{$SITE_ADDRESS::80}</code> 环境变量；默认使用内网 HTTP，在 <code>.env</code> 中设置 <code>SITE_ADDRESS=域名</code> 后自动申请并续期 Let's Encrypt 证书。Compose 同时增加 443 端口映射和 <code>caddydata</code> 数据卷，用于持久保存证书并避免重复申请。验证结果：未设置域名时，重建 web 后 <code>/api/health</code> 与首页均返回 200，内网 HTTP 部署不受影响；<code>sudo docker compose config</code> 在两种配置下均可正确解析。
       - <strong>文件产出</strong>:<code>docs/deploy/</code>(index/install/upgrade/backup/https/faq 六篇中文,含 Win/Linux/Synology/QNAP 安装、异地备份、回滚与 schema 变更提醒、VPS 对外端口与安全设置)、改写 <code>README.md</code>(英语摘要+功能总览+双部署快速开始+文件索引)、新增 <code>CHANGELOG.md</code>(Keep a Changelog,汇总 M0–M5)、<code>CONTRIBUTING.md</code>(开发环境/质量门槛/任务卡制/发布新版本流程)。<code>LICENSE</code>(MIT)M0 已具备。
       - <strong>验收①「干净 VM 实测」的界线</strong>:compose 解析、web 重建与默认 HTTP 服务已在本机 Docker 验过;真正的「全新 VM 从零 pull 安装」需待版本标签推上 GHCR 后才可端到端跑(目前尚无 release tag),此步骤留给实际发布时(或用户)在干净环境验收并记录于 PR。</p>
       <h3 id="m5-4-e2e-总验收与性能"><span class="tick done">☑</span> M5-4 E2E 总验收与性能</h3>
       <ul>
-      <li><strong>描述</strong>:Playwright 全流程场景:学期准备页面→导入→教学任务→自动排课→发布→请假→代课→月统计;性能验收;无障碍基本检查(键盘可操作、对比度)。</li>
+      <li><strong>描述</strong>:Playwright 全流程场景:工作台学期准备辅助面→导入→教学任务→自动排课→发布→请假→代课→月统计;性能验收;无障碍基本检查(键盘可操作、对比度)。</li>
       <li><strong>验收标准</strong>:
         1. 三套 fixtures 全流程 E2E 绿灯
         2. 60 班规模:页面加载 p95 &lt; 2s、check-conflict p95 &lt; 100ms、自动排课 &lt; 10 分钟

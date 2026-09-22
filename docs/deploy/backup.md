@@ -6,7 +6,7 @@
 
 ## 一、每日自动备份(默认已开)
 
-- worker 按 `Asia/Shanghai` 时区每天 **02:00** 自动执行一次 `pg_dump`。
+- `worker-ops` 按 `Asia/Shanghai` 时区每天 **02:00** 自动执行一次 `pg_dump`。
 - 默认保留最新 **30 份**,超出者由旧到新自动轮替删除。
 - 可在 `.env` 调整:
 
@@ -75,7 +75,7 @@ sudo docker compose cp ./某份.dump worker:/backups/
 若你偏好在命令列操作(例如写进自己的调度脚本):
 
 ```bash
-# 备份(pg_dump 在 worker 容器内执行,worker 才装了 postgresql-client)
+# 备份(pg_dump 在 worker 容器内执行；worker 与 worker-ops 共用 backend 镜像)
 sudo docker compose exec worker pg_dump -Fc -h postgres -U scheduler -d scheduler \
   -f /backups/manual_$(date +%Y%m%d_%H%M%S).dump
 

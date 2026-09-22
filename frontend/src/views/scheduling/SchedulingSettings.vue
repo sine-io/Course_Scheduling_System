@@ -261,7 +261,7 @@ async function changeSemester(id: number): Promise<void> {
 
 function returnToFlow(): void {
   router.push({
-    name: 'scheduling-flow',
+    name: 'scheduling-workbench',
     query: { step: 'start', ...(sid.value ? { semester: String(sid.value) } : {}) },
   })
 }
@@ -374,7 +374,7 @@ onMounted(loadPage)
       <div class="rule-editor-header-actions">
         <NButton quaternary data-testid="rule-back-flow" @click="returnToFlow">
           <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
-          返回开始排课
+          返回排课工作台
         </NButton>
         <NSelect
           v-if="semesters.length"

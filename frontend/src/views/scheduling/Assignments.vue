@@ -342,7 +342,7 @@ function blockLabel(a: Assignment): string {
 
 function returnToFlow() {
   router.push({
-    name: 'scheduling-flow',
+    name: 'scheduling-workbench',
     query: {
       step: managementMode.value === 'periods' ? 'subjects' : 'teachers',
       ...(sid.value ? { semester: String(sid.value) } : {}),
@@ -362,7 +362,7 @@ function returnToFlow() {
       <div class="scheduling-header-actions">
         <n-button quaternary data-testid="assignments-back-flow" @click="returnToFlow">
           <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
-          {{ '返回开始排课' }}
+          {{ '返回排课工作台' }}
         </n-button>
         <n-radio-group
           :value="managementMode"
@@ -405,8 +405,8 @@ function returnToFlow() {
     <section v-else-if="!sid" class="scheduling-state" data-testid="assignments-empty">
       <ClipboardList :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建可用学期' }}</strong>
-      <span>{{ '先创建学期并维护班级、科目和教师，再录入课程和每周节数。' }}</span>
-      <n-button v-if="!props.embedded" type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+      <span>{{ '先在排课工作台中创建学期，再维护班级、科目和教师并录入课程节数。' }}</span>
+      <n-button v-if="!props.embedded" type="primary" @click="router.push({ name: 'scheduling-workbench' })">{{ '前往排课工作台' }}</n-button>
     </section>
 
     <template v-else>

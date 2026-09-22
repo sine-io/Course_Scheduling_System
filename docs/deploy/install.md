@@ -62,6 +62,8 @@ irm https://raw.githubusercontent.com/sine-io/Course_Scheduling_System/main/inst
 
 只需要两个文件:`docker-compose.yml` 与 `.env`。创建一个空文件夹(例如 `scheduling`),放入本项目的 `docker-compose.yml`,并在同层创建 `.env`(见步骤 2)。
 
+采用当前 Compose 的版本只有 `course_scheduling_system-backend` 与 `course_scheduling_system-web` 两个应用镜像；`api`、`worker`、`worker-ops` 三个服务会复用前者（旧版发布包名见升级指南）。
+
 ```bash
 mkdir scheduling && cd scheduling
 # 下载 docker-compose.yml 与 .env.example(从项目 Releases 页或源代码获取)
@@ -107,7 +109,7 @@ openssl rand -hex 32        # Linux/Mac/Git Bash
 
 ```bash
 sudo docker compose pull      # 下载官方镜像（首次耗时较长）
-sudo docker compose up -d     # 后台启动六个容器
+sudo docker compose up -d     # 后台启动六个容器（三个后端服务共用 backend 镜像）
 ```
 
 ### 方式 B(从源代码构建)
@@ -133,7 +135,7 @@ curl http://localhost/api/health
 - 本机:<http://localhost>
 - 校内其他电脑:`http://<主机的局域网IP>`(例如 `http://192.168.1.50`,IP 用 `ipconfig` / `ip a` 查)
 
-以 `.env` 设置的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录,系统会要求你**首次改密码**。随后打开“学期与作息时间表”创建当前学期，再到“基础数据”和“校历与排课准备”逐项录入和确认，完成后即可开始创建教学任务。
+以 `.env` 设置的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录,系统会要求你**首次改密码**。随后进入“排课工作台”，在“学期管理”“校历与准备”“资源与导入”三个辅助工作面完成学期、作息、校历和资源准备，再按工作台步骤创建教学任务。原“学期与作息时间表”“基础数据”“校历与排课准备”地址仍可兼容跳转。
 
 ---
 

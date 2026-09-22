@@ -7,13 +7,15 @@
 
 > **当前角色词汇（2026-08）**：本文保留早期任务卡的历史记录；其中 `scheduler`/“排课管理员”均指当时的排课职责。当前未上线版本以 ADR-0009 为准，只保留内置系统管理员、教务主任和教师三种角色，排课与发布由教务主任承担，不提供旧角色兼容层。
 
+> **当前部署决定（ADR-0015）**：历史任务卡曾使用 `base`/`worker` 两个发布镜像；当前 Compose 与 CI 只发布 `course_scheduling_system-backend`（`worker` target），并让 `api`、`worker`、`worker-ops` 以不同命令运行。历史条目中的旧包名和“API 镜像精简”描述保留用于追溯，不代表当前配置。
+
 ---
 
 ## 项目目录结构(M0 创建,整个项目遵循)
 
 ```
 Course_Scheduling_System/
-├── docker-compose.yml          # 正式部署用(5 容器:caddy/api/worker/postgres/redis)
+├── docker-compose.yml          # 正式部署用(6 容器:caddy/api/worker/worker-ops/postgres/redis；后三者共用 backend 镜像)
 ├── docker-compose.dev.yml      # 开发用(热重载)
 ├── .env.example                # 仅需改:管理员密码、校名、SMTP(选填)
 ├── Caddyfile
@@ -60,7 +62,7 @@ Course_Scheduling_System/
 | Milestone | 目标 | 完成的可见成果 |
 |---|---|---|
 | M0 项目骨架 | 可运行的基础系统 | `sudo docker compose up -d` 后可登录并看到空仪表盘 |
-| M1 基础数据 | 构建学校数据 | 学期、基础数据、作息和校历页面完成真实数据维护 |
+| M1 基础数据 | 构建学校数据 | 排课工作台及三个学期准备辅助工作面完成真实数据维护 |
 | M2 手动排课 | 拖拽排课可用 | 手动排完一张班级课表并发布,教师可查询 |
 | M3 自动排课 | 引擎上线 | 一键生成自动排课草稿，无解时提供易懂的原因说明 |
 | M4 调课与代课 | 学期中日常运行 | 请假→代课→通知→确认 全流程 |
@@ -140,11 +142,11 @@ Course_Scheduling_System/
   3. 模板字段有中文说明列,导入时自动跳过
 - **测试方式**:pytest 用 fixtures 内的正确/错误 Excel 文件
 
-### [x] M1-4 分散的学期准备页面
-- **描述**:首次登录(无任何学期数据时)从“学期与作息时间表”开始；随后在基础数据、作息分组和校历页面维护真实数据。仪表盘只显示中性摘要，排课前置检查仍由排课流程负责。该行为由 ADR-0010 取代旧的跨页面向导设计。
+### [x] M1-4 排课工作台学期准备辅助工作面
+- **描述**:首次登录(无任何学期数据时)从“排课工作台”的学期创建卡片开始；随后在学期管理、校历与准备、资源与导入辅助工作面及五步档案视图维护真实数据。仪表盘只显示中性摘要，排课前置检查仍由排课流程负责。该行为由 ADR-0010 与 ADR-0018 取代旧的跨页面向导设计。
 - **模块**:`frontend/src/views/settings/Semesters.vue`、`frontend/src/views/basedata/`、`frontend/src/views/settings/PeriodTableEditor.vue`、`frontend/src/views/settings/Calendar.vue`
 - **验收标准**:
-  1. 全新系统无学期时，管理角色可进入学期页面创建中性学期；不会隐式生成科目、教师、班级或作息
+  1. 全新系统无学期时，管理角色可在排课工作台创建中性学期；不会隐式生成科目、教师、班级或作息
   2. 学期、基础数据、作息分组和校历可分别保存并再次打开，仪表盘摘要来自真实数据
   3. 用户测试：不看文档可在 30 分钟内创建中性学期、录入基础数据并确认学校实际作息
 - **测试方式**:Semesters/BaseData/PeriodTable Vitest + Playwright 学期准备旅程
@@ -473,13 +475,13 @@ Course_Scheduling_System/
 
 **补遗(实现后)**
 - **同一份 Compose，两种部署方式**：为支持 `sudo docker compose pull`，`docker-compose.yml` 中 web、api 和 worker 服务同时配置 `image:`（GHCR）与 `build:`。克隆源代码的用户执行 `sudo docker compose up -d` 时仍在本机构建；只获取部署文件的用户可执行 `sudo docker compose pull && sudo docker compose up -d` 拉取官方镜像。镜像版本由 `.env` 中的 `IMAGE_TAG` 决定，正式部署建议固定版本号。
-- **CI 补版本标签**:原 `images` job 只推 `:latest` 与 `:sha`,`IMAGE_TAG=v1.0.0` 会拉不到镜像。三个镜像各补推 `:${github.ref_name}`(main push=`main`、版本标签=`v1.0.0`),版本固定才真的成立;版本标签仍为唯一触发双架构(amd64+arm64)的条件。
+- **CI 补版本标签**:原 `images` job 只推 `:latest` 与 `:sha`,`IMAGE_TAG=v1.0.0` 会拉不到镜像。应用镜像各补推 `:${github.ref_name}`(main push=`main`、版本标签=`v1.0.0`),版本固定才真的成立;版本标签仍为唯一触发双架构(amd64+arm64)的条件。当前应用镜像为统一的 `backend` 与 `web`。
 - **将 HTTPS 作为可选配置**：Caddyfile 原先将站点地址固定为 `:80` 并写入镜像，使用预建镜像的学校无法修改。现改为 `{$SITE_ADDRESS::80}` 环境变量；默认使用内网 HTTP，在 `.env` 中设置 `SITE_ADDRESS=域名` 后自动申请并续期 Let's Encrypt 证书。Compose 同时增加 443 端口映射和 `caddydata` 数据卷，用于持久保存证书并避免重复申请。验证结果：未设置域名时，重建 web 后 `/api/health` 与首页均返回 200，内网 HTTP 部署不受影响；`sudo docker compose config` 在两种配置下均可正确解析。
 - **文件产出**:`docs/deploy/`(index/install/upgrade/backup/https/faq 六篇中文,含 Win/Linux/Synology/QNAP 安装、异地备份、回滚与 schema 变更提醒、VPS 对外端口与安全设置)、改写 `README.md`(英语摘要+功能总览+双部署快速开始+文件索引)、新增 `CHANGELOG.md`(Keep a Changelog,汇总 M0–M5)、`CONTRIBUTING.md`(开发环境/质量门槛/任务卡制/发布新版本流程)。`LICENSE`(MIT)M0 已具备。
 - **验收①「干净 VM 实测」的界线**:compose 解析、web 重建与默认 HTTP 服务已在本机 Docker 验过;真正的「全新 VM 从零 pull 安装」需待版本标签推上 GHCR 后才可端到端跑(目前尚无 release tag),此步骤留给实际发布时(或用户)在干净环境验收并记录于 PR。
 
 ### [x] M5-4 E2E 总验收与性能
-- **描述**:Playwright 全流程场景:学期准备页面→导入→教学任务→自动排课→发布→请假→代课→月统计;性能验收;无障碍基本检查(键盘可操作、对比度)。
+- **描述**:Playwright 全流程场景:工作台学期准备辅助面→导入→教学任务→自动排课→发布→请假→代课→月统计;性能验收;无障碍基本检查(键盘可操作、对比度)。
 - **验收标准**:
   1. 三套 fixtures 全流程 E2E 绿灯
   2. 60 班规模:页面加载 p95 < 2s、check-conflict p95 < 100ms、自动排课 < 10 分钟

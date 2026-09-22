@@ -6,6 +6,7 @@
 # 两个 worker 的预算差很多,因为工作性质不同(M6-2):
 #   worker      → 排课引擎(OR-Tools 求解 60 班会吃掉大半),分到最多
 #   worker-ops  → 导出/备份/恢复/发送邮件;WeasyPrint 渲染一张 A4 课表的峰值远低于求解
+# 两者与 api 共用同一个 backend 镜像；这里限制的是各自独立进程的运行内存，不是镜像大小。
 name: scheduling
 
 services:

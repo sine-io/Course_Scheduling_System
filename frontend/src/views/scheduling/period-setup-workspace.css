@@ -1,0 +1,198 @@
+.period-setup-workspace {
+  display: grid;
+  min-width: 0;
+  gap: var(--app-space-4);
+}
+
+.period-setup-state {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--app-text-muted);
+}
+
+.period-setup-state strong { color: var(--app-text); }
+.period-setup-state-error { color: var(--app-danger-pressed); }
+
+.period-setup-header,
+.period-preview-heading,
+.period-control-heading,
+.period-subsection-heading,
+.period-grid-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--app-space-3);
+}
+
+.period-setup-header { align-items: flex-start; }
+.period-setup-header h2,
+.period-preview-heading h3 { margin: 0; color: var(--app-text); }
+.period-setup-header p:last-child,
+.period-preview-heading p { max-width: 760px; margin: 6px 0 0; color: var(--app-text-muted); font-size: 13px; line-height: 1.55; }
+.period-setup-header-actions,
+.period-control-actions,
+.period-row-presets {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--app-space-2);
+}
+.period-setup-header-actions { justify-content: flex-end; flex: 0 0 auto; }
+
+.period-section-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--app-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.period-group-switcher {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+}
+.period-group-switcher-heading { display: grid; gap: 1px; }
+.period-group-switcher-heading strong { color: var(--app-text); font-size: 13px; }
+.period-group-switcher-items { display: flex; min-width: 0; align-items: center; gap: 7px; overflow-x: auto; }
+.period-group-item {
+  display: flex;
+  min-width: 170px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--app-radius-xs);
+  background: transparent;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+}
+.period-group-item:hover { background: var(--app-surface-muted); }
+.period-group-item.is-active { border-color: var(--app-primary); background: var(--app-primary-soft); }
+.period-group-item-main { display: grid; min-width: 0; gap: 3px; }
+.period-group-item-main strong { overflow-wrap: anywhere; font-size: 13px; }
+.period-group-item-main small { color: var(--app-text-muted); font-size: 11px; white-space: nowrap; }
+
+.period-setup-layout {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--app-space-4);
+}
+
+.period-control-panel {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+  position: sticky;
+  top: 12px;
+}
+.period-control-section,
+.period-group-editor,
+.period-capacity-preview {
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-surface);
+}
+.period-control-section { display: grid; gap: 11px; padding: 13px; }
+.period-control-heading { align-items: flex-start; }
+.period-control-heading > div { min-width: 0; }
+.period-control-heading strong { color: var(--app-text); font-size: 13px; }
+.period-control-count { color: var(--app-text-muted); font-size: 11px; white-space: nowrap; }
+.period-control-hint { color: var(--app-text-muted); font-size: 11px; line-height: 1.45; }
+.period-control-actions { padding-top: 1px; }
+
+.period-grade-list { display: grid; min-width: 0; gap: 12px; }
+.period-grade-group { display: grid; min-width: 0; gap: 7px; padding-top: 10px; border-top: 1px solid var(--app-border); }
+.period-grade-group:first-child { padding-top: 0; border-top: 0; }
+.period-class-options { display: grid; min-width: 0; gap: 6px; padding-left: 24px; }
+.period-class-options .n-checkbox { align-items: flex-start; }
+.period-class-options small { display: block; color: var(--app-text-muted); font-size: 10px; }
+
+.period-weekday-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 4px; }
+.period-weekday-options .n-checkbox { min-width: 0; }
+.period-count-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.period-count-field { display: grid; min-width: 0; gap: 5px; }
+.period-count-field > span { color: var(--app-text-muted); font-size: 11px; }
+.period-count-field .n-input-number { width: 100%; }
+.period-group-editor { display: grid; min-width: 0; gap: 14px; padding: 14px; }
+.period-preview { display: grid; min-width: 0; gap: 13px; }
+.period-preview-heading { align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid var(--app-border); }
+.period-preview-heading > svg { color: var(--app-primary); flex: 0 0 auto; }
+
+.period-grid-scroll { min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.period-setup-grid { width: 100%; min-width: 820px; border-collapse: collapse; table-layout: fixed; }
+.period-setup-grid th,
+.period-setup-grid td { padding: 8px; border-bottom: 1px solid var(--app-border); vertical-align: middle; text-align: center; }
+.period-setup-grid th { color: var(--app-text-muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.period-setup-grid tr:last-child td { border-bottom: 0; }
+.period-grid-details { width: min(285px, 30%); text-align: left !important; }
+.period-grid-actions { width: 48px; }
+.period-row-details { display: grid; min-width: 0; gap: 6px; }
+.period-row-heading { display: flex; align-items: center; gap: 7px; color: var(--app-text-muted); font-size: 11px; }
+.period-time-range { display: grid; grid-template-columns: minmax(0, 1fr) 12px minmax(0, 1fr); align-items: center; gap: 3px; }
+.period-time-range > span { color: var(--app-text-muted); text-align: center; }
+.period-row-presets { gap: 2px 8px; }
+.period-row-presets .n-button { justify-content: flex-start; padding: 0; font-size: 11px; }
+.period-grid-cell { min-width: 100px; }
+.period-type-cell { min-height: 30px; border-color: transparent; }
+.period-type-regular { color: var(--app-primary-strong); background: var(--app-primary-soft); }
+.period-type-morning { color: var(--app-warning-pressed); background: var(--app-warning-soft); }
+.period-type-lunch { color: var(--app-text-muted); background: var(--app-surface-muted); }
+.period-type-homeroom { color: var(--app-success-pressed); background: var(--app-success-soft); }
+.period-type-reserved { color: var(--app-danger-pressed); background: var(--app-danger-soft); }
+.period-grid-footer { align-items: flex-start; color: var(--app-text-muted); font-size: 11px; line-height: 1.45; }
+.period-grid-footer > span { padding-top: 7px; }
+
+.period-capacity-preview { display: grid; gap: 12px; padding: 13px; }
+.period-subsection-heading { align-items: flex-start; }
+.period-subsection-heading > div { min-width: 0; }
+.period-subsection-heading strong { color: var(--app-text); font-size: 13px; }
+.period-capacity-empty { color: var(--app-text-muted); font-size: 12px; }
+.period-capacity-list { display: grid; min-width: 0; gap: 0; }
+.period-capacity-row { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--app-border); }
+.period-capacity-row:first-child { border-top: 0; }
+.period-capacity-row > div { display: grid; min-width: 0; gap: 2px; }
+.period-capacity-row strong { overflow-wrap: anywhere; color: var(--app-text); font-size: 12px; }
+.period-capacity-row small { color: var(--app-text-muted); font-size: 11px; }
+.period-capacity-row > span { color: var(--app-text-muted); font-size: 12px; white-space: nowrap; }
+
+.period-setup-warnings { display: grid; gap: 8px; }
+
+@media (max-width: 980px) {
+  .period-setup-layout { grid-template-columns: 1fr; }
+  .period-control-panel { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .period-control-group-meta,
+  .period-class-range { grid-column: span 2; }
+}
+
+@media (max-width: 680px) {
+  .period-setup-header { display: grid; }
+  .period-setup-header-actions { justify-content: flex-start; }
+  .period-group-switcher { grid-template-columns: 1fr auto; }
+  .period-group-switcher-heading { grid-column: 1 / -1; }
+  .period-group-switcher-items { grid-column: 1 / -1; order: 3; }
+  .period-control-panel { grid-template-columns: 1fr; }
+  .period-control-group-meta,
+  .period-class-range { grid-column: auto; }
+  .period-count-controls { grid-template-columns: 1fr; }
+  .period-capacity-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .period-capacity-row .n-tag { grid-column: 1 / -1; justify-self: start; }
+}

@@ -183,9 +183,9 @@
         <h1>部署与运维手册</h1>
         <div class="src">源文件 <code>docs/deploy/README.md</code> · <a href="https://github.com/sine-io/Course_Scheduling_System/blob/main/docs/deploy/README.md">在 GitHub 上查看</a></div>
       </header>
-      <p>给<strong>学校信息管理者/教务主任</strong>的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。</p>
+      <p>给<strong>学校信息管理者/教务主任</strong>的完整操作文件。系统为单校自建、纯 Web,以 Docker Compose 一键部署,六个容器(web / api / worker / worker-ops / postgres / redis)在一台主机上跑完。<code>api</code>、<code>worker</code> 与 <code>worker-ops</code> 共用一个 <code>backend</code> 镜像，但仍是三个独立容器。</p>
       <blockquote>
-      <p><code>worker</code> 专跑自动排课(一次可跑好几分钟),<code>worker-ops</code> 跑导出、备份、恢复、发送邮件与定时任务。分开的用意是:<strong>排课那几分钟里,你按「导出课表」仍然是立即响应的</strong>。</p>
+      <p><code>worker</code> 专跑自动排课(一次可跑好几分钟),<code>worker-ops</code> 跑导出、备份、恢复、发送邮件与定时任务。分开的用意是:<strong>排课那几分钟里,你按「导出课表」仍然是立即响应的</strong>。共用镜像只减少构建与发布对象，不合并进程或队列。</p>
       </blockquote>
       <h2 id="我该从哪里开始">我该从哪里开始?</h2>
       <div class="tw"><table>
@@ -248,7 +248,7 @@
       <h2 id="两种部署方式">两种部署方式</h2>
       <p>同一份 <code>docker-compose.yml</code> 支持两种做法:</p>
       <ol>
-      <li><strong>拉取官方预建镜像</strong>（推荐，免构建、升级快）：准备 <code>docker-compose.yml</code> 和 <code>.env</code> 两个文件，然后执行 <code>sudo docker compose pull &amp;&amp; sudo docker compose up -d</code>。</li>
+      <li><strong>拉取官方预建镜像</strong>（推荐，免构建、升级快）：准备 <code>docker-compose.yml</code> 和 <code>.env</code> 两个文件，然后执行 <code>sudo docker compose pull &amp;&amp; sudo docker compose up -d</code>。应用层只需拉取 <code>backend</code> 与 <code>web</code> 两个镜像，PostgreSQL/Redis 仍使用各自的官方基础镜像。</li>
       <li><strong>从源代码自行构建</strong>（需要修改程序或无法连接 GHCR 时）：克隆项目后执行 <code>sudo docker compose up -d</code>，首次会在本机构建镜像，通常需要几分钟。</li>
       </ol>
       <p>详见 <a href="install.html">安装指南</a>。</p>
@@ -267,7 +267,7 @@
       </tr>
       <tr>
       <td>容器 container</td>
-      <td>一个服务的执行实体,如上图五个</td>
+      <td>一个服务的执行实体,如上图六个</td>
       </tr>
       <tr>
       <td>volume</td>

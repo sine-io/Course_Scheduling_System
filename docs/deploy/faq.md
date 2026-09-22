@@ -19,6 +19,10 @@ sudo docker compose logs --tail=50 <服务名>   # 例如 api / worker / postgre
 
 常见:`.env` 的 `DATABASE_URL` 与 `POSTGRES_*` 账号和密码不一致;`SECRET_KEY` 未设。
 
+**Q：为什么 `api`、`worker` 和 `worker-ops` 显示相同的镜像？**
+
+这是预期配置：三个容器共用 `course_scheduling_system-backend`，但启动命令和监听队列不同。API 处理 HTTP，`worker` 只处理 `default` 排课队列，`worker-ops` 只处理 `ops` 运维队列；不要为了省容器而把它们改成一个进程。
+
 **Q:80 端口被占用,启动失败(port is already allocated)。**
 修改 `.env` 中的 `HTTP_PORT`（例如 `8080`），再执行 `sudo docker compose up -d`，然后访问 `http://<主机IP>:8080`。
 
@@ -65,7 +69,7 @@ Email 为**选配**;未在「系统管理」设置 SMTP 时,只有站内通知(�
 排课是计算密集工作,受班级数、约束复杂度影响。建议主机 ≥ 4 核 8GB。无解时系统会给「冲突定位」报告,依提示放宽条件或补资源。可设置求解超时(默认 10 分钟),超时取当前最佳解。
 
 **Q:页面偶尔转圈久。**
-自动排课或大量导出时 worker 会比较繁忙，但它与 API 服务相互独立，一般操作不受影响。自 v1.1 起，排课（`worker`）与导出/备份（`worker-ops`）由不同容器负责，排课进行中提交导出任务仍会立即响应。若持续缓慢，请执行 `sudo docker stats` 检查主机资源使用情况。
+自动排课或大量导出时 worker 会比较繁忙，但它与 API 服务相互独立，一般操作不受影响。排课（`worker`）与导出/备份（`worker-ops`）由不同容器负责，即使共用同一个 backend 镜像，排课进行中提交导出任务仍会立即响应。若持续缓慢，请执行 `sudo docker stats` 检查主机资源使用情况。
 
 **Q:导出/备份时出现「运维背景服务(worker-ops)没有在执行」。**
 

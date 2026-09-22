@@ -15,8 +15,8 @@
 
 | 领域 | 内容 |
 |---|---|
-| **基础数据** | 学期与作息时间表、教师、班级、科目、教室/场地、Excel 导入、开新学期复制、班级作息时间表指派 |
-| **教学任务与手动排课** | 教学任务管理(走班群组、协同教学、连堂)、课时实时统计、拖拽式周课表、单格冲突检查(<100ms)、多草稿版本管理与发布 |
+| **排课工作台** | 创建学期并按五步维护班级、作息、科目与教师档案、教学任务，完成前置检查和自动排课 |
+| **基础数据与手动排课** | 教室/场地、Excel 导入、教师账号绑定、拖拽式周课表、单格冲突检查(<100ms)、多草稿版本管理与发布 |
 | **自动排课** | OR-Tools CP-SAT 引擎,H1–H10 硬约束 + S1–S8 软约束加权;后台求解显示实时进度;**无解时以教务语言定位冲突**并支持部分排课 |
 | **调课与代课** | 请假登记与受影响节次展开、代课推荐引擎、调课验证、指派即生效、站内+Email 通知与确认、今日看板与 A4 公告打印、月结课时统计(Excel) |
 | **报表/导出** | 班级、教师、教室/场地课表导出 Excel / PDF（内嵌中文字体）/ PNG、全校总表、批量 ZIP |
@@ -68,7 +68,7 @@ cp .env.example .env      # 改 ADMIN_PASSWORD、SCHOOL_NAME、SECRET_KEY
 sudo docker compose up -d # 首次会构建镜像，需数分钟
 ```
 
-启动后开浏览器连 `http://<主机IP>`(本机为 <http://localhost>),以 `.env` 的管理员账号和密码登录；先在“学期与作息时间表”创建当前学期，再按“基础数据”和“校历与排课准备”页面逐项完成准备。
+启动后开浏览器连 `http://<主机IP>`(本机为 <http://localhost>),以 `.env` 的管理员账号和密码登录；进入“排课工作台”创建当前学期，再使用工作台内的“学期管理”“校历与准备”“资源与导入”辅助工作面完成准备，随后按五个步骤继续排课。
 
 - 健康检查:`http://localhost/api/health` → `{"status":"ok"}`
 - 容器状态：`sudo docker compose ps`（六个容器均应为 healthy）
@@ -118,13 +118,13 @@ sudo docker compose up -d # 首次会构建镜像，需数分钟
 | 导出 | openpyxl(Excel)、WeasyPrint(PDF,内嵌 Noto CJK)、poppler(PNG) |
 | 数据库 | PostgreSQL 16 |
 | 反向代理 | Caddy(内网 HTTP;设域名即自动 HTTPS) |
-| 部署 | Docker Compose(6 容器:web / api / worker(排课)/ worker-ops(导出·备份·定时)/ postgres / redis) |
+| 部署 | Docker Compose(6 容器:web / api / worker(排课)/ worker-ops(导出·备份·定时)/ postgres / redis；三个后端容器共用 `backend` 镜像) |
 
 ---
 
 ## 项目状态
 
-**v1.2.0 已发行(2026-08-02)。** 六大里程碑 M0–M5 全部完成,功能齐备并经完整验收；本版加入可配置学校名称、教学任务超课时上限、一键安装脚本和离线文档。官方镜像(amd64 + arm64)已发布于 GHCR。
+**v1.2.0 已发行(2026-08-02)。** 六大里程碑 M0–M5 全部完成,功能齐备并经完整验收；本版加入可配置学校名称、教学任务超课时上限、一键安装脚本和离线文档。官方镜像(amd64 + arm64)已发布于 GHCR。当前未发布版本将 API、worker 与 worker-ops 统一为 `course_scheduling_system-backend` 镜像。
 
 **请直接从最新版开始安装**(见上方快速开始);`v1.2.0` 是目前建议使用的版本。各版变更见 [CHANGELOG](CHANGELOG.md),开发历程见 [docs/tasks.md](docs/tasks.md)。
 

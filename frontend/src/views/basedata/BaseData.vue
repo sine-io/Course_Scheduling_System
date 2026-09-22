@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Database, FileSpreadsheet, RefreshCw, ShieldCheck } from '@lucide/vue'
-import { NAlert, NButton, NSelect, NSpin } from 'naive-ui'
+import { Database, RefreshCw, ShieldCheck } from '@lucide/vue'
+import { NAlert, NButton, NRadioButton, NRadioGroup, NSelect, NSpin } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { apiErrorMessage } from '@/api/client'
@@ -9,17 +9,30 @@ import type { SemesterListItem } from '@/api/semesters'
 import { vAccessibleSelect } from '@/directives/accessibleSelect'
 import { useAuthStore } from '@/stores/auth'
 import { useSemesterContextStore } from '@/stores/semesterContext'
-import ManualEntry from './ManualEntry.vue'
 import ReferenceImport from './ReferenceImport.vue'
+import RoomsTab from './RoomsTab.vue'
 import TemplateImport from './TemplateImport.vue'
+import TeacherAccountBindings from './TeacherAccountBindings.vue'
 import './basedata-workspace.css'
 
+export type BaseDataSection = 'rooms' | 'template' | 'reference' | 'teacher-accounts'
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+  embeddedSemesterId?: number
+  embeddedSection?: BaseDataSection
+}>(), {
+  embedded: false,
+  embeddedSemesterId: undefined,
+  embeddedSection: 'rooms',
+})
+const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore()
 const semesterContext = useSemesterContextStore()
 const route = useRoute()
 const router = useRouter()
 const semesters = ref<SemesterListItem[]>([])
 const currentId = ref<number | null>(null)
+const embeddedSection = ref<BaseDataSection>(props.embeddedSection)
 const loading = ref(true)
 const loadError = ref<string | null>(null)
 
@@ -38,18 +51,37 @@ const semesterOptions = computed(() =>
 const currentSemester = computed(() => (
   semesters.value.find(semester => semester.id === currentId.value) ?? null
 ))
-type BaseDataSection = 'subjects' | 'teachers' | 'rooms' | 'template' | 'reference'
-const initialSection = computed<BaseDataSection>(() => {
+const activeSection = computed<BaseDataSection>(() => {
+  if (props.embedded) {
+    const allowed = auth.hasRole('admin')
+      ? ['rooms', 'template', 'reference', 'teacher-accounts']
+      : ['rooms', 'template', 'reference']
+    return allowed.includes(embeddedSection.value)
+      ? embeddedSection.value
+      : 'rooms'
+  }
   const value = String(route.query.tab ?? '')
-  return ['subjects', 'teachers', 'rooms', 'template', 'reference'].includes(value)
+  const allowed = auth.hasRole('admin')
+    ? ['rooms', 'template', 'reference', 'teacher-accounts']
+    : ['rooms', 'template', 'reference']
+  return allowed.includes(value)
     ? value as BaseDataSection
-    : 'subjects'
+    : 'rooms'
 })
-const manualSection = computed<'subjects' | 'teachers' | 'rooms'>(() => (
-  ['subjects', 'teachers', 'rooms'].includes(initialSection.value)
-    ? initialSection.value as 'subjects' | 'teachers' | 'rooms'
-    : 'subjects'
-))
+
+async function selectSection(value: BaseDataSection) {
+  if (props.embedded) {
+    embeddedSection.value = value
+    return
+  }
+  await router.replace({ query: { ...route.query, tab: value } })
+}
+
+async function selectSemester(value: number | null) {
+  currentId.value = value
+  if (!value) return
+  await router.replace({ query: { ...route.query, semester: String(value) } })
+}
 
 async function loadSemesters() {
   loading.value = true
@@ -57,7 +89,7 @@ async function loadSemesters() {
   try {
     await semesterContext.load()
     semesters.value = await listSemesters()
-    const querySemesterId = Number(route.query.semester)
+    const querySemesterId = props.embeddedSemesterId ?? Number(route.query.semester)
     currentId.value = semesters.value.find((semester) => semester.id === querySemesterId)?.id
       ?? semesters.value.find((semester) => semester.is_current)?.id
       ?? semesterContext.currentSemesterId
@@ -75,25 +107,22 @@ onMounted(loadSemesters)
 
 <template>
   <div class="basedata-page">
-    <header class="basedata-page-header">
+    <header v-if="!props.embedded" class="basedata-page-header">
       <div>
         <p class="basedata-eyebrow">{{ '基础档案' }}</p>
         <h1>{{ '基础数据' }}</h1>
-        <p>{{ '按学期维护教师、科目与教室/场地，保持排课所需的基础信息一致。班级请在“开始排课”中设置。' }}</p>
+        <p>{{ '维护教室/场地、批量导入和教师登录账号绑定。班级、科目与教师档案统一在“排课工作台”中维护。' }}</p>
       </div>
       <div class="basedata-header-actions">
         <n-select
           v-if="semesters.length"
-          v-model:value="currentId"
           v-accessible-select="'选择工作学期'"
+          :value="currentId"
           :options="semesterOptions"
           data-testid="basedata-semester-select"
           :placeholder="'选择学期'"
+          @update:value="selectSemester"
         />
-        <n-button secondary data-testid="basedata-template-import" @click="router.push({ query: { ...route.query, tab: 'template' } })">
-          <template #icon><FileSpreadsheet :size="16" aria-hidden="true" /></template>
-          {{ '模板导入' }}
-        </n-button>
       </div>
     </header>
 
@@ -116,37 +145,63 @@ onMounted(loadSemesters)
     <section v-else-if="!currentId" class="basedata-state" data-testid="basedata-empty">
       <Database :size="24" aria-hidden="true" />
       <strong>{{ '尚未创建任何学期' }}</strong>
-      <span>{{ '请先在“学期与作息时间表”中创建学期，再维护教师、科目和教室/场地。班级请在“开始排课”中设置。' }}</span>
-      <n-button type="primary" @click="router.push({ name: 'semesters' })">{{ '前往学期配置' }}</n-button>
+      <span>{{ '请先在“排课工作台”中创建学期，再维护教室/场地、导入数据或绑定教师账号。' }}</span>
+      <n-button type="primary" data-testid="basedata-start-scheduling" @click="router.push({ name: 'scheduling-workbench' })">{{ '前往排课工作台' }}</n-button>
     </section>
 
     <section v-else class="basedata-panel basedata-manual-panel" data-testid="basedata-workspace">
-      <n-alert v-if="!canEdit" class="basedata-readonly" type="info" data-testid="basedata-readonly">
+      <n-radio-group
+        :value="activeSection"
+        size="small"
+        data-testid="basedata-section-switcher"
+        aria-label="选择基础数据功能"
+        @update:value="selectSection"
+      >
+        <n-radio-button value="rooms" data-testid="basedata-section-rooms">{{ '教室/场地' }}</n-radio-button>
+        <n-radio-button value="template" data-testid="basedata-section-template">{{ '模板导入' }}</n-radio-button>
+        <n-radio-button value="reference" data-testid="basedata-section-reference">{{ '参考文件导入' }}</n-radio-button>
+        <n-radio-button v-if="auth.hasRole('admin')" value="teacher-accounts" data-testid="basedata-section-teacher-accounts">
+          {{ '教师账号绑定' }}
+        </n-radio-button>
+      </n-radio-group>
+
+      <n-alert
+        v-if="activeSection === 'teacher-accounts' ? !canAdminHighRisk : !canEdit"
+        class="basedata-readonly"
+        type="info"
+        data-testid="basedata-readonly"
+      >
         <template #icon><ShieldCheck :size="17" aria-hidden="true" /></template>
-        {{ '当前角色仅可查看基础数据，写入操作仅对教务主任开放。' }}
+        {{ '当前学期仅可查看，无法执行写入操作。' }}
       </n-alert>
+      <RoomsTab
+        v-if="activeSection === 'rooms'"
+        :key="`rooms-${currentId}`"
+        :semester-id="currentId"
+        :can-edit="canEdit"
+        :can-delete="canAdminHighRisk"
+        @changed="emit('changed')"
+      />
       <TemplateImport
-        v-if="initialSection === 'template' && currentSemester"
+        v-else-if="activeSection === 'template' && currentSemester"
         :key="`template-${currentId}`"
         :semester="currentSemester"
         :can-edit="canEdit"
+        @changed="emit('changed')"
       />
       <ReferenceImport
-        v-else-if="initialSection === 'reference'"
+        v-else-if="activeSection === 'reference'"
         :key="`reference-${currentId}`"
         :semester-id="currentId"
         :can-edit="canEdit"
+        @changed="emit('changed')"
       />
-      <ManualEntry
+      <TeacherAccountBindings
         v-else
-        :key="`manual-${currentId}-${initialSection}`"
+        :key="`teacher-accounts-${currentId}`"
         :semester-id="currentId"
-        :initial-section="manualSection"
-        :can-edit="canEdit"
-        :can-delete="canAdminHighRisk"
-        :can-manage-accounts="canAdminHighRisk"
-        :show-classes="false"
-        :show-readonly-notice="false"
+        :can-edit="canAdminHighRisk"
+        @changed="emit('changed')"
       />
     </section>
   </div>

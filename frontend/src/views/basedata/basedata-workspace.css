@@ -86,6 +86,7 @@
 .basedata-data-table { min-width: 680px; }
 
 .basedata-data-table--teachers { min-width: 900px; }
+.basedata-data-table--accounts { min-width: 620px; }
 .basedata-data-table--classes { min-width: 820px; }
 .basedata-data-table--rooms { min-width: 650px; }
 

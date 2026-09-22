@@ -580,8 +580,8 @@ describe('TemplateImport', () => {
     await flushPromises()
 
     expect(mocks.confirmSemesterReadiness).toHaveBeenCalledWith(17)
-    expect(wrapper.get('[data-testid="readiness-next"]').attributes('href')).toBe('/scheduling/settings')
-    expect(wrapper.get('[data-testid="readiness-next"]').text()).toContain('编辑排课规则')
+    expect(wrapper.get('[data-testid="readiness-next"]').attributes('href')).toBe('/scheduling/flow?step=start&semester=17')
+    expect(wrapper.get('[data-testid="readiness-next"]').text()).toContain('继续排课工作台')
     wrapper.unmount()
   })
 

@@ -55,7 +55,7 @@ cd frontend && npm install && npm run test
 - **所有用户界面、接口错误、导入导出和通知文案统一使用自然简体中文。** 采用全国中小学通用教务用语，例如教学任务、作息时间表、课时、走班和班主任。冲突提示使用作息时间表中的名称（如早自习、午休、第一节），不展示内部 `period_no`。
 - **数据库 schema 变更必附 Alembic 迁移**,且能从前一版顺向升级。
 - solver 模块(`app/solver/`)不得 import `app.api` / `app.models`(以测试保证纯度)。
-- **后台任务分两条队列**:`default` 只跑自动排课(可占住 worker 数分钟),`ops` 跑导出/备份/恢复/发送邮件与定时任务。新增后台任务时先问「这会不会跑很久」——会的话走 `default`,否则统一 `ops`,别让秒级任务排在排课后面。两者由 `worker` 与 `worker-ops` 两个容器分别监听(同一镜像,见 `app/workers/worker.py`)。
+- **后台任务分两条队列**:`default` 只跑自动排课(可占住 worker 数分钟),`ops` 跑导出/备份/恢复/发送邮件与定时任务。新增后台任务时先问「这会不会跑很久」——会的话走 `default`,否则统一 `ops`,别让秒级任务排在排课后面。两者由 `worker` 与 `worker-ops` 两个容器分别监听；`api`、`worker`、`worker-ops` 共用同一个 backend 镜像(见 `app/workers/worker.py` 与 ADR-0015)。
 - 架构规格以 [docs/architecture.md](docs/architecture.md) 为准;与任务卡冲突时以架构文件为准并反馈矛盾。
 
 ### E2E(Playwright)
@@ -74,7 +74,7 @@ npm run e2e:perf       # 60 班压测(执行久,非回归,CI 不跑)
 npm run e2e:manual     # 操作手册截图生成器(需另备示范数据测试站,CI 不跑)
 ```
 
-CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建测试账号并运行 `npm run e2e:acceptance`；E2E 未通过时不会发布镜像。
+CI 的 `e2e` 任务会在 runner 上构建 backend 与 web 两个应用镜像、启动全栈、创建测试账号并运行 `npm run e2e:acceptance`；E2E 未通过时不会发布镜像。
 
 ## 提交与 PR
 
@@ -101,11 +101,10 @@ CI 的 `e2e` 任务会在 runner 上构建三个镜像、启动全栈、创建�
    ```
 
 4. `v*` 标签触发 CI 的 `images` job,构建并推送**双架构(amd64 + arm64)**镜像到 GHCR:
-   - `ghcr.io/sine-io/course_scheduling_system-api`
-   - `ghcr.io/sine-io/course_scheduling_system-worker`
+   - `ghcr.io/sine-io/course_scheduling_system-backend`（API、worker、worker-ops 共用）
    - `ghcr.io/sine-io/course_scheduling_system-web`
 
-   每个镜像会推 `:latest`、`:<版本标签>`(如 `v1.2.0`,即 `github.ref_name`)与 `:<commit sha>` 三个 tag。`main` push 仅建 amd64;**版本标签才建双架构**。
+   每个镜像会推 `:latest`、`:<版本标签>`(如 `v1.2.0`,即 `github.ref_name`)与 `:<commit sha>` 三个 tag。`main` push 仅建 amd64;**版本标签才建双架构**。统一镜像后，旧的 `-api`/`-worker` 包名只代表历史发布；升级时必须同步更新 `docker-compose.yml`。
 5. 在 GitHub 创建 Release,关联该标签,粘贴该版 CHANGELOG 内容。
 6. 用户升级：在 `.env` 中设置 `IMAGE_TAG=v1.2.0`，然后执行 `sudo docker compose pull && sudo docker compose up -d`（见 [升级说明](docs/deploy/upgrade.md)）。`IMAGE_TAG` 对应此处推送的版本标签。
 

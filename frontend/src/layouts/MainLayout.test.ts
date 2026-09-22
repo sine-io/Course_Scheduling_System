@@ -70,7 +70,7 @@ function makeRouter() {
       { path: '/settings/calendar', name: 'calendar', component: { template: '<main />' } },
       { path: '/basedata', name: 'basedata', component: { template: '<main />' } },
       { path: '/scheduling/assignments', name: 'assignments', component: { template: '<main />' } },
-      { path: '/scheduling/flow', name: 'scheduling-flow', component: { template: '<main />' } },
+      { path: '/scheduling/flow', name: 'scheduling-workbench', component: { template: '<main />' } },
       { path: '/scheduling/settings', name: 'scheduling-settings', component: { template: '<main />' } },
       { path: '/scheduling/workbench', name: 'workbench', component: { template: '<main />' } },
       { path: '/scheduling/auto', name: 'auto-schedule', component: { template: '<main />' } },
@@ -123,10 +123,14 @@ describe('MainLayout', () => {
     expect(wrapper.get('[data-testid="product-identity"]').text()).toContain('教务排课')
     expect(wrapper.find('[data-testid="shell-breadcrumb"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('课程表调整')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课工作台')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('开始排课')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('工作空间')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('首页总览')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('系统管理')
-    expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('学期准备')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('学期与作息时间表')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('校历与排课准备')
+    expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('基础数据')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('排课主流程')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).toContain('日常运行')
     expect(wrapper.get('[data-testid="shell-nav"]').text()).not.toContain('常用')
@@ -170,8 +174,10 @@ describe('MainLayout', () => {
     expect(managementGroups[0].text()).toContain('工作空间')
     expect(wrapper.get('[data-nav-key="dashboard"]').text()).toContain('仪表盘')
     expect(wrapper.get('[data-nav-key="dashboard"]').classes()).toContain('app-nav-dashboard-link')
+    expect(managementGroups[0].text()).toContain('排课工作台')
+    expect(wrapper.get('[data-nav-key="scheduling-workbench"]').attributes('href')).toBe('/scheduling/flow')
     expect(managementGroups[0].text()).toContain('仪表盘')
-    expect(managementGroups[1].text()).toContain('学期准备')
+    expect(managementGroups[1].text()).toContain('排课主流程')
   })
 
   it('opens the mobile drawer, moves focus into it, and restores focus on escape', async () => {

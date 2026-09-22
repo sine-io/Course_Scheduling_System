@@ -114,7 +114,8 @@ async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
 }
 
-async function mockFlowApplication(page: Page) {
+async function mockFlowApplication(page: Page, options: { emptySemester?: boolean } = {}) {
+  let semesterCreated = !options.emptySemester
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url())
     const path = url.pathname
@@ -136,13 +137,21 @@ async function mockFlowApplication(page: Page) {
     })
     if (path === '/api/auth/me') return fulfillJson(route, USER)
     if (path === '/api/semester-context') return fulfillJson(route, {
-      current_semester: SEMESTER,
+      current_semester: semesterCreated ? SEMESTER : null,
       revision: 1,
       can_switch: false,
     })
     if (path === '/api/notifications/mine/unread-count') return fulfillJson(route, { unread: 0 })
     if (path === '/api/notifications/mine') return fulfillJson(route, { items: [], unread: 0 })
-    if (path === '/api/semesters') return fulfillJson(route, [SEMESTER])
+    if (path === '/api/semesters' && route.request().method() === 'POST') {
+      semesterCreated = true
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify(SEMESTER),
+      })
+    }
+    if (path === '/api/semesters') return fulfillJson(route, semesterCreated ? [SEMESTER] : [])
     if (path === '/api/semesters/71') return fulfillJson(route, SEMESTER)
     if (path === '/api/semesters/71/period-setup') return fulfillJson(route, {
       fingerprint: 'a'.repeat(64),
@@ -282,7 +291,7 @@ async function expectEmbeddedStepUsesWorkbenchWidth(page: Page, testId: string) 
   expect(dimensions.stepWidth).toBeLessThanOrEqual(dimensions.workbenchWidth + 1)
 }
 
-test('开始排课在宽屏下占满主内容区', async ({ page }) => {
+test('排课工作台在宽屏下占满主内容区', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 })
   await mockFlowApplication(page)
   await page.goto('/scheduling/flow')
@@ -291,7 +300,23 @@ test('开始排课在宽屏下占满主内容区', async ({ page }) => {
   await expectFlowUsesAvailableContentWidth(page)
 })
 
-test('开始排课的自动排课步骤在宽屏下占满工作台', async ({ page }) => {
+test('排课工作台在当前工作台创建首个学期，不跳转到学期设置页', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 })
+  await mockFlowApplication(page, { emptySemester: true })
+  await page.goto('/scheduling/flow')
+
+  await expect(page.getByTestId('flow-empty')).toBeVisible()
+  await expectNoRootOverflow(page)
+  await page.getByTestId('flow-semester-start-date').locator('input').fill('2045-09-01')
+  await page.getByTestId('flow-semester-end-date').locator('input').fill('2046-01-20')
+  await page.getByTestId('flow-semester-create').click()
+
+  await expect.poll(() => new URL(page.url()).pathname).toBe('/scheduling/flow')
+  await expect(page.getByTestId('flow-summary')).toBeVisible()
+  await expect(page.getByTestId('semesters-page')).not.toBeVisible()
+})
+
+test('排课工作台的自动排课步骤在宽屏下占满工作台', async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1080 })
   await mockFlowApplication(page)
   await page.goto('/scheduling/flow')
@@ -310,7 +335,7 @@ const responsiveViewports = [
 ] as const
 
 for (const viewport of responsiveViewports) {
-  test(`开始排课在${viewport.label}宽度下完整响应`, async ({ page }, testInfo) => {
+  test(`排课工作台在${viewport.label}宽度下完整响应`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width: viewport.width, height: viewport.height })
     await mockFlowApplication(page)
     await page.goto('/scheduling/flow')
@@ -327,7 +352,7 @@ for (const viewport of responsiveViewports) {
   })
 }
 
-test('开始排课在同一路由内完成五步设置并可返回总览', async ({ page }, testInfo) => {
+test('排课工作台在同一路由内完成五步设置并可返回总览', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await mockFlowApplication(page)
   await page.goto('/scheduling/flow')
@@ -336,29 +361,49 @@ test('开始排课在同一路由内完成五步设置并可返回总览', async
   const navigation = page.getByTestId('shell-nav')
   await expect(navigation.locator('.app-nav-group').first()).toContainText('工作空间')
   await expect(navigation.locator('.app-nav-group').first()).toContainText('仪表盘')
-  await expect(navigation.getByRole('link', { name: '开始排课', exact: true })).toHaveAttribute('href', '/scheduling/flow')
+  await expect(navigation.getByRole('link', { name: '排课工作台', exact: true })).toHaveAttribute('href', '/scheduling/flow')
   await expect(navigation.getByRole('link', { name: '基础数据', exact: true })).toBeVisible()
+  await expect(page.getByTestId('flow-go-rooms')).toHaveCount(0)
 
   await openStep(page, 'classes', 'classes-table')
 
   await page.getByTestId('flow-go-periods').click()
   await expectFlowLocation(page, 'periods')
-  await expect(page.getByTestId('semesters-page')).toBeVisible()
-  await page.getByTestId('period-table-edit-91').click()
+  await expect(page.getByTestId('period-setup-workspace')).toBeVisible()
+  await page.getByTestId('period-group-open-detail').click()
   await expectFlowLocation(page, 'periods', '91')
   await expect(page.getByTestId('period-table-back')).toContainText('返回排课工作台')
   await page.getByTestId('period-table-back').click()
   await expectFlowLocation(page)
 
-  await openStep(page, 'subjects', 'assignment-table')
-  await openStep(page, 'teachers', 'assignment-table')
+  await page.getByTestId('flow-go-subjects').click()
+  await expectFlowLocation(page, 'subjects')
+  await expect(page.getByTestId('assignment-table')).toBeVisible()
+  await page.getByTestId('flow-subjects-archive').click()
+  await expect(page.getByTestId('manual-common-subjects')).toBeVisible()
+  await expect(page.getByTestId('subjects-table')).toBeVisible()
+  await page.getByTestId('flow-subjects-work').click()
+  await expect(page.getByTestId('assignment-table')).toBeVisible()
+  await page.getByTestId('flow-step-back').click()
+  await expectFlowLocation(page)
+
+  await page.getByTestId('flow-go-teachers').click()
+  await expectFlowLocation(page, 'teachers')
+  await expect(page.getByTestId('assignment-table')).toBeVisible()
+  await page.getByTestId('flow-teachers-archive').click()
+  await expect(page.getByTestId('teachers-table')).toBeVisible()
+  await page.getByTestId('flow-teachers-work').click()
+  await expect(page.getByTestId('assignment-table')).toBeVisible()
+  await page.getByTestId('flow-step-back').click()
+  await expectFlowLocation(page)
+
   await openStep(page, 'start', 'auto-schedule-page')
 
   await expectNoRootOverflow(page)
   await page.screenshot({ path: testInfo.outputPath('scheduling-flow-desktop.png'), fullPage: true })
 })
 
-test('开始排课在窄屏下不溢出且移动导航保留统一入口', async ({ page }, testInfo) => {
+test('排课工作台在窄屏下不溢出且移动导航保留统一入口', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await mockFlowApplication(page)
   await page.goto('/scheduling/flow')
@@ -368,7 +413,7 @@ test('开始排课在窄屏下不溢出且移动导航保留统一入口', async
   await page.getByTestId('shell-menu').click()
   await expect(page.getByTestId('mobile-drawer')).toBeVisible()
   await expect(page.getByTestId('shell-nav')).toContainText('工作空间')
-  await expect(page.getByTestId('shell-nav').getByRole('link', { name: '开始排课', exact: true })).toBeVisible()
+  await expect(page.getByTestId('shell-nav').getByRole('link', { name: '排课工作台', exact: true })).toBeVisible()
   await page.getByTestId('shell-close').click()
 
   await page.getByTestId('flow-go-classes').click()

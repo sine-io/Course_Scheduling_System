@@ -194,6 +194,8 @@
       <pre><code class="language-bash">sudo docker compose logs --tail=50 &lt;服务名&gt;   # 例如 api / worker / postgres
       </code></pre>
       <p>常见:<code>.env</code> 的 <code>DATABASE_URL</code> 与 <code>POSTGRES_*</code> 账号和密码不一致;<code>SECRET_KEY</code> 未设。</p>
+      <p><strong>Q：为什么 <code>api</code>、<code>worker</code> 和 <code>worker-ops</code> 显示相同的镜像？</strong></p>
+      <p>这是预期配置：三个容器共用 <code>course_scheduling_system-backend</code>，但启动命令和监听队列不同。API 处理 HTTP，<code>worker</code> 只处理 <code>default</code> 排课队列，<code>worker-ops</code> 只处理 <code>ops</code> 运维队列；不要为了省容器而把它们改成一个进程。</p>
       <p><strong>Q:80 端口被占用,启动失败(port is already allocated)。</strong>
       修改 <code>.env</code> 中的 <code>HTTP_PORT</code>（例如 <code>8080</code>），再执行 <code>sudo docker compose up -d</code>，然后访问 <code>http://&lt;主机IP&gt;:8080</code>。</p>
       <p><strong>Q:校内其他电脑连不到。</strong>
@@ -222,7 +224,7 @@
       <p><strong>Q:自动排课很慢或跑不出来。</strong>
       排课是计算密集工作,受班级数、约束复杂度影响。建议主机 ≥ 4 核 8GB。无解时系统会给「冲突定位」报告,依提示放宽条件或补资源。可设置求解超时(默认 10 分钟),超时取当前最佳解。</p>
       <p><strong>Q:页面偶尔转圈久。</strong>
-      自动排课或大量导出时 worker 会比较繁忙，但它与 API 服务相互独立，一般操作不受影响。自 v1.1 起，排课（<code>worker</code>）与导出/备份（<code>worker-ops</code>）由不同容器负责，排课进行中提交导出任务仍会立即响应。若持续缓慢，请执行 <code>sudo docker stats</code> 检查主机资源使用情况。</p>
+      自动排课或大量导出时 worker 会比较繁忙，但它与 API 服务相互独立，一般操作不受影响。排课（<code>worker</code>）与导出/备份（<code>worker-ops</code>）由不同容器负责，即使共用同一个 backend 镜像，排课进行中提交导出任务仍会立即响应。若持续缓慢，请执行 <code>sudo docker stats</code> 检查主机资源使用情况。</p>
       <p><strong>Q:导出/备份时出现「运维背景服务(worker-ops)没有在执行」。</strong></p>
       <p>你的 <code>docker-compose.yml</code> 少了 <code>worker-ops</code> 这个容器(多半是用了旧版的 Compose 文件)。它负责导出、备份、恢复、发送邮件与每日自动备份——没有它,这些功能全都没人处理,而且<strong>每日自动备份是无声停摆的</strong>。</p>
       <p>获取最新的 Compose 文件再重启即可,数据不受影响:</p>
