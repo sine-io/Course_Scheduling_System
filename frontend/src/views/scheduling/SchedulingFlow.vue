@@ -288,6 +288,8 @@ const currentStep = computed(() => steps.value.find((step) => step.key === nextS
 const activeStepMeta = computed(() => (
   activeStep.value ? steps.value.find((step) => step.key === activeStep.value) ?? null : null
 ))
+const activeStepTitle = computed(() => activeStepMeta.value?.title ?? '')
+const activeStepDescription = computed(() => activeStepMeta.value?.description ?? '')
 const activeSurfaceMeta = computed(() => {
   if (activeSupportPanel.value === 'semester') {
     return {
@@ -422,12 +424,6 @@ async function onSemesterChange(id: number) {
 async function refresh() {
   if (!sid.value || refreshing.value) return
   await onSemesterChange(sid.value)
-}
-
-function stepStateLabel(state: StepState): string {
-  if (state === 'done') return '已完成'
-  if (state === 'active') return '下一步'
-  return '待前置'
 }
 
 function stepButtonLabel(step: FlowStep): string {
@@ -786,74 +782,84 @@ watch(() => route.query.semester, () => {
           </div>
         </section>
 
-        <section class="scheduling-panel flow-support-surfaces" data-testid="flow-support-surfaces">
-          <header class="scheduling-panel-heading compact-heading">
-            <div>
-              <p class="scheduling-eyebrow">{{ '准备辅助工作面' }}</p>
-              <h2>{{ '学期、校历与基础数据' }}</h2>
-              <p>{{ '原有的学期准备功能已并入当前工作台，维护后会自动刷新排课准备度。' }}</p>
-            </div>
-            <CalendarDays :size="20" class="scheduling-heading-icon" aria-hidden="true" />
-          </header>
-          <div class="flow-support-actions">
-            <n-button data-testid="flow-open-semester-support" @click="openSupportPanel('semester')">
-              <template #icon><GraduationCap :size="16" aria-hidden="true" /></template>
-              {{ '学期管理' }}
-            </n-button>
-            <n-button data-testid="flow-open-calendar-support" @click="openSupportPanel('calendar')">
-              <template #icon><CalendarDays :size="16" aria-hidden="true" /></template>
-              {{ '校历与排课准备' }}
-            </n-button>
-            <n-button data-testid="flow-open-resources-support" @click="openSupportPanel('resources', 'rooms')">
-              <template #icon><Database :size="16" aria-hidden="true" /></template>
-              {{ '基础数据' }}
-            </n-button>
-          </div>
-        </section>
-
-        <section class="scheduling-panel flow-steps-panel" data-testid="scheduling-flow-steps">
-          <header class="scheduling-panel-heading compact-heading">
-            <div>
-              <p class="scheduling-eyebrow">{{ '排课流程' }}</p>
-              <h2>{{ '从准备到课表草稿' }}</h2>
-              <p>{{ '每一步都在当前工作台内完成，完成状态由当前数据自动判断。' }}</p>
-            </div>
-            <ArrowRight :size="20" class="scheduling-heading-icon" aria-hidden="true" />
-          </header>
-
-          <div class="flow-step-list">
-            <article
-              v-for="(step, index) in steps"
-              :key="step.key"
-              class="flow-step"
-              :class="`is-${step.state}`"
-              :data-testid="`flow-step-${step.key}`"
-            >
-              <span class="flow-step-number" aria-hidden="true">
-                <CheckCircle2 v-if="step.state === 'done'" :size="18" />
-                <span v-else>{{ index + 1 }}</span>
-              </span>
-              <div class="flow-step-copy">
-                <div class="flow-step-title-line">
-                  <h3>{{ step.title }}</h3>
-                  <n-tag size="small" :type="step.state === 'done' ? 'success' : step.state === 'active' ? 'info' : 'default'">
-                    {{ stepStateLabel(step.state) }}
-                  </n-tag>
-                </div>
-                <p>{{ step.description }}</p>
-                <span>{{ step.summary }}</span>
+        <section class="flow-c-layout" data-testid="flow-c-layout">
+          <aside class="scheduling-panel flow-c-overview" data-testid="flow-c-overview">
+            <div class="flow-c-overview-heading">
+              <div>
+                <p class="scheduling-eyebrow">{{ '五步进度' }}</p>
+                <h2>{{ '当前学期' }}</h2>
               </div>
-              <n-button
-                :type="step.state === 'active' ? 'primary' : 'default'"
-                :disabled="!canOpenStep(step) || (step.key === 'start' && !canEdit)"
+              <n-button quaternary circle size="small" aria-label="刷新准备度" title="刷新准备度" @click="refresh">
+                <template #icon><RefreshCw :size="15" aria-hidden="true" /></template>
+              </n-button>
+            </div>
+            <div class="flow-c-progress">
+              <strong>{{ `${Math.round((steps.filter((step) => step.state === 'done').length / steps.length) * 100)}%` }}</strong>
+              <span>{{ '准备度' }}</span>
+              <div class="flow-c-progress-bar"><span :style="{ width: `${(steps.filter((step) => step.state === 'done').length / steps.length) * 100}%` }" /></div>
+            </div>
+            <div class="flow-c-step-list" data-testid="scheduling-flow-steps">
+              <button
+                v-for="(step, index) in steps"
+                :key="step.key"
+                class="flow-c-step"
+                :class="`is-${step.state}`"
+                type="button"
                 :data-testid="`flow-go-${step.key}`"
+                :data-flow-step-key="step.key"
+                :aria-label="stepButtonLabel(step)"
                 @click="goToStep(step)"
               >
-                <template #icon><Play v-if="step.key === 'start'" :size="15" aria-hidden="true" /><ArrowRight v-else :size="15" aria-hidden="true" /></template>
-                {{ stepButtonLabel(step) }}
+                <span class="flow-c-step-number"><CheckCircle2 v-if="step.state === 'done'" :size="15" /><span v-else>{{ index + 1 }}</span></span>
+                <span class="flow-c-step-copy"><strong>{{ step.title }}</strong><small>{{ step.summary }}</small></span>
+                <ArrowRight :size="14" aria-hidden="true" />
+              </button>
+            </div>
+            <div class="flow-c-activity">
+              <p class="scheduling-eyebrow">{{ '辅助入口' }}</p>
+              <div class="flow-c-support-links">
+                <n-button text size="small" data-testid="flow-open-semester-support" @click="openSupportPanel('semester')"><template #icon><GraduationCap :size="14" /></template>{{ '学期管理' }}</n-button>
+                <n-button text size="small" data-testid="flow-open-calendar-support" @click="openSupportPanel('calendar')"><template #icon><CalendarDays :size="14" /></template>{{ '校历与排课准备' }}</n-button>
+                <n-button text size="small" data-testid="flow-open-resources-support" @click="openSupportPanel('resources', 'rooms')"><template #icon><Database :size="14" /></template>{{ '基础数据' }}</n-button>
+              </div>
+            </div>
+          </aside>
+
+          <section class="scheduling-panel flow-c-detail" data-testid="flow-c-detail">
+            <div v-if="!activeStepMeta" class="flow-c-detail-empty">
+              <span class="flow-c-detail-icon"><ListChecks :size="24" aria-hidden="true" /></span>
+              <p class="scheduling-eyebrow">{{ '详情区域' }}</p>
+              <h2>{{ '从左侧选择一个步骤' }}</h2>
+              <p>{{ '班级、课时、科目、教师和自动排课都在当前学期内完成；选择后这里显示该步骤的完整业务工作面。' }}</p>
+              <n-button type="primary" @click="goToStep(currentStep)">
+                <template #icon><Play :size="15" aria-hidden="true" /></template>
+                {{ `进入${currentStep.title}` }}
               </n-button>
-            </article>
-          </div>
+            </div>
+            <template v-else>
+              <div class="flow-c-detail-heading">
+                <div>
+                  <p class="scheduling-eyebrow">{{ `排课工作台 · ${activeStepTitle}` }}</p>
+                  <h2>{{ activeStepTitle }}</h2>
+                  <p>{{ activeStepDescription }}</p>
+                </div>
+                <n-button data-testid="flow-step-back" @click="returnToOverview">
+                  <template #icon><ArrowLeft :size="16" aria-hidden="true" /></template>
+                  {{ '返回总览' }}
+                </n-button>
+              </div>
+              <div class="flow-c-detail-body">
+                <ClassesTab v-if="activeStep === 'classes'" :key="`flow-classes-${flowSemesterId}`" :semester-id="flowSemesterId" :can-edit="canEdit" :can-delete="canDelete" @changed="onEmbeddedChanged" />
+                <PeriodTableEditor v-else-if="activeStep === 'periods' && activePeriodTableId" :key="`flow-period-editor-${activePeriodTableId}`" :embedded="true" :embedded-table-id="activePeriodTableId" @back="returnToOverview" @changed="onEmbeddedChanged" />
+                <PeriodSetupWorkspace v-else-if="activeStep === 'periods'" :key="`flow-periods-${flowSemesterId}`" :semester-id="flowSemesterId" :assignments="assignments" :class-loads="classLoads" :can-edit="canEdit" @changed="onEmbeddedChanged" @edit-period-table="openPeriodTable" />
+                <section v-else-if="activeStep === 'subjects' && activeResourceView === 'archive'" class="flow-subject-archive" data-testid="flow-subject-archive"><CommonSubjectsQuickAdd :key="`flow-common-subjects-${flowSemesterId}`" :semester-id="flowSemesterId" :subjects="subjects" :can-edit="canEdit" @changed="onEmbeddedChanged" /><SubjectsTab :key="`flow-subject-archive-${flowSemesterId}-${subjectArchiveRevision}`" :semester-id="flowSemesterId" :can-edit="canEdit" :can-delete="canDelete" @changed="onEmbeddedChanged" /></section>
+                <div v-else-if="activeStep === 'subjects'" class="flow-c-embedded"><n-radio-group v-if="activeResourceView === 'work'" :value="activeResourceView" size="small" aria-label="选择科目设置视图" @update:value="setResourceView"><n-radio-button value="archive" data-testid="flow-subjects-archive">{{ '科目档案' }}</n-radio-button><n-radio-button value="work" data-testid="flow-subjects-work">{{ '科目节数' }}</n-radio-button></n-radio-group><Assignments :key="`flow-subjects-${flowSemesterId}`" :embedded="true" :embedded-semester-id="flowSemesterId" embedded-mode="periods" @changed="onEmbeddedChanged" /></div>
+                <TeachersTab v-else-if="activeStep === 'teachers' && activeResourceView === 'archive'" :key="`flow-teacher-archive-${flowSemesterId}`" :semester-id="flowSemesterId" :can-edit="canEdit" :can-delete="canDelete" :can-manage-accounts="false" @changed="onEmbeddedChanged" />
+                <div v-else-if="activeStep === 'teachers'" class="flow-c-embedded"><n-radio-group v-if="activeResourceView === 'work'" :value="activeResourceView" size="small" aria-label="选择教师设置视图" @update:value="setResourceView"><n-radio-button value="archive" data-testid="flow-teachers-archive">{{ '教师档案' }}</n-radio-button><n-radio-button value="work" data-testid="flow-teachers-work">{{ '教师任课' }}</n-radio-button></n-radio-group><Assignments :key="`flow-teachers-${flowSemesterId}`" :embedded="true" :embedded-semester-id="flowSemesterId" embedded-mode="teachers" @changed="onEmbeddedChanged" /></div>
+                <AutoSchedule v-else :key="`flow-start-${flowSemesterId}`" :embedded="true" :embedded-semester-id="flowSemesterId" />
+              </div>
+            </template>
+          </section>
         </section>
 
         <div v-if="errorIssues.length" class="flow-issues" data-testid="flow-issues">
@@ -931,9 +937,38 @@ watch(() => route.query.semester, () => {
 .flow-summary-copy p:last-child { margin: 5px 0 0; color: var(--app-text-muted); font-size: 12px; }
 .flow-summary-stats { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 10px; color: var(--app-text-muted); font-size: 12px; }
 .flow-summary-stats span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.flow-support-surfaces { display: grid; gap: var(--app-space-4); }
-.flow-support-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.flow-steps-panel { display: grid; gap: var(--app-space-4); }
+.flow-c-layout { display: grid; min-width: 0; grid-template-columns: minmax(230px, 275px) minmax(0, 1fr); align-items: start; gap: var(--app-space-4); }
+.flow-c-overview, .flow-c-detail { min-width: 0; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface); }
+.flow-c-overview { display: grid; gap: var(--app-space-4); padding: var(--app-space-4); }
+.flow-c-overview-heading, .flow-c-detail-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--app-space-3); }
+.flow-c-overview-heading h2, .flow-c-detail-heading h2 { margin: 0; font-size: 17px; }
+.flow-c-progress { display: grid; grid-template-columns: auto 1fr; align-items: baseline; gap: 3px 8px; padding: 0 5px; }
+.flow-c-progress strong { color: var(--app-primary-strong); font-size: 26px; }
+.flow-c-progress span { color: var(--app-text-muted); font-size: 11px; }
+.flow-c-progress-bar { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 99px; background: var(--app-surface-muted); }
+.flow-c-progress-bar span { display: block; height: 100%; border-radius: inherit; background: var(--app-primary); transition: width .2s ease; }
+.flow-c-step-list { display: grid; gap: 5px; }
+.flow-c-step { display: grid; width: 100%; min-width: 0; grid-template-columns: 28px minmax(0, 1fr) 14px; align-items: center; gap: 8px; padding: 9px 7px; border: 1px solid transparent; border-radius: var(--app-radius-sm); background: transparent; color: var(--app-text-muted); text-align: left; cursor: pointer; }
+.flow-c-step:hover { background: var(--app-surface-muted); }
+.flow-c-step.is-active { border-color: var(--app-primary-border); background: var(--app-primary-soft); color: var(--app-primary-strong); }
+.flow-c-step.is-done { color: var(--app-success-pressed); }
+.flow-c-step.is-blocked { color: var(--app-text-faint); }
+.flow-c-step-number { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; font-weight: 750; }
+.flow-c-step-copy { display: grid; min-width: 0; gap: 3px; }
+.flow-c-step-copy strong { overflow-wrap: anywhere; font-size: 12px; }
+.flow-c-step-copy small { overflow: hidden; color: var(--app-text-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.flow-c-step > svg { margin-left: auto; }
+.flow-c-activity { display: grid; gap: 8px; padding-top: var(--app-space-3); border-top: 1px solid var(--app-border); }
+.flow-c-support-links { display: grid; justify-items: start; gap: 4px; }
+.flow-c-support-links .n-button { justify-content: flex-start; padding-inline: 0; }
+.flow-c-detail { min-height: 510px; padding: var(--app-space-panel); }
+.flow-c-detail-empty { display: grid; min-height: 440px; place-items: center; align-content: center; gap: 8px; text-align: center; }
+.flow-c-detail-icon { display: grid; width: 50px; height: 50px; place-items: center; margin-bottom: 6px; border-radius: var(--app-radius-sm); background: var(--app-primary-soft); color: var(--app-primary-strong); }
+.flow-c-detail-empty h2 { margin: 0; font-size: 20px; }
+.flow-c-detail-empty p:last-of-type { max-width: 480px; margin: 0 0 8px; color: var(--app-text-muted); font-size: 12px; line-height: 1.6; }
+.flow-c-detail-heading { margin-bottom: var(--app-space-4); }
+.flow-c-detail-heading p:last-child { margin: 5px 0 0; color: var(--app-text-muted); font-size: 13px; line-height: 1.55; }
+.flow-c-detail-body { display: grid; min-width: 0; gap: var(--app-space-4); }
 .flow-step-list { display: grid; gap: 10px; }
 .flow-step {
   display: grid;
@@ -973,8 +1008,11 @@ watch(() => route.query.semester, () => {
   .flow-embedded-toolbar .n-button { align-self: flex-start; }
   .flow-summary-panel { grid-template-columns: auto minmax(0, 1fr); }
   .flow-summary-stats { grid-column: 1 / -1; justify-content: flex-start; }
-  .flow-support-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
-  .flow-support-actions .n-button { justify-content: flex-start; }
+  .flow-c-layout { grid-template-columns: minmax(0, 1fr); }
+  .flow-c-overview { order: 0; }
+  .flow-c-detail { order: 1; padding: var(--app-space-4); }
+  .flow-c-detail-heading { align-items: stretch; flex-direction: column; }
+  .flow-c-detail-heading .n-button { align-self: flex-start; }
   .flow-step { grid-template-columns: 32px minmax(0, 1fr); align-items: start; }
   .flow-step > .n-button { grid-column: 2; justify-self: start; }
   .flow-start-panel { align-items: flex-start; flex-direction: column; }
